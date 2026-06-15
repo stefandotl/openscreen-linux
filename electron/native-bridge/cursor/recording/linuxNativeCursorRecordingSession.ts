@@ -308,6 +308,7 @@ export class LinuxNativeCursorRecordingSession implements CursorRecordingSession
 			cx: clamp(cx, 0, 1),
 			cy: clamp(cy, 0, 1),
 			visible,
+			cursorType: "arrow",
 			interactionType,
 		};
 	}

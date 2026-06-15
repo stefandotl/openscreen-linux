@@ -260,7 +260,7 @@ export default function VideoEditor() {
 	// samples with OpenScreen's default arrow asset for the editable overlay.
 	const hasEditableCursorRecording =
 		recordingCursorCaptureMode === "editable-overlay" &&
-		(nativePlatform === "win32" || nativePlatform === "darwin") &&
+		(nativePlatform === "win32" || nativePlatform === "darwin" || nativePlatform === "linux") &&
 		hasNativeCursorRecordingData(cursorRecordingData);
 	const effectiveShowCursor = showCursor && hasEditableCursorRecording;
 	const showCursorSettings = hasEditableCursorRecording;

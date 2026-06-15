@@ -1091,6 +1091,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						maxFrameRate: TARGET_FRAME_RATE,
 						minFrameRate: MIN_FRAME_RATE,
 					},
+					cursor: cursorCaptureMode === "editable-overlay" ? "never" : "always",
 				};
 
 				if (systemAudioEnabled) {
