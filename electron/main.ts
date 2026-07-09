@@ -142,7 +142,7 @@ function setupApplicationMenu() {
 			submenu: [
 				{
 					role: "about",
-					label: mainT("common", "actions.about") || "About OpenScreen",
+					label: mainT("common", "actions.about") || "About OpenScreen Linux",
 				},
 				{ type: "separator" },
 				{
@@ -152,7 +152,7 @@ function setupApplicationMenu() {
 				{ type: "separator" },
 				{
 					role: "hide",
-					label: mainT("common", "actions.hide") || "Hide OpenScreen",
+					label: mainT("common", "actions.hide") || "Hide OpenScreen Linux",
 				},
 				{
 					role: "hideOthers",
@@ -310,7 +310,7 @@ function updateTrayMenu(recording: boolean = false) {
 		? mainT("common", "actions.recordingStatus", {
 				source: selectedSourceName,
 			}) || `Recording: ${selectedSourceName}`
-		: "OpenScreen";
+		: "OpenScreen Linux";
 	const menuTemplate = recording
 		? [
 				{

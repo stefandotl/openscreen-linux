@@ -7,7 +7,7 @@
   "asarUnpack": [
     "**/*.node"
   ],
-  "productName": "Openscreen",
+  "productName": "OpenScreen Linux",
   // Fetch the auto-caption model + ORT wasm into caption-assets/ before packaging (idempotent).
   "beforePack": "scripts/before-pack.cjs",
   "npmRebuild": true,
@@ -81,7 +81,7 @@
       "pacman"
     ],
     "icon": "icons/icons/png",
-    "artifactName": "${productName}-Linux-${version}.${ext}",
+    "artifactName": "OpenScreen-Linux-${version}.${ext}",
     "category": "AudioVideo",
     "extraResources": [
       {
