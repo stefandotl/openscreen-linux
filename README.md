@@ -45,7 +45,7 @@ Screen Studio is an awesome product and this is definitely not a 1:1 clone. If y
 
 ## Installation
 
-Download Linux builds from this fork's [GitHub Releases](https://github.com/stefandotl/openscreen/releases) page.
+Download Linux builds from this fork's [GitHub Releases](https://github.com/stefandotl/openscreen-linux/releases) page.
 
 ### Linux
 
@@ -76,18 +76,18 @@ chmod +x OpenScreen-Linux-*.AppImage
 
 Try without installing:
 ```bash
-nix run github:stefandotl/openscreen
+nix run github:stefandotl/openscreen-linux
 ```
 
 Install into your user profile:
 ```bash
-nix profile install github:stefandotl/openscreen
+nix profile install github:stefandotl/openscreen-linux
 ```
 
 For a NixOS system config (flake):
 ```nix
 {
-  inputs.openscreen.url = "github:stefandotl/openscreen";
+  inputs.openscreen.url = "github:stefandotl/openscreen-linux";
 
   outputs = { nixpkgs, openscreen, ... }: {
     nixosConfigurations.<host> = nixpkgs.lib.nixosSystem {
