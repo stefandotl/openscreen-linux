@@ -14,9 +14,8 @@ export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 const NATIVE_ASPECT_RATIO_FALLBACK = 16 / 9;
 
 /**
- * Returns the numeric value of an aspect ratio.
- * For "native", returns a fallback ratio of 16/9.
- * Callers with source/crop context should use getNativeAspectRatioValue().
+ * Numeric value of an aspect ratio. "native" returns the 16/9 fallback;
+ * callers with source/crop context should use getNativeAspectRatioValue().
  */
 export function getAspectRatioValue(aspectRatio: AspectRatio): number {
 	switch (aspectRatio) {
@@ -79,7 +78,7 @@ export function getAspectRatioDimensions(
 }
 
 export function getAspectRatioLabel(aspectRatio: AspectRatio): string {
-	if (aspectRatio === "native") return "Native";
+	if (aspectRatio === "native") return "Original";
 	return aspectRatio;
 }
 

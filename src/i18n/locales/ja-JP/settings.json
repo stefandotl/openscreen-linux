@@ -1,5 +1,6 @@
 {
 	"zoom": {
+		"previewHold": "押している間ズーム効果をプレビュー",
 		"level": "ズーム倍率",
 		"selectRegion": "ズーム範囲を選択して調整",
 		"deleteZoom": "ズームを削除",
@@ -44,7 +45,10 @@
 		"dualFrame": "デュアルフレーム",
 		"webcamShape": "カメラの形状",
 		"webcamSize": "カメラのサイズ",
-		"noWebcam": "Webカメラなし"
+		"noWebcam": "Webカメラなし",
+		"mirrorWebcam": "Webカメラを反転",
+		"reactiveWebcam": "ズーム時に縮小",
+		"reactiveWebcamDescription": "ズーム中はカメラがスムーズに縮小し、邪魔になりません。"
 	},
 	"effects": {
 		"title": "動画効果",
@@ -97,7 +101,8 @@
 	},
 	"project": {
 		"save": "プロジェクトを保存",
-		"load": "プロジェクトを読み込む"
+		"load": "プロジェクトを読み込む",
+		"new": "新規プロジェクト"
 	},
 	"export": {
 		"videoButton": "動画をエクスポート",
@@ -111,7 +116,7 @@
 	},
 	"imageUpload": {
 		"invalidFileType": "無効なファイル形式",
-		"jpgOnly": "JPG または JPEG 画像ファイルを選択してください。",
+		"jpgOnly": "JPG、PNG、GIF、またはWebP画像ファイルを選択してください。",
 		"uploadSuccess": "カスタム画像を読み込みました。",
 		"failedToUpload": "画像の読み込みに失敗しました",
 		"errorReading": "ファイルの読み取り中にエラーが発生しました。"
@@ -173,6 +178,17 @@
 		"modern": "モダン",
 		"clean": "クリーン"
 	},
+	"textAnimation": {
+		"title": "テキストアニメーション",
+		"selectAnimation": "アニメーションを選択",
+		"none": "なし",
+		"fade": "フェード",
+		"rise": "上昇",
+		"pop": "ポップ",
+		"slideLeft": "左へスライド",
+		"typewriter": "タイプライター",
+		"pulse": "パルス"
+	},
 	"customFont": {
 		"dialogTitle": "Googleフォントを追加",
 		"urlLabel": "GoogleフォントのインポートURL",
@@ -193,6 +209,8 @@
 		"errorLoadFailed": "フォントを読み込めませんでした。GoogleフォントのURLが正しいことを確認してください。"
 	},
 	"cursor": {
+		"theme": "カーソルのスタイル",
+		"themeDefault": "デフォルト",
 		"show": "カーソルを表示",
 		"size": "サイズ",
 		"smoothing": "スムージング",
@@ -202,5 +220,9 @@
 	},
 	"language": {
 		"title": "言語"
+	},
+	"timeline": {
+		"title": "タイムライン",
+		"waveform": "トリムトラックにオーディオ波形を表示"
 	}
 }

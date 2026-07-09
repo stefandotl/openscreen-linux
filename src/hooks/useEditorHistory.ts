@@ -1,4 +1,9 @@
 import { useCallback, useRef, useState } from "react";
+import {
+	DEFAULT_EDITOR_APPEARANCE_SETTINGS,
+	DEFAULT_EDITOR_LAYOUT_SETTINGS,
+	DEFAULT_WEBCAM_SETTINGS,
+} from "@/components/video-editor/editorDefaults";
 import type {
 	AnnotationRegion,
 	CropRegion,
@@ -12,18 +17,20 @@ import type {
 } from "@/components/video-editor/types";
 import {
 	DEFAULT_CROP_REGION,
-	DEFAULT_WEBCAM_LAYOUT_PRESET,
-	DEFAULT_WEBCAM_MASK_SHAPE,
-	DEFAULT_WEBCAM_POSITION,
-	DEFAULT_WEBCAM_SIZE_PRESET,
+	DEFAULT_WEBCAM_MIRRORED,
+	DEFAULT_WEBCAM_REACTIVE_ZOOM,
 } from "@/components/video-editor/types";
-import { DEFAULT_WALLPAPER } from "@/lib/wallpaper";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 
-// Undoable state — selection IDs are intentionally excluded (undoing a
-// selection change would feel surprising to the user).
+// Undoable state. Selection IDs are excluded, since undoing a selection change
+// would feel surprising.
 export interface EditorState {
 	zoomRegions: ZoomRegion[];
+	/** Magic-wand auto-zoom toggle. When on, fresh recordings get suggested zooms. */
+	autoZoomEnabled: boolean;
+	/** Global Auto-Focus toggle: when on, all zooms follow the cursor and the
+	 * per-zoom Focus Mode selector is locked. */
+	autoFocusAll: boolean;
 	trimRegions: TrimRegion[];
 	speedRegions: SpeedRegion[];
 	annotationRegions: AnnotationRegion[];
@@ -31,33 +38,41 @@ export interface EditorState {
 	wallpaper: string;
 	shadowIntensity: number;
 	showBlur: boolean;
+	showTrimWaveform: boolean;
 	motionBlurAmount: number;
 	borderRadius: number;
 	padding: number;
 	aspectRatio: AspectRatio;
 	webcamLayoutPreset: WebcamLayoutPreset;
 	webcamMaskShape: WebcamMaskShape;
+	webcamMirrored: boolean;
+	webcamReactiveZoom: boolean;
 	webcamSizePreset: WebcamSizePreset;
 	webcamPosition: WebcamPosition | null;
 }
 
 export const INITIAL_EDITOR_STATE: EditorState = {
 	zoomRegions: [],
+	autoZoomEnabled: true,
+	autoFocusAll: false,
 	trimRegions: [],
 	speedRegions: [],
 	annotationRegions: [],
 	cropRegion: DEFAULT_CROP_REGION,
-	wallpaper: DEFAULT_WALLPAPER,
-	shadowIntensity: 0,
-	showBlur: false,
-	motionBlurAmount: 0,
-	borderRadius: 0,
-	padding: 50,
-	aspectRatio: "16:9",
-	webcamLayoutPreset: DEFAULT_WEBCAM_LAYOUT_PRESET,
-	webcamMaskShape: DEFAULT_WEBCAM_MASK_SHAPE,
-	webcamSizePreset: DEFAULT_WEBCAM_SIZE_PRESET,
-	webcamPosition: DEFAULT_WEBCAM_POSITION,
+	wallpaper: DEFAULT_EDITOR_LAYOUT_SETTINGS.wallpaper,
+	shadowIntensity: DEFAULT_EDITOR_APPEARANCE_SETTINGS.shadowIntensity,
+	showBlur: DEFAULT_EDITOR_APPEARANCE_SETTINGS.showBlur,
+	showTrimWaveform: DEFAULT_EDITOR_APPEARANCE_SETTINGS.showTrimWaveform,
+	motionBlurAmount: DEFAULT_EDITOR_APPEARANCE_SETTINGS.motionBlurAmount,
+	borderRadius: DEFAULT_EDITOR_APPEARANCE_SETTINGS.borderRadius,
+	padding: DEFAULT_EDITOR_LAYOUT_SETTINGS.padding,
+	aspectRatio: DEFAULT_EDITOR_LAYOUT_SETTINGS.aspectRatio,
+	webcamLayoutPreset: DEFAULT_WEBCAM_SETTINGS.layoutPreset,
+	webcamMaskShape: DEFAULT_WEBCAM_SETTINGS.maskShape,
+	webcamMirrored: DEFAULT_WEBCAM_MIRRORED,
+	webcamReactiveZoom: DEFAULT_WEBCAM_REACTIVE_ZOOM,
+	webcamSizePreset: DEFAULT_WEBCAM_SETTINGS.sizePreset,
+	webcamPosition: DEFAULT_WEBCAM_SETTINGS.position,
 };
 
 type StateUpdate = Partial<EditorState> | ((prev: EditorState) => Partial<EditorState>);
@@ -86,8 +101,8 @@ function withCheckpoint(history: History, newPresent: EditorState): History {
 export function useEditorHistory(initial: EditorState = INITIAL_EDITOR_STATE) {
 	const [history, setHistory] = useState<History>({ past: [], present: initial, future: [] });
 
-	// Tracks whether a live-update series (e.g. slider drag) is in progress.
-	// The first updateState call saves the pre-interaction state as a checkpoint.
+	// True while a live-update series (e.g. slider drag) is in progress. The first
+	// updateState call checkpoints the pre-interaction state.
 	const dirtyRef = useRef(false);
 
 	const pushState = useCallback((update: StateUpdate) => {
@@ -130,6 +145,11 @@ export function useEditorHistory(initial: EditorState = INITIAL_EDITOR_STATE) {
 		dirtyRef.current = false;
 	}, []);
 
+	const resetState = useCallback((newInitial: EditorState = INITIAL_EDITOR_STATE) => {
+		setHistory({ past: [], present: newInitial, future: [] });
+		dirtyRef.current = false;
+	}, []);
+
 	return {
 		state: history.present,
 		pushState,
@@ -137,6 +157,7 @@ export function useEditorHistory(initial: EditorState = INITIAL_EDITOR_STATE) {
 		commitState,
 		undo,
 		redo,
+		resetState,
 		canUndo: history.past.length > 0,
 		canRedo: history.future.length > 0,
 	};

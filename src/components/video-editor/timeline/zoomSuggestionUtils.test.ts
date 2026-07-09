@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CursorTelemetryPoint } from "../types";
 import {
+	buildAutoZoomSuggestions,
 	CLICK_CANDIDATE_STRENGTH,
 	detectZoomClickCandidates,
 	detectZoomDwellCandidates,
@@ -35,6 +36,22 @@ describe("zoomSuggestionUtils", () => {
 		expect(candidates[0].focus.cx).toBeCloseTo(0.21, 2);
 		expect(candidates[0].strength).toBeGreaterThan(CLICK_CANDIDATE_STRENGTH);
 		expect(candidates[1].centerTimeMs).toBe(1800);
+	});
+
+	it("includes click clusters in auto zoom suggestions", () => {
+		const suggestions = buildAutoZoomSuggestions({
+			cursorTelemetry: makeSamples([
+				{ timeMs: 100, cx: 0.2, cy: 0.3, interactionType: "click" },
+				{ timeMs: 450, cx: 0.22, cy: 0.32, interactionType: "click" },
+			]),
+			totalMs: 3000,
+			existingRegions: [],
+			defaultDurationMs: 400,
+		});
+
+		expect(suggestions).toHaveLength(1);
+		expect(suggestions[0].span).toEqual({ start: 75, end: 475 });
+		expect(suggestions[0].focus.cx).toBeCloseTo(0.21, 2);
 	});
 
 	it("still detects dwell moments for recordings without clicks", () => {

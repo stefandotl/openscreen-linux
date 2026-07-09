@@ -5,6 +5,8 @@ export const MAX_DWELL_DURATION_MS = 2600;
 export const DWELL_MOVE_THRESHOLD = 0.02;
 export const CLICK_CLUSTER_WINDOW_MS = 900;
 export const CLICK_CANDIDATE_STRENGTH = 10_000;
+/** Minimum spacing between two accepted suggestion centres. */
+export const SUGGESTION_SPACING_MS = 1800;
 
 export interface ZoomDwellCandidate {
 	centerTimeMs: number;
@@ -130,4 +132,80 @@ export function detectZoomClickCandidates(samples: CursorTelemetryPoint[]): Zoom
 	pushCluster();
 
 	return candidates;
+}
+
+export interface AutoZoomSuggestion {
+	span: { start: number; end: number };
+	focus: ZoomFocus;
+}
+
+/**
+ * Build non-overlapping zoom suggestions from cursor telemetry: detect clicks and dwell
+ * moments, rank by strength, space by SUGGESTION_SPACING_MS, drop any overlapping an
+ * existing region. Pure, shared by the magic-wand toggle and the on-load auto-suggest pass.
+ */
+export function buildAutoZoomSuggestions(options: {
+	cursorTelemetry: CursorTelemetryPoint[];
+	totalMs: number;
+	existingRegions: { startMs: number; endMs: number }[];
+	defaultDurationMs: number;
+}): AutoZoomSuggestion[] {
+	const { cursorTelemetry, totalMs, existingRegions, defaultDurationMs } = options;
+	if (totalMs <= 0 || cursorTelemetry.length < 2) {
+		return [];
+	}
+
+	const defaultDuration = Math.min(defaultDurationMs, totalMs);
+	if (defaultDuration <= 0) {
+		return [];
+	}
+
+	const normalizedSamples = normalizeCursorTelemetry(cursorTelemetry, totalMs);
+	if (normalizedSamples.length < 2) {
+		return [];
+	}
+
+	const candidates = [
+		...detectZoomClickCandidates(normalizedSamples),
+		...detectZoomDwellCandidates(normalizedSamples),
+	];
+	if (candidates.length === 0) {
+		return [];
+	}
+
+	const reservedSpans = existingRegions
+		.map((region) => ({ start: region.startMs, end: region.endMs }))
+		.sort((a, b) => a.start - b.start);
+
+	const sortedCandidates = candidates.sort((a, b) => b.strength - a.strength);
+	const acceptedCenters: number[] = [];
+	const suggestions: AutoZoomSuggestion[] = [];
+
+	for (const candidate of sortedCandidates) {
+		const tooCloseToAccepted = acceptedCenters.some(
+			(center) => Math.abs(center - candidate.centerTimeMs) < SUGGESTION_SPACING_MS,
+		);
+		if (tooCloseToAccepted) {
+			continue;
+		}
+
+		const centeredStart = Math.round(candidate.centerTimeMs - defaultDuration / 2);
+		const candidateStart = Math.max(0, Math.min(centeredStart, totalMs - defaultDuration));
+		const candidateEnd = candidateStart + defaultDuration;
+		const hasOverlap = reservedSpans.some(
+			(span) => candidateEnd > span.start && candidateStart < span.end,
+		);
+		if (hasOverlap) {
+			continue;
+		}
+
+		reservedSpans.push({ start: candidateStart, end: candidateEnd });
+		acceptedCenters.push(candidate.centerTimeMs);
+		suggestions.push({
+			span: { start: candidateStart, end: candidateEnd },
+			focus: candidate.focus,
+		});
+	}
+
+	return suggestions;
 }

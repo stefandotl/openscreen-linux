@@ -10,11 +10,11 @@ import type {
 import { BackgroundLoadError } from "@/lib/wallpaper";
 import type { CursorRecordingData } from "@/native/contracts";
 import { getPlatform } from "@/utils/platformUtils";
-import { AsyncVideoFrameQueue } from "./asyncVideoFrameQueue";
 import { AudioProcessor } from "./audioEncoder";
 import { FrameRenderer } from "./frameRenderer";
 import { VideoMuxer } from "./muxer";
 import { StreamingVideoDecoder } from "./streamingDecoder";
+import { TimestampedVideoFrameQueue } from "./timestampedVideoFrameQueue";
 import type { ExportConfig, ExportProgress, ExportResult } from "./types";
 
 const ENCODER_STALL_TIMEOUT_MS = 15_000;
@@ -37,6 +37,8 @@ export interface VideoExporterConfig extends ExportConfig {
 	cropRegion: CropRegion;
 	webcamLayoutPreset?: WebcamLayoutPreset;
 	webcamMaskShape?: import("@/components/video-editor/types").WebcamMaskShape;
+	webcamMirrored?: boolean;
+	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
 	webcamPosition?: { cx: number; cy: number } | null;
 	cursorRecordingData?: CursorRecordingData | null;
@@ -45,6 +47,7 @@ export interface VideoExporterConfig extends ExportConfig {
 	cursorMotionBlur?: number;
 	cursorClickBounce?: number;
 	cursorClipToBounds?: boolean;
+	cursorTheme?: string;
 	annotationRegions?: AnnotationRegion[];
 	previewWidth?: number;
 	previewHeight?: number;
@@ -195,7 +198,7 @@ export class VideoExporter {
 	private async exportWithEncoderPreference(
 		encoderPreference: HardwareAcceleration,
 	): Promise<ExportResult> {
-		let webcamFrameQueue: AsyncVideoFrameQueue | null = null;
+		let webcamFrameQueue: TimestampedVideoFrameQueue | null = null;
 		let stopWebcamDecode = false;
 		let webcamDecodeError: Error | null = null;
 		let webcamDecodePromise: Promise<void> | null = null;
@@ -243,11 +246,14 @@ export class VideoExporter {
 				cursorMotionBlur: this.config.cursorMotionBlur,
 				cursorClickBounce: this.config.cursorClickBounce,
 				cursorClipToBounds: this.config.cursorClipToBounds,
+				cursorTheme: this.config.cursorTheme,
 				videoWidth: videoInfo.width,
 				videoHeight: videoInfo.height,
 				webcamSize: webcamInfo ? { width: webcamInfo.width, height: webcamInfo.height } : null,
 				webcamLayoutPreset: this.config.webcamLayoutPreset,
 				webcamMaskShape: this.config.webcamMaskShape,
+				webcamMirrored: this.config.webcamMirrored,
+				webcamReactiveZoom: this.config.webcamReactiveZoom,
 				webcamSizePreset: this.config.webcamSizePreset,
 				webcamPosition: this.config.webcamPosition,
 				annotationRegions: this.config.annotationRegions,
@@ -290,7 +296,7 @@ export class VideoExporter {
 					? Math.min(this.MAX_ENCODE_QUEUE, 32)
 					: this.MAX_ENCODE_QUEUE;
 
-			webcamFrameQueue = this.config.webcamVideoUrl ? new AsyncVideoFrameQueue() : null;
+			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
 			webcamDecodePromise =
 				webcamDecoder && webcamFrameQueue
 					? (() => {
@@ -300,7 +306,7 @@ export class VideoExporter {
 									this.config.frameRate,
 									this.config.trimRegions,
 									this.config.speedRegions,
-									async (webcamFrame) => {
+									async (webcamFrame, _exportTimestampUs, webcamSourceTimestampMs) => {
 										while (queue.length >= 12 && !this.cancelled && !stopWebcamDecode) {
 											await new Promise((resolve) => setTimeout(resolve, 2));
 										}
@@ -308,7 +314,7 @@ export class VideoExporter {
 											webcamFrame.close();
 											return;
 										}
-										queue.enqueue(webcamFrame);
+										queue.enqueue(webcamFrame, webcamSourceTimestampMs);
 									},
 									onWarning,
 								)
@@ -342,7 +348,9 @@ export class VideoExporter {
 						}
 
 						const timestamp = frameIndex * frameDuration;
-						webcamFrame = webcamFrameQueue ? await webcamFrameQueue.dequeue() : null;
+						webcamFrame = webcamFrameQueue
+							? await webcamFrameQueue.frameAt(sourceTimestampMs)
+							: null;
 						if (this.cancelled) {
 							return;
 						}

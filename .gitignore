@@ -47,6 +47,7 @@ release/**
 test-results
 playwright-report/
 
+
 # Vitest browser mode screenshots
 __screenshots__/
 
@@ -59,3 +60,10 @@ result-*
 
 #kilocode
 .kilo/
+
+#others
+
+**/*.import
+
+# Auto-caption model + ORT wasm — regenerated at build by scripts/fetch-caption-model.mjs
+/caption-assets/

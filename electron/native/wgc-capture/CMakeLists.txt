@@ -37,7 +37,7 @@ target_compile_definitions(wgc-capture PRIVATE
   _WIN32_WINNT=0x0A00
 )
 
-target_compile_options(wgc-capture PRIVATE /EHsc /W4 /utf-8)
+target_compile_options(wgc-capture PRIVATE /EHsc /W4 /utf-8 /await)
 
 target_link_libraries(wgc-capture PRIVATE
   d3d11
@@ -48,4 +48,20 @@ target_link_libraries(wgc-capture PRIVATE
   mfuuid
   runtimeobject
   windowsapp
+)
+
+add_executable(cursor-sampler
+  src/cursor-sampler.cpp
+)
+
+target_compile_definitions(cursor-sampler PRIVATE
+  NOMINMAX
+  _WIN32_WINNT=0x0A00
+)
+
+target_compile_options(cursor-sampler PRIVATE /EHsc /W4 /utf-8)
+
+target_link_libraries(cursor-sampler PRIVATE
+  gdi32
+  gdiplus
 )

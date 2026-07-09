@@ -40,20 +40,29 @@ import { RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
+import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
+import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 const PROJECT_FILE_EXTENSION = "openscreen";
-const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
+export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_FILE_PREFIX = "recording-";
 const RECORDING_SESSION_SUFFIX = ".session.json";
-const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([".webm", ".mp4", ".mov", ".avi", ".mkv"]);
+const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
+	".webm",
+	".mp4",
+	".mov",
+	".avi",
+	".mkv",
+	".m4v",
+	".wmv",
+	".flv",
+	".ts",
+]);
 const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
 const nativeMacCaptureEvents = new EventEmitter();
 
-/**
- * Paths explicitly approved by the user via file picker dialogs or project loads.
- * These are added at runtime when the user selects files from outside the default directories.
- */
+// Paths the user approved via file picker or project load (i.e. outside the default dirs).
 const approvedPaths = new Set<string>();
 
 function approveFilePath(filePath: string): void {
@@ -89,10 +98,7 @@ function resolveApprovedVideoPath(videoPath?: string | null): string | null {
 	return normalizedPath;
 }
 
-/**
- * Helper function to build dialog options with a parent window only when it's valid.
- * This prevents passing stale or destroyed BrowserWindow references to dialog calls.
- */
+// Attach the parent window only when valid, to avoid passing a destroyed BrowserWindow to dialogs.
 function buildDialogOptions<T extends Electron.OpenDialogOptions | Electron.SaveDialogOptions>(
 	baseOptions: T,
 	parentWindow: BrowserWindow | null,
@@ -221,9 +227,8 @@ async function approveReadableVideoPath(
 		return null;
 	}
 
-	// When called with trustedDirs (e.g. from project load), only auto-approve
-	// paths within those directories. This prevents malicious project files from
-	// approving reads to arbitrary filesystem locations.
+	// With trustedDirs (e.g. project load), only auto-approve paths inside them so a
+	// malicious project file can't approve reads to arbitrary locations.
 	if (trustedDirs) {
 		const resolved = path.resolve(normalizedPath);
 		const withinTrusted = trustedDirs.some((dir) => isPathWithinDir(resolved, dir));
@@ -265,6 +270,28 @@ function resolveRecordingOutputPath(fileName: string): string {
 	return path.join(RECORDINGS_DIR, parsedPath.base);
 }
 
+function isValidDurationMs(value: number | undefined): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+/**
+ * Finalize one recording file: flush/close the stream if it was streamed, else write
+ * the buffered bytes (short recording or stream failed to open). Returns whether it was
+ * streamed, so the caller knows if the WebM duration needs patching on disk.
+ */
+async function finalizeRecordingFile(
+	registry: RecordingStreamRegistry,
+	fileName: string,
+	filePath: string,
+	videoData?: ArrayBuffer,
+): Promise<boolean> {
+	const streamed = await registry.finalize(fileName);
+	if (!streamed && videoData && videoData.byteLength > 0) {
+		await fs.writeFile(filePath, Buffer.from(videoData));
+	}
+	return streamed;
+}
+
 async function getApprovedProjectSession(
 	project: unknown,
 	projectFilePath?: string,
@@ -286,8 +313,8 @@ async function getApprovedProjectSession(
 		return null;
 	}
 
-	// Only auto-approve media paths within the project's directory or RECORDINGS_DIR.
-	// This prevents crafted project files from approving reads to arbitrary locations.
+	// Only auto-approve media within the project's dir or RECORDINGS_DIR, so a crafted
+	// project file can't approve reads to arbitrary locations.
 	const trustedDirs = [RECORDINGS_DIR];
 	if (projectFilePath) {
 		trustedDirs.push(path.dirname(path.resolve(projectFilePath)));
@@ -330,10 +357,7 @@ let lastEnumeratedSources = new Map<string, DesktopCapturerSource>();
 let currentProjectPath: string | null = null;
 let currentRecordingSession: RecordingSession | null = null;
 
-/**
- * Returns the cached DesktopCapturerSource set when the user picked a source.
- * Used by setDisplayMediaRequestHandler in main.ts for cursor-free capture.
- */
+// Cached source from the user's pick. Used by setDisplayMediaRequestHandler in main.ts for cursor-free capture.
 export function getSelectedDesktopSource(): DesktopCapturerSource | null {
 	return selectedDesktopSource;
 }
@@ -384,6 +408,10 @@ let nativeWindowsCaptureWebcamTargetPath: string | null = null;
 let nativeWindowsCaptureRecordingId: number | null = null;
 let nativeWindowsCursorOffsetMs = 0;
 let nativeWindowsCursorCaptureMode: CursorCaptureMode = "editable-overlay";
+let nativeWindowsCursorRecordingStartMs = 0;
+let nativeWindowsPauseStartedAtMs: number | null = null;
+let nativeWindowsPauseRanges: Array<{ startMs: number; endMs: number }> = [];
+let nativeWindowsIsPaused = false;
 const NATIVE_WINDOWS_CAPTURE_STOP_TIMEOUT_MS = 15_000;
 let nativeMacCaptureProcess: ChildProcessWithoutNullStreams | null = null;
 let nativeMacCaptureOutput = "";
@@ -876,6 +904,18 @@ function completeNativeMacCursorPauseRange(endMs = Date.now()) {
 	nativeMacPauseStartedAtMs = null;
 }
 
+function completeNativeWindowsCursorPauseRange(endMs = Date.now()) {
+	if (nativeWindowsPauseStartedAtMs === null || nativeWindowsCursorRecordingStartMs <= 0) {
+		return;
+	}
+
+	nativeWindowsPauseRanges.push({
+		startMs: Math.max(0, nativeWindowsPauseStartedAtMs - nativeWindowsCursorRecordingStartMs),
+		endMs: Math.max(0, endMs - nativeWindowsCursorRecordingStartMs),
+	});
+	nativeWindowsPauseStartedAtMs = null;
+}
+
 function waitForNativeWindowsCaptureStart(proc: ChildProcessWithoutNullStreams) {
 	return new Promise<void>((resolve, reject) => {
 		const timer = setTimeout(() => {
@@ -1241,7 +1281,7 @@ export function registerIpcHandlers(
 				return { success: true, granted: true, status };
 			}
 
-			// Screen recording has no askForMediaAccess equivalent. Trigger the
+			// Screen recording has no askForMediaAccess equivalent, so trigger the
 			// TCC prompt without opening OpenScreen's source selector above it.
 			if (status === "not-determined") {
 				const mainWin = getMainWindow();
@@ -1347,7 +1387,36 @@ export function registerIpcHandlers(
 	});
 
 	ipcMain.handle("request-native-mac-cursor-access", async () => {
-		return requestMacCursorAccessibilityAccess();
+		const access = await requestMacCursorAccessibilityAccess();
+
+		// When the editable cursor can't get Accessibility trust, pop a native dialog
+		// that deep-links to the Accessibility pane (mirrors the Screen Recording flow).
+		if (process.platform === "darwin" && !access.granted) {
+			const mainWin = getMainWindow();
+			const detail =
+				access.status === "missing-helper"
+					? "The cursor helper couldn't be found in this build, so the editable cursor can't be enabled. Rebuild the native helper (npm run build:native:mac) or switch the HUD cursor mode to system."
+					: "Allow OpenScreen under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
+			const messageOptions = {
+				type: "warning",
+				buttons: ["Open Accessibility Settings", "Cancel"],
+				defaultId: 0,
+				cancelId: 1,
+				message: "Accessibility access is required for the editable cursor",
+				detail,
+			} satisfies Electron.MessageBoxOptions;
+			const result =
+				mainWin && !mainWin.isDestroyed()
+					? await dialog.showMessageBox(mainWin, messageOptions)
+					: await dialog.showMessageBox(messageOptions);
+			if (result.response === 0) {
+				await shell.openExternal(
+					"x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+				);
+			}
+		}
+
+		return access;
 	});
 
 	ipcMain.handle("open-source-selector", async () => {
@@ -1391,10 +1460,9 @@ export function registerIpcHandlers(
 	});
 
 	ipcMain.handle("switch-to-editor", () => {
-		const mainWin = getMainWindow();
-		if (mainWin) {
-			mainWin.close();
-		}
+		// createEditorWindow already closes the current mainWindow (the HUD) before
+		// opening the editor. Closing it here too double-closes, leaving ghost
+		// transparent windows and compounding the HUD shadow each cycle.
 		createEditorWindow();
 	});
 
@@ -1414,14 +1482,16 @@ export function registerIpcHandlers(
 			return;
 		}
 
-		if (!overlayWindow.isVisible()) {
-			overlayWindow.showInactive();
-		}
-
+		// Wait for the first frame before showing, else Chromium flashes a black
+		// rectangle because it hasn't rendered any pixels yet.
 		if (overlayWindow.webContents.isLoading()) {
 			await new Promise<void>((resolve) => {
-				overlayWindow.webContents.once("did-finish-load", () => resolve());
+				overlayWindow.once("ready-to-show", resolve);
 			});
+		}
+
+		if (!overlayWindow.isVisible()) {
+			overlayWindow.showInactive();
 		}
 
 		overlayWindow.webContents.send("countdown-overlay-value", value, runId);
@@ -1586,9 +1656,14 @@ export function registerIpcHandlers(
 				nativeWindowsCaptureRecordingId = recordingId;
 				nativeWindowsCursorOffsetMs = 0;
 				nativeWindowsCursorCaptureMode = cursorCaptureMode;
+				nativeWindowsCursorRecordingStartMs = 0;
+				nativeWindowsPauseStartedAtMs = null;
+				nativeWindowsPauseRanges = [];
+				nativeWindowsIsPaused = false;
 
 				const cursorStartTimeMs = Date.now();
 				if (cursorCaptureMode === "editable-overlay") {
+					nativeWindowsCursorRecordingStartMs = cursorStartTimeMs;
 					await startCursorRecording(cursorStartTimeMs);
 					console.info("[native-wgc] cursor sampler ready", {
 						cursorStartTimeMs,
@@ -1638,6 +1713,10 @@ export function registerIpcHandlers(
 				nativeWindowsCaptureRecordingId = null;
 				nativeWindowsCursorOffsetMs = 0;
 				nativeWindowsCursorCaptureMode = "editable-overlay";
+				nativeWindowsCursorRecordingStartMs = 0;
+				nativeWindowsPauseStartedAtMs = null;
+				nativeWindowsPauseRanges = [];
+				nativeWindowsIsPaused = false;
 				await stopCursorRecording();
 				return { success: false, error: String(error) };
 			}
@@ -1839,6 +1918,50 @@ export function registerIpcHandlers(
 		}
 	});
 
+	ipcMain.handle("pause-native-windows-recording", async () => {
+		const proc = nativeWindowsCaptureProcess;
+		if (!proc) {
+			return { success: false, error: "Native Windows capture is not running." };
+		}
+		if (nativeWindowsIsPaused) {
+			return { success: true };
+		}
+		if (!proc.stdin.writable) {
+			return { success: false, error: "Native Windows capture command channel is closed." };
+		}
+
+		try {
+			proc.stdin.write("pause\n");
+			nativeWindowsIsPaused = true;
+			nativeWindowsPauseStartedAtMs = Date.now();
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	});
+
+	ipcMain.handle("resume-native-windows-recording", async () => {
+		const proc = nativeWindowsCaptureProcess;
+		if (!proc) {
+			return { success: false, error: "Native Windows capture is not running." };
+		}
+		if (!nativeWindowsIsPaused) {
+			return { success: true };
+		}
+		if (!proc.stdin.writable) {
+			return { success: false, error: "Native Windows capture command channel is closed." };
+		}
+
+		try {
+			proc.stdin.write("resume\n");
+			completeNativeWindowsCursorPauseRange();
+			nativeWindowsIsPaused = false;
+			return { success: true };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	});
+
 	ipcMain.handle("stop-native-windows-recording", async (_, discard?: boolean) => {
 		const proc = nativeWindowsCaptureProcess;
 		const preferredPath = nativeWindowsCaptureTargetPath;
@@ -1851,6 +1974,7 @@ export function registerIpcHandlers(
 		}
 
 		try {
+			completeNativeWindowsCursorPauseRange();
 			const stoppedPathPromise = waitForNativeWindowsCaptureStop(proc);
 			proc.stdin.write("stop\n");
 			const stoppedPath = await stoppedPathPromise;
@@ -1875,6 +1999,7 @@ export function registerIpcHandlers(
 			}
 
 			if (cursorCaptureMode === "editable-overlay") {
+				compactPendingCursorTelemetryPauseRanges(nativeWindowsPauseRanges);
 				shiftPendingCursorTelemetry(nativeWindowsCursorOffsetMs);
 				await writePendingCursorTelemetry(screenVideoPath);
 			}
@@ -1916,6 +2041,10 @@ export function registerIpcHandlers(
 			nativeWindowsCaptureRecordingId = null;
 			nativeWindowsCursorOffsetMs = 0;
 			nativeWindowsCursorCaptureMode = "editable-overlay";
+			nativeWindowsCursorRecordingStartMs = 0;
+			nativeWindowsPauseStartedAtMs = null;
+			nativeWindowsPauseRanges = [];
+			nativeWindowsIsPaused = false;
 			const source = selectedSource || { name: "Screen" };
 			if (onRecordingStateChange) {
 				onRecordingStateChange(false, source.name);
@@ -2069,6 +2198,11 @@ export function registerIpcHandlers(
 		},
 	);
 
+	// On-disk write streams for in-progress recordings, keyed by output file name.
+	// Chunks append as they arrive so the renderer never buffers the full video (#616).
+	const recordingStreams = new RecordingStreamRegistry();
+	registerRecordingStreamHandlers(ipcMain, recordingStreams, resolveRecordingOutputPath);
+
 	ipcMain.handle("store-recorded-session", async (_, payload: StoreRecordedSessionInput) => {
 		try {
 			return await storeRecordedSessionFiles(payload);
@@ -2089,12 +2223,37 @@ export function registerIpcHandlers(
 				: Date.now();
 		const cursorCaptureMode = normalizeCursorCaptureMode(payload.cursorCaptureMode);
 		const screenVideoPath = resolveRecordingOutputPath(payload.screen.fileName);
-		await fs.writeFile(screenVideoPath, Buffer.from(payload.screen.videoData));
+		const screenStreamed = await finalizeRecordingFile(
+			recordingStreams,
+			payload.screen.fileName,
+			screenVideoPath,
+			payload.screen.videoData,
+		);
 
 		let webcamVideoPath: string | undefined;
+		let webcamStreamed = false;
 		if (payload.webcam) {
 			webcamVideoPath = resolveRecordingOutputPath(payload.webcam.fileName);
-			await fs.writeFile(webcamVideoPath, Buffer.from(payload.webcam.videoData));
+			webcamStreamed = await finalizeRecordingFile(
+				recordingStreams,
+				payload.webcam.fileName,
+				webcamVideoPath,
+				payload.webcam.videoData,
+			);
+		}
+
+		// Streamed files lack the WebM Duration header (renderer no longer holds the
+		// blob), so patch on disk for the editor's seek bar and timeline. Best-effort,
+		// independent per file, so they run together.
+		if (isValidDurationMs(payload.durationMs)) {
+			const patches: Promise<unknown>[] = [];
+			if (screenStreamed) {
+				patches.push(patchWebmDurationOnDisk(screenVideoPath, payload.durationMs));
+			}
+			if (webcamStreamed && webcamVideoPath) {
+				patches.push(patchWebmDurationOnDisk(webcamVideoPath, payload.durationMs));
+			}
+			await Promise.all(patches);
 		}
 
 		const session: RecordingSession = webcamVideoPath
@@ -2220,9 +2379,8 @@ export function registerIpcHandlers(
 				? [{ name: mainT("dialogs", "fileDialogs.gifImage"), extensions: ["gif"] }]
 				: [{ name: mainT("dialogs", "fileDialogs.mp4Video"), extensions: ["mp4"] }];
 
-			// Prefer the user's last export folder if it still exists, otherwise fall
-			// back to ~/Downloads. Validation must happen here because the renderer
-			// can't stat the filesystem.
+			// Prefer the user's last export folder if it still exists, else ~/Downloads.
+			// Validate here because the renderer can't stat the filesystem.
 			let defaultDir = app.getPath("downloads");
 			if (exportFolder) {
 				try {
@@ -2267,8 +2425,8 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("write-export-to-path", async (_, videoData: ArrayBuffer, filePath: string) => {
 		try {
-			// Sanity-check the path. The renderer is trusted (contextIsolation is on),
-			// but a stale state bug shouldn't be able to clobber arbitrary files.
+			// Sanity-check the path: the renderer is trusted (contextIsolation on), but a
+			// stale-state bug shouldn't be able to clobber arbitrary files.
 			if (typeof filePath !== "string" || !path.isAbsolute(filePath)) {
 				return { success: false, message: "Invalid path" };
 			}
@@ -2305,7 +2463,7 @@ export function registerIpcHandlers(
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.videoFiles"),
-							extensions: ["webm", "mp4", "mov", "avi", "mkv"],
+							extensions: ["webm", "mp4", "mov", "avi", "mkv", "m4v", "wmv", "flv", "ts"],
 						},
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
 					],
@@ -2344,14 +2502,13 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("reveal-in-folder", async (_, filePath: string) => {
 		try {
-			// shell.showItemInFolder doesn't return a value, it throws on error
+			// showItemInFolder returns nothing, it throws on error
 			shell.showItemInFolder(filePath);
 			return { success: true };
 		} catch (error) {
 			console.error(`Error revealing item in folder: ${filePath}`, error);
-			// Fallback to open the directory if revealing the item fails
-			// This might happen if the file was moved or deleted after export,
-			// or if the path is somehow invalid for showItemInFolder
+			// Fall back to opening the directory if revealing fails (file moved/deleted
+			// after export, or a path showItemInFolder rejects).
 			try {
 				const openPathResult = await shell.openPath(path.dirname(filePath));
 				if (openPathResult) {
@@ -2484,16 +2641,34 @@ export function registerIpcHandlers(
 		}
 	}
 
-	ipcMain.handle("load-project-file", async () => {
-		return loadProjectFile();
+	ipcMain.handle("load-project-file", async (_, projectFolder?: string) => {
+		return loadProjectFile(projectFolder);
 	});
 
-	async function loadProjectFile(): Promise<ProjectFileResult> {
+	async function loadProjectFile(projectFolder?: string): Promise<ProjectFileResult> {
 		try {
+			// Prefer the user's last opened-project folder if it still exists, else
+			// RECORDINGS_DIR. Validate here because the renderer can't stat the filesystem.
+			let defaultDir = RECORDINGS_DIR;
+			if (projectFolder) {
+				try {
+					const stats = await fs.stat(projectFolder);
+					if (stats.isDirectory()) {
+						defaultDir = projectFolder;
+					}
+				} catch (err) {
+					// Stat can fail if the folder was moved/deleted (expected) or on a
+					// permission error (worth surfacing). We fall back either way, but log it.
+					console.warn(
+						`Could not access remembered project folder "${projectFolder}", falling back to RECORDINGS_DIR:`,
+						err,
+					);
+				}
+			}
 			const dialogOptions = buildDialogOptions(
 				{
 					title: mainT("dialogs", "fileDialogs.openProject"),
-					defaultPath: RECORDINGS_DIR,
+					defaultPath: defaultDir,
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.openscreenProject"),
@@ -2525,6 +2700,50 @@ export function registerIpcHandlers(
 			};
 		} catch (error) {
 			console.error("Failed to load project file:", error);
+			return {
+				success: false,
+				message: "Failed to load project file",
+				error: String(error),
+			};
+		}
+	}
+
+	ipcMain.handle("load-project-file-from-path", async (_event, filePath: string) => {
+		return loadProjectFileFromPath(filePath);
+	});
+
+	async function loadProjectFileFromPath(filePath: string): Promise<ProjectFileResult> {
+		try {
+			if (!filePath || typeof filePath !== "string") {
+				return { success: false, message: "Invalid file path" };
+			}
+			// Validate extension and readability
+			if (path.extname(filePath).toLowerCase() !== `.${PROJECT_FILE_EXTENSION}`) {
+				return { success: false, message: "Not an Openscreen project file" };
+			}
+			const stats = await fs.stat(filePath).catch(() => null);
+			if (!stats?.isFile()) {
+				return { success: false, message: "File not found" };
+			}
+			const content = await fs.readFile(filePath, "utf-8");
+			const project = JSON.parse(content);
+			currentProjectPath = filePath;
+
+			// Approve session paths but tolerate failures (e.g. video moved outside trusted
+			// dirs) so the project still loads and the renderer can show "video not found".
+			let session: import("../../src/lib/recordingSession").RecordingSession | null = null;
+			try {
+				session = await getApprovedProjectSession(project, filePath);
+			} catch (sessionError) {
+				console.warn(
+					"[loadProjectFileFromPath] Could not approve session paths, proceeding without session:",
+					sessionError,
+				);
+			}
+			setCurrentRecordingSessionState(session);
+			return { success: true, path: filePath, project };
+		} catch (error) {
+			console.error("Failed to load project file from path:", error);
 			return {
 				success: false,
 				message: "Failed to load project file",
@@ -2615,6 +2834,8 @@ export function registerIpcHandlers(
 
 	function clearCurrentVideoPath(): ProjectPathResult {
 		currentVideoPath = null;
+		currentProjectPath = null;
+		setCurrentRecordingSessionState(null);
 		return { success: true };
 	}
 
@@ -2689,6 +2910,7 @@ export function registerIpcHandlers(
 		saveProjectFile,
 		loadProjectFile,
 		loadCurrentProjectFile,
+		loadProjectFileFromPath,
 		setCurrentVideoPath,
 		getCurrentVideoPathResult,
 		clearCurrentVideoPath,
