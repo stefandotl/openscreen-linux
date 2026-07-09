@@ -23,6 +23,7 @@ import type {
 	CursorRecordingSample,
 	NativeCursorAsset,
 	NativeCursorType,
+	NativePlatform,
 } from "@/native/contracts";
 
 export interface ActiveNativeCursorFrame {
@@ -269,6 +270,29 @@ export function hasNativeCursorRecordingData(
 			recordingData.samples.length > 0 &&
 			(recordingData.assets.length > 0 || recordingData.provider === "none"),
 	);
+}
+
+export function hasRenderableNativeCursorRecordingData(
+	recordingData: CursorRecordingData | null | undefined,
+	options: { currentPlatform?: NativePlatform | null } = {},
+): recordingData is CursorRecordingData {
+	if (!hasNativeCursorRecordingData(recordingData)) {
+		return false;
+	}
+
+	// Linux browser capture can still bake the system cursor into the video even when
+	// the cursor helper records telemetry. Keep that telemetry for auto-zoom, but
+	// don't draw a second replacement cursor unless a future native Linux provider
+	// supplies real cursor assets.
+	if (
+		options.currentPlatform === "linux" &&
+		recordingData.provider === "none" &&
+		recordingData.assets.length === 0
+	) {
+		return false;
+	}
+
+	return true;
 }
 
 export function createNativeCursorMotionBlurState(): NativeCursorMotionBlurState {

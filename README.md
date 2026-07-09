@@ -105,6 +105,11 @@ Three packages are published to the [Releases page](https://github.com/siddharth
 sudo apt install ./Openscreen-Linux-latest.deb
 ```
 
+Build only the Debian package locally:
+```bash
+npm run build:native:linux-cursor && tsc && vite build && electron-builder --linux deb --config.npmRebuild=false
+```
+
 **Arch / Manjaro (`.pacman`)**
 ```bash
 sudo pacman -U Openscreen-Linux-latest.pacman

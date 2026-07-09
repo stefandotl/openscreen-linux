@@ -34,7 +34,10 @@ import {
 	transcribeMono16kToSegments,
 	trimLeadingSilenceMono16k,
 } from "@/lib/captioning";
-import { hasNativeCursorRecordingData } from "@/lib/cursor/nativeCursor";
+import {
+	hasNativeCursorRecordingData,
+	hasRenderableNativeCursorRecordingData,
+} from "@/lib/cursor/nativeCursor";
 import {
 	calculateEffectiveSourceDimensions,
 	calculateMp4ExportSettings,
@@ -302,12 +305,15 @@ export default function VideoEditor() {
 
 	const { shortcuts, isMac } = useShortcuts();
 	// Windows recordings include captured cursor assets. macOS hides the system
-	// cursor in ScreenCaptureKit and renders telemetry samples with OpenScreen's
-	// default arrow asset for the editable overlay.
+	// cursor in ScreenCaptureKit and can render telemetry-only samples with
+	// OpenScreen's default arrow asset. Linux telemetry stays available for
+	// auto-zoom, but browser capture may already contain the original cursor.
 	const hasEditableCursorRecording =
 		recordingCursorCaptureMode === "editable-overlay" &&
 		(nativePlatform === "win32" || nativePlatform === "darwin" || nativePlatform === "linux") &&
-		hasNativeCursorRecordingData(cursorRecordingData);
+		hasRenderableNativeCursorRecordingData(cursorRecordingData, {
+			currentPlatform: nativePlatform,
+		});
 	const effectiveShowCursor = showCursor && hasEditableCursorRecording;
 	const showCursorSettings = hasEditableCursorRecording;
 	const { locale, setLocale, t: rawT } = useI18n();

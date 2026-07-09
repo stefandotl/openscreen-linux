@@ -4,6 +4,7 @@ import {
 	getNativeCursorClickBounceProgress,
 	getNativeCursorClickBounceScale,
 	hasNativeCursorRecordingData,
+	hasRenderableNativeCursorRecordingData,
 	resolveInterpolatedNativeCursorFrame,
 	resolveNativeCursorRenderAsset,
 } from "./nativeCursor";
@@ -48,10 +49,30 @@ describe("native cursor click bounce", () => {
 		};
 
 		expect(hasNativeCursorRecordingData(recordingData)).toBe(true);
+		expect(
+			hasRenderableNativeCursorRecordingData(recordingData, { currentPlatform: "darwin" }),
+		).toBe(true);
 		const frame = resolveInterpolatedNativeCursorFrame(recordingData, 50);
 		expect(frame?.asset.cursorType).toBe("arrow");
 		expect(frame?.sample.cx).toBeCloseTo(0.5);
 		expect(frame?.sample.cy).toBeCloseTo(0.5);
+	});
+
+	it("does not render telemetry-only Linux cursor data over a cursor-baked capture", () => {
+		const recordingData = {
+			version: 2,
+			provider: "none" as const,
+			assets: [],
+			samples: [
+				{ timeMs: 0, cx: 0.25, cy: 0.4, visible: true },
+				{ timeMs: 100, cx: 0.75, cy: 0.6, visible: true },
+			],
+		};
+
+		expect(hasNativeCursorRecordingData(recordingData)).toBe(true);
+		expect(
+			hasRenderableNativeCursorRecordingData(recordingData, { currentPlatform: "linux" }),
+		).toBe(false);
 	});
 
 	it("renders the natively captured cursor bitmap for untyped macOS samples", () => {
