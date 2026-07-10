@@ -120,6 +120,7 @@ import VideoPlayback, { VideoPlaybackRef } from "./VideoPlayback";
 
 /** Single Sonner slot so auto-caption phases update in place instead of stacking. */
 const AUTO_CAPTION_PROGRESS_TOAST_ID = "auto-caption-progress";
+const MP4_EXPORT_FRAME_RATE = 30;
 
 function isClickInteractionType(interactionType: string | null | undefined) {
 	return (
@@ -1988,10 +1989,9 @@ export default function VideoEditor() {
 						nativeOutputPath: targetPath,
 						nativeAudioPath: videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : undefined),
 						preferNativeNvenc: true,
-						requireNativeNvenc: true,
 						width: exportWidth,
 						height: exportHeight,
-						frameRate: 60,
+						frameRate: MP4_EXPORT_FRAME_RATE,
 						bitrate,
 						codec: "avc1.640033",
 						wallpaper,
@@ -2069,7 +2069,7 @@ export default function VideoEditor() {
 							sourcePath: videoSourcePath ?? videoPath,
 							width: exportWidth,
 							height: exportHeight,
-							frameRate: 60,
+							frameRate: MP4_EXPORT_FRAME_RATE,
 							codec: "avc1.640033",
 							bitrate,
 						});

@@ -6,7 +6,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { DesktopCapturerSource } from "electron";
+import type { DesktopCapturerSource, MessagePortMain } from "electron";
 import {
 	app,
 	BrowserWindow,
@@ -70,7 +70,17 @@ type NativeNvencExportSession = {
 	process: ChildProcessWithoutNullStreams;
 	outputPath: string;
 	stderr: string;
+	framePort?: MessagePortMain;
 	exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null; error?: Error }>;
+	writePerf: {
+		startedAtMs: number;
+		lastLogAtMs: number;
+		frames: number;
+		bytes: number;
+		bufferWrapMs: number;
+		pipeWriteMs: number;
+		maxPipeWriteMs: number;
+	};
 };
 
 const nativeNvencExportSessions = new Map<string, NativeNvencExportSession>();
@@ -78,6 +88,72 @@ const TIMELINE_EPSILON_SEC = 0.0001;
 
 function tailText(text: string, maxLength = 8000) {
 	return text.length > maxLength ? text.slice(text.length - maxLength) : text;
+}
+
+function maybeLogNativeNvencMainPerf(session: NativeNvencExportSession, force = false) {
+	const stats = session.writePerf;
+	if (stats.frames === 0) return;
+
+	const now = performance.now();
+	if (!force && stats.frames % 120 !== 0 && now - stats.lastLogAtMs < 5000) return;
+
+	const elapsedSec = Math.max((now - stats.startedAtMs) / 1000, 0.001);
+	const pipeSec = Math.max(stats.pipeWriteMs / 1000, 0.001);
+	const mib = stats.bytes / (1024 * 1024);
+	console.info(
+		`[native-nvenc-main-perf] ${JSON.stringify({
+			frames: stats.frames,
+			feedFps: Number((stats.frames / elapsedSec).toFixed(2)),
+			feedMiBps: Number((mib / elapsedSec).toFixed(2)),
+			avgMs: {
+				bufferWrap: Number((stats.bufferWrapMs / stats.frames).toFixed(3)),
+				pipeWrite: Number((stats.pipeWriteMs / stats.frames).toFixed(2)),
+			},
+			maxPipeWriteMs: Number(stats.maxPipeWriteMs.toFixed(2)),
+			pipeMiBps: Number((mib / pipeSec).toFixed(2)),
+		})}`,
+	);
+	stats.lastLogAtMs = now;
+}
+
+async function writeNativeNvencExportFrame(
+	sessionId: string,
+	chunk: ArrayBuffer,
+): Promise<{ success: boolean; message?: string; error?: string }> {
+	const session = nativeNvencExportSessions.get(sessionId);
+	if (!session) {
+		return { success: false, message: "Native NVENC export session not found" };
+	}
+	if (session.process.stdin.destroyed) {
+		return { success: false, message: "Native NVENC export stdin is closed" };
+	}
+
+	try {
+		const bufferWrapStartedAtMs = performance.now();
+		const buffer = Buffer.from(chunk);
+		const bufferWrapMs = performance.now() - bufferWrapStartedAtMs;
+		const pipeWriteStartedAtMs = performance.now();
+		await new Promise<void>((resolve, reject) => {
+			session.process.stdin.write(buffer, (error) => {
+				if (error) reject(error);
+				else resolve();
+			});
+		});
+		const pipeWriteMs = performance.now() - pipeWriteStartedAtMs;
+		session.writePerf.frames++;
+		session.writePerf.bytes += chunk.byteLength;
+		session.writePerf.bufferWrapMs += bufferWrapMs;
+		session.writePerf.pipeWriteMs += pipeWriteMs;
+		session.writePerf.maxPipeWriteMs = Math.max(session.writePerf.maxPipeWriteMs, pipeWriteMs);
+		maybeLogNativeNvencMainPerf(session);
+		return { success: true };
+	} catch (error) {
+		return {
+			success: false,
+			message: "Failed to write native NVENC export frame",
+			error: String(error),
+		};
+	}
 }
 
 function getFfmpegBinary() {
@@ -108,7 +184,7 @@ function buildNativeNvencArgs(input: {
 		"-f",
 		"rawvideo",
 		"-pix_fmt",
-		"rgba",
+		"yuv420p",
 		"-s",
 		`${input.width}x${input.height}`,
 		"-r",
@@ -2794,6 +2870,7 @@ export function registerIpcHandlers(
 					height: Math.round(height),
 					frameRate,
 					bitrate,
+					inputPixelFormat: "yuv420p",
 					audio: Boolean(audioPath),
 					trimRegions: payload.trimRegions?.length ?? 0,
 					speedRegions: payload.speedRegions?.length ?? 0,
@@ -2808,6 +2885,15 @@ export function registerIpcHandlers(
 					process: child,
 					outputPath,
 					stderr: "",
+					writePerf: {
+						startedAtMs: performance.now(),
+						lastLogAtMs: performance.now(),
+						frames: 0,
+						bytes: 0,
+						bufferWrapMs: 0,
+						pipeWriteMs: 0,
+						maxPipeWriteMs: 0,
+					},
 					exitPromise: new Promise((resolve) => {
 						child.once("error", (error) => resolve({ code: null, signal: null, error }));
 						child.once("close", (code, signal) => resolve({ code, signal }));
@@ -2834,34 +2920,53 @@ export function registerIpcHandlers(
 		},
 	);
 
-	ipcMain.handle(
-		"write-native-nvenc-export-chunk",
-		async (_, sessionId: string, chunk: ArrayBuffer) => {
-			const session = nativeNvencExportSessions.get(sessionId);
-			if (!session) {
-				return { success: false, message: "Native NVENC export session not found" };
-			}
-			if (session.process.stdin.destroyed) {
-				return { success: false, message: "Native NVENC export stdin is closed" };
-			}
+	ipcMain.on("connect-native-nvenc-export-port", (event, sessionId: unknown) => {
+		const port = event.ports[0];
+		const session =
+			typeof sessionId === "string" ? nativeNvencExportSessions.get(sessionId) : undefined;
+		if (!port || !session || typeof sessionId !== "string") {
+			port?.close();
+			return;
+		}
 
-			try {
-				await new Promise<void>((resolve, reject) => {
-					session.process.stdin.write(Buffer.from(chunk), (error) => {
-						if (error) reject(error);
-						else resolve();
+		session.framePort?.close();
+		session.framePort = port;
+		let writeQueue = Promise.resolve();
+		port.on("message", (messageEvent) => {
+			const data = messageEvent.data as { requestId?: unknown; chunk?: unknown };
+			const requestId = typeof data?.requestId === "number" ? data.requestId : -1;
+			if (requestId === 1) {
+				console.info("[native-nvenc] First transferable frame received", {
+					bytes: data?.chunk instanceof ArrayBuffer ? data.chunk.byteLength : null,
+					payloadType: Object.prototype.toString.call(data?.chunk),
+				});
+			}
+			writeQueue = writeQueue
+				.then(async () => {
+					const result =
+						data?.chunk instanceof ArrayBuffer
+							? await writeNativeNvencExportFrame(sessionId, data.chunk)
+							: { success: false, message: "Invalid native NVENC frame payload" };
+					port.postMessage({ requestId, result });
+				})
+				.catch((error) => {
+					port.postMessage({
+						requestId,
+						result: {
+							success: false,
+							message: "Native NVENC frame port failed",
+							error: String(error),
+						},
 					});
 				});
-				return { success: true };
-			} catch (error) {
-				return {
-					success: false,
-					message: "Failed to write native NVENC export frame",
-					error: String(error),
-				};
-			}
-		},
-	);
+		});
+		port.on("close", () => {
+			if (session.framePort === port) session.framePort = undefined;
+		});
+		port.start();
+		port.postMessage({ type: "ready" });
+		console.info("[native-nvenc] Transferable frame port connected", { sessionId });
+	});
 
 	ipcMain.handle("finish-native-nvenc-export", async (_, sessionId: string) => {
 		const session = nativeNvencExportSessions.get(sessionId);
@@ -2870,8 +2975,10 @@ export function registerIpcHandlers(
 		}
 
 		try {
+			session.framePort?.close();
 			session.process.stdin.end();
 			const result = await session.exitPromise;
+			maybeLogNativeNvencMainPerf(session, true);
 			nativeNvencExportSessions.delete(sessionId);
 
 			if (result.error || result.code !== 0) {
@@ -2897,6 +3004,7 @@ export function registerIpcHandlers(
 				stderr: session.stderr,
 			};
 		} catch (error) {
+			session.framePort?.close();
 			nativeNvencExportSessions.delete(sessionId);
 			return {
 				success: false,
@@ -2914,6 +3022,7 @@ export function registerIpcHandlers(
 		}
 
 		nativeNvencExportSessions.delete(sessionId);
+		session.framePort?.close();
 		session.process.stdin.destroy();
 		if (!session.process.killed) {
 			session.process.kill("SIGKILL");

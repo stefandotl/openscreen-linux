@@ -12,7 +12,13 @@ import type { CursorRecordingData } from "@/native/contracts";
 import { getPlatform } from "@/utils/platformUtils";
 import { AudioProcessor } from "./audioEncoder";
 import { FrameRenderer } from "./frameRenderer";
+import { copyCanvasToPackedI420, createPackedI420FrameBuffer } from "./i420Frame";
 import { VideoMuxer } from "./muxer";
+import {
+	closeNativeNvencFramePort,
+	waitForNativeNvencFramePort,
+	writeNativeNvencFrame,
+} from "./nativeNvencFramePort";
 import { StreamingVideoDecoder } from "./streamingDecoder";
 import { TimestampedVideoFrameQueue } from "./timestampedVideoFrameQueue";
 import type { ExportConfig, ExportProgress, ExportResult } from "./types";
@@ -59,7 +65,6 @@ export interface VideoExporterConfig extends ExportConfig {
 	nativeOutputPath?: string;
 	nativeAudioPath?: string;
 	preferNativeNvenc?: boolean;
-	requireNativeNvenc?: boolean;
 	onProgress?: (progress: ExportProgress) => void;
 }
 
@@ -236,7 +241,7 @@ function maybeLogNativeNvencPerf(stats: NativeNvencPerfStats, totalFrames: numbe
 	const avg = (value: number) => Number((value / frames).toFixed(2));
 	const max = (value: number) => Number(value.toFixed(2));
 
-	console.info("[native-nvenc-perf]", {
+	const snapshot = {
 		frames: totalFrames > 0 ? `${stats.frames}/${totalFrames}` : stats.frames,
 		fps: Number((stats.frames / elapsedSec).toFixed(2)),
 		avgMs: {
@@ -253,7 +258,8 @@ function maybeLogNativeNvencPerf(stats: NativeNvencPerfStats, totalFrames: numbe
 			readback: max(stats.maxReadbackMs),
 			ffmpegWrite: max(stats.maxFfmpegWriteMs),
 		},
-	});
+	};
+	console.info(`[native-nvenc-perf] ${JSON.stringify(snapshot)}`);
 	stats.lastLogAtMs = now;
 }
 
@@ -275,14 +281,12 @@ export class VideoExporter {
 	private chunkCount = 0;
 	private lastEncoderOutputAt = 0;
 	private fatalEncoderError: Error | null = null;
-	private nativeNvencWarning: string | null = null;
 
 	constructor(config: VideoExporterConfig) {
 		this.config = config;
 	}
 
 	async export(): Promise<ExportResult> {
-		this.nativeNvencWarning = null;
 		const nativeResult = await this.tryNativeNvencExport();
 		if (nativeResult) {
 			return nativeResult;
@@ -293,14 +297,7 @@ export class VideoExporter {
 
 		for (const encoderPreference of encoderPreferences) {
 			try {
-				const result = await this.exportWithEncoderPreference(encoderPreference);
-				if (result.success && this.nativeNvencWarning) {
-					return {
-						...result,
-						warnings: [this.nativeNvencWarning, ...(result.warnings ?? [])],
-					};
-				}
-				return result;
+				return await this.exportWithEncoderPreference(encoderPreference);
 			} catch (error) {
 				const normalizedError = error instanceof Error ? error : new Error(String(error));
 				lastError = normalizedError;
@@ -332,7 +329,6 @@ export class VideoExporter {
 
 	private getNativeNvencBlocker(platform: string): string | null {
 		if (platform !== "linux") return `platform is ${platform}`;
-		if (!this.config.preferNativeNvenc) return "native NVENC preference is disabled";
 		if (!this.config.nativeOutputPath) return "native output path is missing";
 		if (!window.electronAPI?.startNativeNvencExport) return "native NVENC IPC is unavailable";
 
@@ -349,16 +345,13 @@ export class VideoExporter {
 		const warnings: string[] = [];
 		const onWarning = (message: string) => warnings.push(message);
 
+		if (!this.config.preferNativeNvenc) return null;
 		const platform = await getPlatform();
-		const requireNativeNvenc = Boolean(this.config.requireNativeNvenc && platform === "linux");
 		const blocker = this.getNativeNvencBlocker(platform);
 		if (blocker) {
-			this.nativeNvencWarning = `Native NVENC export skipped: ${blocker}`;
-			console.info(`[VideoExporter] ${this.nativeNvencWarning}`);
-			if (requireNativeNvenc) {
-				return { success: false, error: this.nativeNvencWarning };
-			}
-			return null;
+			const error = `Native NVENC export unavailable: ${blocker}`;
+			console.error(`[VideoExporter] ${error}`);
+			return { success: false, error };
 		}
 
 		this.cleanup();
@@ -428,16 +421,17 @@ export class VideoExporter {
 				speedRegions: this.config.speedRegions,
 			});
 			if (!startResult.success || !startResult.sessionId) {
-				this.nativeNvencWarning = `Native NVENC export unavailable: ${
+				const error = `Native NVENC export unavailable: ${
 					startResult.message || startResult.error || "unknown reason"
 				}`;
-				console.warn("[VideoExporter] Native NVENC export unavailable:", startResult);
-				if (requireNativeNvenc) {
-					return { success: false, error: this.nativeNvencWarning };
-				}
-				return null;
+				console.error("[VideoExporter] Native NVENC export unavailable:", startResult);
+				return { success: false, error };
 			}
 			nativeSessionId = startResult.sessionId;
+			const framePortResult = await waitForNativeNvencFramePort(nativeSessionId);
+			if (!framePortResult.success) {
+				throw new Error(framePortResult.message || "Required native NVENC frame port failed");
+			}
 
 			const { totalFrames } = streamingDecoder.getExportMetrics(
 				this.config.frameRate,
@@ -446,11 +440,14 @@ export class VideoExporter {
 			);
 			let frameIndex = 0;
 			const perfStats = createNativeNvencPerfStats();
+			const i420Frame = createPackedI420FrameBuffer(this.config.width, this.config.height);
 			console.info("[native-nvenc-perf] Sampling export pipeline", {
 				totalFrames,
 				width: this.config.width,
 				height: this.config.height,
 				frameRate: this.config.frameRate,
+				inputPixelFormat: "yuv420p",
+				frameBytes: i420Frame.data.byteLength,
 				hasWebcam: Boolean(this.config.webcamVideoUrl),
 				hasCursorOverlay: (this.config.cursorScale ?? 0) > 0,
 				zoomRegions: this.config.zoomRegions.length,
@@ -523,16 +520,18 @@ export class VideoExporter {
 						renderMs = performance.now() - renderStartMs;
 
 						const canvas = renderer.getCanvas();
-						const canvasCtx = canvas.getContext("2d")!;
 						const readbackStartMs = performance.now();
-						const imageData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
+						const outputTimestampUs = frameIndex * (1_000_000 / this.config.frameRate);
+						await copyCanvasToPackedI420(
+							canvas,
+							i420Frame,
+							outputTimestampUs,
+							1_000_000 / this.config.frameRate,
+						);
 						readbackMs = performance.now() - readbackStartMs;
 
 						const ffmpegWriteStartMs = performance.now();
-						const writeResult = await window.electronAPI.writeNativeNvencExportChunk(
-							nativeSessionId!,
-							imageData.data.buffer as ArrayBuffer,
-						);
+						const writeResult = await writeNativeNvencFrame(nativeSessionId!, i420Frame.data);
 						ffmpegWriteMs = performance.now() - ffmpegWriteStartMs;
 						if (!writeResult.success) {
 							throw new Error(
@@ -568,6 +567,7 @@ export class VideoExporter {
 			);
 
 			if (this.cancelled) {
+				closeNativeNvencFramePort(nativeSessionId);
 				await window.electronAPI.cancelNativeNvencExport(nativeSessionId);
 				nativeSessionId = null;
 				return { success: false, error: "Export cancelled" };
@@ -587,17 +587,16 @@ export class VideoExporter {
 			});
 			maybeLogNativeNvencPerf(perfStats, totalFrames, true);
 
-			const finishResult = await window.electronAPI.finishNativeNvencExport(nativeSessionId);
+			const finishedSessionId = nativeSessionId;
+			const finishResult = await window.electronAPI.finishNativeNvencExport(finishedSessionId);
+			closeNativeNvencFramePort(finishedSessionId);
 			nativeSessionId = null;
 			if (!finishResult.success || !finishResult.path) {
-				this.nativeNvencWarning = `Native NVENC export failed: ${
+				const error = `Native NVENC export failed: ${
 					finishResult.message || finishResult.error || finishResult.stderr || "unknown reason"
 				}`;
 				console.warn("[VideoExporter] Native NVENC export failed:", finishResult);
-				if (requireNativeNvenc) {
-					return { success: false, error: this.nativeNvencWarning };
-				}
-				return null;
+				return { success: false, error };
 			}
 
 			return {
@@ -606,17 +605,15 @@ export class VideoExporter {
 				warnings: warnings.length > 0 ? warnings : undefined,
 			};
 		} catch (error) {
-			this.nativeNvencWarning = `Native NVENC export failed: ${
+			const nativeError = `Native NVENC export failed: ${
 				error instanceof Error ? error.message : String(error)
 			}`;
-			console.warn("[VideoExporter] Native NVENC export failed, falling back:", error);
+			console.error("[VideoExporter] Required native NVENC export failed:", error);
 			if (nativeSessionId) {
+				closeNativeNvencFramePort(nativeSessionId);
 				await window.electronAPI.cancelNativeNvencExport(nativeSessionId).catch(() => undefined);
 			}
-			if (requireNativeNvenc) {
-				return { success: false, error: this.nativeNvencWarning };
-			}
-			return null;
+			return { success: false, error: nativeError };
 		} finally {
 			stopWebcamDecode = true;
 			webcamFrameQueue?.destroy();

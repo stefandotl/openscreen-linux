@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { NATIVE_NVENC_FRAME_PORT_MESSAGE } from "../src/lib/exporter/nativeNvencFramePortProtocol";
 import type { NativeMacRecordingRequest } from "../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
 import type { RecordingSession, StoreRecordedSessionInput } from "../src/lib/recordingSession";
@@ -149,7 +150,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	writeExportToPath: (videoData: ArrayBuffer, filePath: string) => {
 		return ipcRenderer.invoke("write-export-to-path", videoData, filePath);
 	},
-	startNativeNvencExport: (payload: {
+	startNativeNvencExport: async (payload: {
 		width: number;
 		height: number;
 		frameRate: number;
@@ -160,15 +161,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		trimRegions?: Array<{ startMs: number; endMs: number }>;
 		speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
 	}) => {
-		return ipcRenderer.invoke("start-native-nvenc-export", payload);
+		const result = await ipcRenderer.invoke("start-native-nvenc-export", payload);
+		if (result.success && result.sessionId) {
+			const channel = new MessageChannel();
+			ipcRenderer.postMessage("connect-native-nvenc-export-port", result.sessionId, [
+				channel.port1,
+			]);
+			window.postMessage(
+				{ type: NATIVE_NVENC_FRAME_PORT_MESSAGE, sessionId: result.sessionId },
+				"*",
+				[channel.port2],
+			);
+		}
+		return result;
 	},
-	writeNativeNvencExportChunk: (sessionId: string, chunk: ArrayBuffer) => {
-		return ipcRenderer.invoke("write-native-nvenc-export-chunk", sessionId, chunk);
-	},
-	finishNativeNvencExport: (sessionId: string) => {
+	finishNativeNvencExport: async (sessionId: string) => {
 		return ipcRenderer.invoke("finish-native-nvenc-export", sessionId);
 	},
-	cancelNativeNvencExport: (sessionId: string) => {
+	cancelNativeNvencExport: async (sessionId: string) => {
 		return ipcRenderer.invoke("cancel-native-nvenc-export", sessionId);
 	},
 	openVideoFilePicker: () => {

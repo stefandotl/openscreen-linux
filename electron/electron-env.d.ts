@@ -207,14 +207,6 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
-		writeNativeNvencExportChunk: (
-			sessionId: string,
-			chunk: ArrayBuffer,
-		) => Promise<{
-			success: boolean;
-			message?: string;
-			error?: string;
-		}>;
 		finishNativeNvencExport: (sessionId: string) => Promise<{
 			success: boolean;
 			path?: string;
