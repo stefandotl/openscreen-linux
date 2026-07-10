@@ -1985,6 +1985,10 @@ export default function VideoEditor() {
 					const exporter = new VideoExporter({
 						videoUrl: videoPath,
 						webcamVideoUrl: webcamVideoPath || undefined,
+						nativeOutputPath: targetPath,
+						nativeAudioPath: videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : undefined),
+						preferNativeNvenc: true,
+						requireNativeNvenc: true,
 						width: exportWidth,
 						height: exportHeight,
 						frameRate: 60,
@@ -2027,7 +2031,15 @@ export default function VideoEditor() {
 					exporterRef.current = exporter;
 					const result = await exporter.export();
 
-					if (result.success && result.blob) {
+					if (result.success && result.path) {
+						if (result.warnings) {
+							for (const warning of result.warnings) {
+								toast.warning(warning);
+							}
+						}
+						setUnsavedExport(null);
+						handleExportSaved("Video", result.path);
+					} else if (result.success && result.blob) {
 						const arrayBuffer = await result.blob.arrayBuffer();
 
 						if (result.warnings) {

@@ -1,4 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
@@ -64,6 +65,262 @@ const nativeMacCaptureEvents = new EventEmitter();
 
 // Paths the user approved via file picker or project load (i.e. outside the default dirs).
 const approvedPaths = new Set<string>();
+
+type NativeNvencExportSession = {
+	process: ChildProcessWithoutNullStreams;
+	outputPath: string;
+	stderr: string;
+	exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null; error?: Error }>;
+};
+
+const nativeNvencExportSessions = new Map<string, NativeNvencExportSession>();
+const TIMELINE_EPSILON_SEC = 0.0001;
+
+function tailText(text: string, maxLength = 8000) {
+	return text.length > maxLength ? text.slice(text.length - maxLength) : text;
+}
+
+function getFfmpegBinary() {
+	return process.env.OPENSCREEN_FFMPEG_PATH || "ffmpeg";
+}
+
+function buildNativeNvencArgs(input: {
+	width: number;
+	height: number;
+	frameRate: number;
+	bitrate: number;
+	outputPath: string;
+	audioPath?: string;
+	sourceDurationSec?: number;
+	trimRegions?: Array<{ startMs: number; endMs: number }>;
+	speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
+}) {
+	const bitrate = Math.max(500_000, Math.round(input.bitrate));
+	const maxRate = Math.round(bitrate * 1.5);
+	const bufferSize = Math.round(bitrate * 2);
+	const audioTimelineFilter = input.audioPath
+		? buildAudioTimelineFilter(input.sourceDurationSec, input.trimRegions, input.speedRegions)
+		: null;
+
+	return [
+		"-hide_banner",
+		"-y",
+		"-f",
+		"rawvideo",
+		"-pix_fmt",
+		"rgba",
+		"-s",
+		`${input.width}x${input.height}`,
+		"-r",
+		String(input.frameRate),
+		"-i",
+		"pipe:0",
+		...(input.audioPath ? ["-i", input.audioPath] : []),
+		...(audioTimelineFilter ? ["-filter_complex", audioTimelineFilter.filter] : []),
+		"-map",
+		"0:v:0",
+		...(input.audioPath
+			? ["-map", audioTimelineFilter ? audioTimelineFilter.outputLabel : "1:a?"]
+			: []),
+		"-c:v",
+		"h264_nvenc",
+		"-preset",
+		"p4",
+		"-tune",
+		"hq",
+		"-rc",
+		"vbr",
+		"-b:v",
+		String(bitrate),
+		"-maxrate",
+		String(maxRate),
+		"-bufsize",
+		String(bufferSize),
+		"-pix_fmt",
+		"yuv420p",
+		...(input.audioPath ? ["-c:a", "aac", "-b:a", "128k", "-shortest"] : []),
+		"-movflags",
+		"+faststart",
+		input.outputPath,
+	];
+}
+
+function buildAudioTimelineFilter(
+	sourceDurationSec?: number,
+	trimRegions?: Array<{ startMs: number; endMs: number }>,
+	speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>,
+) {
+	const duration = Number(sourceDurationSec);
+	const hasTimelineEdits = Boolean(trimRegions?.length || speedRegions?.length);
+	if (!Number.isFinite(duration) || duration <= 0 || !hasTimelineEdits) {
+		return null;
+	}
+
+	const keepSegments = buildKeepSegments(duration, trimRegions);
+	const timelineSegments = splitSegmentsBySpeed(keepSegments, speedRegions);
+
+	if (timelineSegments.length === 0) {
+		return {
+			filter: "anullsrc=channel_layout=stereo:sample_rate=48000:d=0.001[aout]",
+			outputLabel: "[aout]",
+		};
+	}
+
+	const isPassthrough =
+		timelineSegments.length === 1 &&
+		Math.abs(timelineSegments[0].startSec) <= TIMELINE_EPSILON_SEC &&
+		Math.abs(timelineSegments[0].endSec - duration) <= TIMELINE_EPSILON_SEC &&
+		Math.abs(timelineSegments[0].speed - 1) <= TIMELINE_EPSILON_SEC;
+	if (isPassthrough) {
+		return null;
+	}
+
+	const parts = timelineSegments.map((segment, index) => {
+		const label = `a${index}`;
+		const filters = [
+			`[1:a]atrim=start=${formatFfmpegNumber(segment.startSec)}:end=${formatFfmpegNumber(
+				segment.endSec,
+			)}`,
+			"asetpts=PTS-STARTPTS",
+			...buildAtempoFilters(segment.speed),
+		];
+		return `${filters.join(",")}[${label}]`;
+	});
+
+	if (timelineSegments.length === 1) {
+		return {
+			filter: parts[0],
+			outputLabel: "[a0]",
+		};
+	}
+
+	const inputLabels = timelineSegments.map((_, index) => `[a${index}]`).join("");
+	parts.push(`${inputLabels}concat=n=${timelineSegments.length}:v=0:a=1[aout]`);
+
+	return {
+		filter: parts.join(";"),
+		outputLabel: "[aout]",
+	};
+}
+
+function buildKeepSegments(
+	duration: number,
+	trimRegions?: Array<{ startMs: number; endMs: number }>,
+) {
+	if (!trimRegions?.length) {
+		return [{ startSec: 0, endSec: duration }];
+	}
+
+	const trims = trimRegions
+		.map((region) => ({
+			startSec: Math.max(0, Number(region.startMs) / 1000),
+			endSec: Math.max(0, Number(region.endMs) / 1000),
+		}))
+		.filter(
+			(region) =>
+				Number.isFinite(region.startSec) &&
+				Number.isFinite(region.endSec) &&
+				region.endSec > region.startSec,
+		)
+		.sort((a, b) => a.startSec - b.startSec);
+
+	if (trims.length === 0) {
+		return [{ startSec: 0, endSec: duration }];
+	}
+
+	const keepSegments: Array<{ startSec: number; endSec: number }> = [];
+	let cursorSec = 0;
+	for (const trim of trims) {
+		const trimStart = Math.min(duration, Math.max(cursorSec, trim.startSec));
+		const trimEnd = Math.min(duration, Math.max(trimStart, trim.endSec));
+		if (trimStart > cursorSec) {
+			keepSegments.push({ startSec: cursorSec, endSec: trimStart });
+		}
+		cursorSec = Math.max(cursorSec, trimEnd);
+	}
+	if (cursorSec < duration) {
+		keepSegments.push({ startSec: cursorSec, endSec: duration });
+	}
+
+	return keepSegments.filter((segment) => segment.endSec - segment.startSec > TIMELINE_EPSILON_SEC);
+}
+
+function splitSegmentsBySpeed(
+	segments: Array<{ startSec: number; endSec: number }>,
+	speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>,
+) {
+	const speeds = speedRegions
+		?.map((region) => ({
+			startSec: Math.max(0, Number(region.startMs) / 1000),
+			endSec: Math.max(0, Number(region.endMs) / 1000),
+			speed: Number(region.speed),
+		}))
+		.filter(
+			(region) =>
+				Number.isFinite(region.startSec) &&
+				Number.isFinite(region.endSec) &&
+				Number.isFinite(region.speed) &&
+				region.speed > 0 &&
+				region.endSec > region.startSec,
+		)
+		.sort((a, b) => a.startSec - b.startSec);
+
+	if (!speeds?.length) {
+		return segments.map((segment) => ({ ...segment, speed: 1 }));
+	}
+
+	const result: Array<{ startSec: number; endSec: number; speed: number }> = [];
+	for (const segment of segments) {
+		const overlapping = speeds.filter(
+			(speed) => speed.startSec < segment.endSec && speed.endSec > segment.startSec,
+		);
+		if (overlapping.length === 0) {
+			result.push({ ...segment, speed: 1 });
+			continue;
+		}
+
+		let cursorSec = segment.startSec;
+		for (const speed of overlapping) {
+			const speedStartSec = Math.max(speed.startSec, segment.startSec);
+			const speedEndSec = Math.min(speed.endSec, segment.endSec);
+			if (cursorSec < speedStartSec) {
+				result.push({ startSec: cursorSec, endSec: speedStartSec, speed: 1 });
+			}
+			result.push({ startSec: speedStartSec, endSec: speedEndSec, speed: speed.speed });
+			cursorSec = Math.max(cursorSec, speedEndSec);
+		}
+		if (cursorSec < segment.endSec) {
+			result.push({ startSec: cursorSec, endSec: segment.endSec, speed: 1 });
+		}
+	}
+
+	return result.filter((segment) => segment.endSec - segment.startSec > TIMELINE_EPSILON_SEC);
+}
+
+function buildAtempoFilters(speed: number) {
+	if (!Number.isFinite(speed) || speed <= 0 || Math.abs(speed - 1) <= TIMELINE_EPSILON_SEC) {
+		return [];
+	}
+
+	const filters: string[] = [];
+	let remaining = speed;
+	while (remaining > 2) {
+		filters.push("atempo=2");
+		remaining /= 2;
+	}
+	while (remaining < 0.5) {
+		filters.push("atempo=0.5");
+		remaining /= 0.5;
+	}
+	if (Math.abs(remaining - 1) > TIMELINE_EPSILON_SEC) {
+		filters.push(`atempo=${formatFfmpegNumber(remaining)}`);
+	}
+	return filters;
+}
+
+function formatFfmpegNumber(value: number) {
+	return value.toFixed(6).replace(/\.?0+$/, "") || "0";
+}
 
 function approveFilePath(filePath: string): void {
 	approvedPaths.add(path.resolve(filePath));
@@ -335,6 +592,16 @@ async function getApprovedProjectSession(
 	return webcamVideoPath
 		? { screenVideoPath, webcamVideoPath, createdAt: Date.now() }
 		: { screenVideoPath, createdAt: Date.now() };
+}
+
+async function getApprovedProjectSessionOrNull(project: unknown, projectFilePath?: string) {
+	try {
+		return await getApprovedProjectSession(project, projectFilePath);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.info(`[project] Could not approve session paths; continuing without media: ${message}`);
+		return null;
+	}
 }
 
 type SelectedSource = {
@@ -2454,6 +2721,206 @@ export function registerIpcHandlers(
 		}
 	});
 
+	ipcMain.handle(
+		"start-native-nvenc-export",
+		async (
+			_,
+			payload: {
+				width: number;
+				height: number;
+				frameRate: number;
+				bitrate: number;
+				outputPath: string;
+				audioPath?: string;
+				sourceDurationSec?: number;
+				trimRegions?: Array<{ startMs: number; endMs: number }>;
+				speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
+			},
+		) => {
+			try {
+				const outputPath =
+					typeof payload.outputPath === "string" ? path.normalize(payload.outputPath) : "";
+				if (!path.isAbsolute(outputPath) || !outputPath.toLowerCase().endsWith(".mp4")) {
+					return { success: false, message: "Invalid output path" };
+				}
+
+				const width = Number(payload.width);
+				const height = Number(payload.height);
+				const frameRate = Number(payload.frameRate);
+				const bitrate = Number(payload.bitrate);
+				if (
+					!Number.isFinite(width) ||
+					!Number.isFinite(height) ||
+					!Number.isFinite(frameRate) ||
+					!Number.isFinite(bitrate) ||
+					width < 2 ||
+					height < 2 ||
+					frameRate <= 0 ||
+					bitrate <= 0
+				) {
+					return { success: false, message: "Invalid export settings" };
+				}
+
+				let audioPath: string | undefined;
+				if (payload.audioPath) {
+					const normalizedAudioPath = normalizeVideoSourcePath(payload.audioPath);
+					if (
+						normalizedAudioPath &&
+						path.isAbsolute(normalizedAudioPath) &&
+						hasAllowedImportVideoExtension(normalizedAudioPath)
+					) {
+						const stats = await fs.stat(normalizedAudioPath).catch(() => null);
+						if (stats?.isFile()) {
+							audioPath = normalizedAudioPath;
+						}
+					}
+				}
+
+				await fs.mkdir(path.dirname(outputPath), { recursive: true });
+				const args = buildNativeNvencArgs({
+					width: Math.round(width),
+					height: Math.round(height),
+					frameRate,
+					bitrate,
+					outputPath,
+					audioPath,
+					sourceDurationSec: payload.sourceDurationSec,
+					trimRegions: payload.trimRegions,
+					speedRegions: payload.speedRegions,
+				});
+				console.info("[native-nvenc] Starting ffmpeg export", {
+					ffmpeg: getFfmpegBinary(),
+					width: Math.round(width),
+					height: Math.round(height),
+					frameRate,
+					bitrate,
+					audio: Boolean(audioPath),
+					trimRegions: payload.trimRegions?.length ?? 0,
+					speedRegions: payload.speedRegions?.length ?? 0,
+					outputPath,
+				});
+
+				const child = spawn(getFfmpegBinary(), args, {
+					stdio: ["pipe", "pipe", "pipe"],
+				});
+				const sessionId = randomUUID();
+				const session: NativeNvencExportSession = {
+					process: child,
+					outputPath,
+					stderr: "",
+					exitPromise: new Promise((resolve) => {
+						child.once("error", (error) => resolve({ code: null, signal: null, error }));
+						child.once("close", (code, signal) => resolve({ code, signal }));
+					}),
+				};
+
+				child.stderr.on("data", (chunk: Buffer) => {
+					session.stderr = tailText(session.stderr + chunk.toString("utf-8"));
+				});
+				child.stdout.on("data", () => {
+					// Drain stdout; ffmpeg normally writes progress to stderr.
+				});
+				nativeNvencExportSessions.set(sessionId, session);
+
+				return { success: true, sessionId };
+			} catch (error) {
+				console.error("Failed to start native NVENC export:", error);
+				return {
+					success: false,
+					message: "Failed to start native NVENC export",
+					error: String(error),
+				};
+			}
+		},
+	);
+
+	ipcMain.handle(
+		"write-native-nvenc-export-chunk",
+		async (_, sessionId: string, chunk: ArrayBuffer) => {
+			const session = nativeNvencExportSessions.get(sessionId);
+			if (!session) {
+				return { success: false, message: "Native NVENC export session not found" };
+			}
+			if (session.process.stdin.destroyed) {
+				return { success: false, message: "Native NVENC export stdin is closed" };
+			}
+
+			try {
+				await new Promise<void>((resolve, reject) => {
+					session.process.stdin.write(Buffer.from(chunk), (error) => {
+						if (error) reject(error);
+						else resolve();
+					});
+				});
+				return { success: true };
+			} catch (error) {
+				return {
+					success: false,
+					message: "Failed to write native NVENC export frame",
+					error: String(error),
+				};
+			}
+		},
+	);
+
+	ipcMain.handle("finish-native-nvenc-export", async (_, sessionId: string) => {
+		const session = nativeNvencExportSessions.get(sessionId);
+		if (!session) {
+			return { success: false, message: "Native NVENC export session not found" };
+		}
+
+		try {
+			session.process.stdin.end();
+			const result = await session.exitPromise;
+			nativeNvencExportSessions.delete(sessionId);
+
+			if (result.error || result.code !== 0) {
+				console.warn("[native-nvenc] ffmpeg export failed", {
+					code: result.code,
+					signal: result.signal,
+					error: result.error?.message,
+					stderr: session.stderr,
+				});
+				return {
+					success: false,
+					message: "Native NVENC export failed",
+					error: result.error?.message || `ffmpeg exited with code ${result.code}`,
+					stderr: session.stderr,
+				};
+			}
+
+			console.info("[native-nvenc] ffmpeg export completed", { outputPath: session.outputPath });
+			return {
+				success: true,
+				path: session.outputPath,
+				message: "Video exported successfully",
+				stderr: session.stderr,
+			};
+		} catch (error) {
+			nativeNvencExportSessions.delete(sessionId);
+			return {
+				success: false,
+				message: "Failed to finish native NVENC export",
+				error: String(error),
+				stderr: session.stderr,
+			};
+		}
+	});
+
+	ipcMain.handle("cancel-native-nvenc-export", async (_, sessionId: string) => {
+		const session = nativeNvencExportSessions.get(sessionId);
+		if (!session) {
+			return { success: true };
+		}
+
+		nativeNvencExportSessions.delete(sessionId);
+		session.process.stdin.destroy();
+		if (!session.process.killed) {
+			session.process.kill("SIGKILL");
+		}
+		return { success: true };
+	});
+
 	ipcMain.handle("open-video-file-picker", async () => {
 		try {
 			const dialogOptions = buildDialogOptions(
@@ -2691,7 +3158,7 @@ export function registerIpcHandlers(
 			const content = await fs.readFile(filePath, "utf-8");
 			const project = JSON.parse(content);
 			currentProjectPath = filePath;
-			setCurrentRecordingSessionState(await getApprovedProjectSession(project, filePath));
+			setCurrentRecordingSessionState(await getApprovedProjectSessionOrNull(project, filePath));
 
 			return {
 				success: true,
@@ -2729,17 +3196,8 @@ export function registerIpcHandlers(
 			const project = JSON.parse(content);
 			currentProjectPath = filePath;
 
-			// Approve session paths but tolerate failures (e.g. video moved outside trusted
-			// dirs) so the project still loads and the renderer can show "video not found".
-			let session: import("../../src/lib/recordingSession").RecordingSession | null = null;
-			try {
-				session = await getApprovedProjectSession(project, filePath);
-			} catch (sessionError) {
-				console.warn(
-					"[loadProjectFileFromPath] Could not approve session paths, proceeding without session:",
-					sessionError,
-				);
-			}
+			// Tolerate missing/moved media so the project settings still load.
+			const session = await getApprovedProjectSessionOrNull(project, filePath);
 			setCurrentRecordingSessionState(session);
 			return { success: true, path: filePath, project };
 		} catch (error) {
@@ -2764,7 +3222,9 @@ export function registerIpcHandlers(
 
 			const content = await fs.readFile(currentProjectPath, "utf-8");
 			const project = JSON.parse(content);
-			setCurrentRecordingSessionState(await getApprovedProjectSession(project, currentProjectPath));
+			setCurrentRecordingSessionState(
+				await getApprovedProjectSessionOrNull(project, currentProjectPath),
+			);
 			return {
 				success: true,
 				path: currentProjectPath,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	getSourceCopyFastPathBlockers,
 	isSourceCopyFastPathEligible,
+	shouldUseCpuFrameReadback,
 	type VideoExporterConfig,
 } from "./videoExporter";
 
@@ -117,5 +118,40 @@ describe("getSourceCopyFastPathBlockers", () => {
 				height: 1032,
 			}),
 		).toContain("output-size 1920x1080 differs from source 1920x1032");
+	});
+});
+
+describe("shouldUseCpuFrameReadback", () => {
+	it("keeps the safer CPU readback on Linux by default", () => {
+		expect(
+			shouldUseCpuFrameReadback({
+				platform: "linux",
+			}),
+		).toBe(true);
+	});
+
+	it("allows explicit Linux frame-source overrides", () => {
+		expect(
+			shouldUseCpuFrameReadback({
+				platform: "linux",
+				linuxFrameSource: "canvas",
+			}),
+		).toBe(false);
+
+		expect(
+			shouldUseCpuFrameReadback({
+				platform: "linux",
+				linuxFrameSource: "readback",
+			}),
+		).toBe(true);
+	});
+
+	it("does not force CPU readback on non-Linux platforms", () => {
+		expect(
+			shouldUseCpuFrameReadback({
+				platform: "darwin",
+				linuxFrameSource: "readback",
+			}),
+		).toBe(false);
 	});
 });

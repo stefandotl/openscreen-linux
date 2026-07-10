@@ -108,6 +108,7 @@ interface FrameRenderConfig {
 	cursorTelemetry?: import("@/components/video-editor/types").CursorTelemetryPoint[];
 	cursorClickTimestamps?: number[];
 	platform: string;
+	useLinuxCpuReadback?: boolean;
 }
 
 interface AnimationState {
@@ -163,11 +164,11 @@ export class FrameRenderer {
 	private prevAnimationTimeMs: number | null = null;
 	private zoomSpringState = createZoomSpringState();
 	private prevTargetProgress = 0;
-	private isLinux = false;
+	private useLinuxCpuReadback = false;
 
 	constructor(config: FrameRenderConfig) {
 		this.config = config;
-		this.isLinux = config.platform === "linux";
+		this.useLinuxCpuReadback = config.platform === "linux" && (config.useLinuxCpuReadback ?? true);
 		this.animationState = {
 			scale: 1,
 			focusX: DEFAULT_FOCUS.cx,
@@ -224,9 +225,9 @@ export class FrameRenderer {
 		this.compositeCanvas.width = this.config.width;
 		this.compositeCanvas.height = this.config.height;
 
-		// On Linux getImageData() runs frequently, so hint frequent CPU readback
+		// The Linux fallback uses getImageData()/readPixels frequently, so hint CPU readback.
 		this.compositeCtx = this.compositeCanvas.getContext("2d", {
-			willReadFrequently: this.isLinux,
+			willReadFrequently: this.useLinuxCpuReadback,
 		});
 
 		if (!this.compositeCtx) {
@@ -247,7 +248,7 @@ export class FrameRenderer {
 		this.foregroundCanvas.width = this.config.width;
 		this.foregroundCanvas.height = this.config.height;
 		this.foregroundCtx = this.foregroundCanvas.getContext("2d", {
-			willReadFrequently: this.isLinux,
+			willReadFrequently: this.useLinuxCpuReadback,
 		});
 		if (!this.foregroundCtx) {
 			throw new Error("Failed to get 2D context for foreground canvas");
@@ -475,8 +476,8 @@ export class FrameRenderer {
 			const w = this.foregroundCanvas.width;
 			const h = this.foregroundCanvas.height;
 			this.foregroundCtx.clearRect(0, 0, w, h);
-			if (this.isLinux) {
-				// drawImage(webglCanvas) is unreliable on Linux/Wayland, so use readPixels
+			if (this.useLinuxCpuReadback) {
+				// drawImage(webglCanvas) is unreliable on some Linux/Wayland setups.
 				const pixels = this.threeDPass.readPixels();
 				const imageData = this.foregroundCtx.createImageData(w, h);
 				imageData.data.set(pixels);
@@ -960,7 +961,7 @@ export class FrameRenderer {
 		)
 			return;
 
-		const videoCanvas = this.isLinux
+		const videoCanvas = this.useLinuxCpuReadback
 			? this.readbackVideoCanvas()
 			: (this.app.canvas as HTMLCanvasElement);
 

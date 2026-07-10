@@ -20,6 +20,8 @@ import type { ExportConfig, ExportProgress, ExportResult } from "./types";
 const ENCODER_STALL_TIMEOUT_MS = 15_000;
 const ENCODER_FLUSH_TIMEOUT_MS = 20_000;
 
+export type LinuxExportFrameSource = "auto" | "canvas" | "readback";
+
 export interface VideoExporterConfig extends ExportConfig {
 	videoUrl: string;
 	webcamVideoUrl?: string;
@@ -53,6 +55,11 @@ export interface VideoExporterConfig extends ExportConfig {
 	previewHeight?: number;
 	cursorTelemetry?: import("@/components/video-editor/types").CursorTelemetryPoint[];
 	cursorClickTimestamps?: number[];
+	linuxFrameSource?: LinuxExportFrameSource;
+	nativeOutputPath?: string;
+	nativeAudioPath?: string;
+	preferNativeNvenc?: boolean;
+	requireNativeNvenc?: boolean;
 	onProgress?: (progress: ExportProgress) => void;
 }
 
@@ -136,6 +143,120 @@ function isMp4Source(videoUrl: string, blob: Blob) {
 	}
 }
 
+export function shouldUseCpuFrameReadback({
+	platform,
+	linuxFrameSource = "auto",
+}: {
+	platform: string;
+	linuxFrameSource?: LinuxExportFrameSource;
+}) {
+	if (platform !== "linux") return false;
+	if (linuxFrameSource === "canvas") return false;
+	if (linuxFrameSource === "readback") return true;
+
+	// WebCodecs H.264 can still resolve to OpenH264 software encoding on Linux. In
+	// that case direct canvas frames are slower on some systems than the explicit
+	// readback path, so keep the old path as the safe auto default. The canvas path
+	// remains available for explicit experiments.
+	return true;
+}
+
+type NativeNvencPerfStats = {
+	startedAtMs: number;
+	lastLogAtMs: number;
+	lastFrameEndAtMs: number | null;
+	frames: number;
+	decodeWaitMs: number;
+	webcamWaitMs: number;
+	renderMs: number;
+	readbackMs: number;
+	ffmpegWriteMs: number;
+	callbackMs: number;
+	maxDecodeWaitMs: number;
+	maxRenderMs: number;
+	maxReadbackMs: number;
+	maxFfmpegWriteMs: number;
+};
+
+function createNativeNvencPerfStats(): NativeNvencPerfStats {
+	const now = performance.now();
+	return {
+		startedAtMs: now,
+		lastLogAtMs: now,
+		lastFrameEndAtMs: null,
+		frames: 0,
+		decodeWaitMs: 0,
+		webcamWaitMs: 0,
+		renderMs: 0,
+		readbackMs: 0,
+		ffmpegWriteMs: 0,
+		callbackMs: 0,
+		maxDecodeWaitMs: 0,
+		maxRenderMs: 0,
+		maxReadbackMs: 0,
+		maxFfmpegWriteMs: 0,
+	};
+}
+
+function recordNativeNvencPerfSample(
+	stats: NativeNvencPerfStats,
+	sample: {
+		decodeWaitMs: number;
+		webcamWaitMs: number;
+		renderMs: number;
+		readbackMs: number;
+		ffmpegWriteMs: number;
+		callbackMs: number;
+		frameEndMs: number;
+	},
+) {
+	stats.frames++;
+	stats.decodeWaitMs += sample.decodeWaitMs;
+	stats.webcamWaitMs += sample.webcamWaitMs;
+	stats.renderMs += sample.renderMs;
+	stats.readbackMs += sample.readbackMs;
+	stats.ffmpegWriteMs += sample.ffmpegWriteMs;
+	stats.callbackMs += sample.callbackMs;
+	stats.maxDecodeWaitMs = Math.max(stats.maxDecodeWaitMs, sample.decodeWaitMs);
+	stats.maxRenderMs = Math.max(stats.maxRenderMs, sample.renderMs);
+	stats.maxReadbackMs = Math.max(stats.maxReadbackMs, sample.readbackMs);
+	stats.maxFfmpegWriteMs = Math.max(stats.maxFfmpegWriteMs, sample.ffmpegWriteMs);
+	stats.lastFrameEndAtMs = sample.frameEndMs;
+}
+
+function maybeLogNativeNvencPerf(stats: NativeNvencPerfStats, totalFrames: number, force = false) {
+	if (stats.frames === 0) return;
+
+	const now = performance.now();
+	const shouldLog = force || stats.frames % 120 === 0 || now - stats.lastLogAtMs >= 5000;
+	if (!shouldLog) return;
+
+	const frames = Math.max(stats.frames, 1);
+	const elapsedSec = Math.max((now - stats.startedAtMs) / 1000, 0.001);
+	const avg = (value: number) => Number((value / frames).toFixed(2));
+	const max = (value: number) => Number(value.toFixed(2));
+
+	console.info("[native-nvenc-perf]", {
+		frames: totalFrames > 0 ? `${stats.frames}/${totalFrames}` : stats.frames,
+		fps: Number((stats.frames / elapsedSec).toFixed(2)),
+		avgMs: {
+			decodeWait: avg(stats.decodeWaitMs),
+			webcamWait: avg(stats.webcamWaitMs),
+			render: avg(stats.renderMs),
+			readback: avg(stats.readbackMs),
+			ffmpegWrite: avg(stats.ffmpegWriteMs),
+			callback: avg(stats.callbackMs),
+		},
+		maxMs: {
+			decodeWait: max(stats.maxDecodeWaitMs),
+			render: max(stats.maxRenderMs),
+			readback: max(stats.maxReadbackMs),
+			ffmpegWrite: max(stats.maxFfmpegWriteMs),
+		},
+	});
+	stats.lastLogAtMs = now;
+}
+
 export class VideoExporter {
 	private config: VideoExporterConfig;
 	private streamingDecoder: StreamingVideoDecoder | null = null;
@@ -154,18 +275,32 @@ export class VideoExporter {
 	private chunkCount = 0;
 	private lastEncoderOutputAt = 0;
 	private fatalEncoderError: Error | null = null;
+	private nativeNvencWarning: string | null = null;
 
 	constructor(config: VideoExporterConfig) {
 		this.config = config;
 	}
 
 	async export(): Promise<ExportResult> {
+		this.nativeNvencWarning = null;
+		const nativeResult = await this.tryNativeNvencExport();
+		if (nativeResult) {
+			return nativeResult;
+		}
+
 		const encoderPreferences = this.getEncoderPreferences();
 		let lastError: Error | null = null;
 
 		for (const encoderPreference of encoderPreferences) {
 			try {
-				return await this.exportWithEncoderPreference(encoderPreference);
+				const result = await this.exportWithEncoderPreference(encoderPreference);
+				if (result.success && this.nativeNvencWarning) {
+					return {
+						...result,
+						warnings: [this.nativeNvencWarning, ...(result.warnings ?? [])],
+					};
+				}
+				return result;
 			} catch (error) {
 				const normalizedError = error instanceof Error ? error : new Error(String(error));
 				lastError = normalizedError;
@@ -195,6 +330,304 @@ export class VideoExporter {
 		};
 	}
 
+	private getNativeNvencBlocker(platform: string): string | null {
+		if (platform !== "linux") return `platform is ${platform}`;
+		if (!this.config.preferNativeNvenc) return "native NVENC preference is disabled";
+		if (!this.config.nativeOutputPath) return "native output path is missing";
+		if (!window.electronAPI?.startNativeNvencExport) return "native NVENC IPC is unavailable";
+
+		return null;
+	}
+
+	private async tryNativeNvencExport(): Promise<ExportResult | null> {
+		let webcamFrameQueue: TimestampedVideoFrameQueue | null = null;
+		let stopWebcamDecode = false;
+		let webcamDecodeError: Error | null = null;
+		let webcamDecodePromise: Promise<void> | null = null;
+		let webcamDecoder: StreamingVideoDecoder | null = null;
+		let nativeSessionId: string | null = null;
+		const warnings: string[] = [];
+		const onWarning = (message: string) => warnings.push(message);
+
+		const platform = await getPlatform();
+		const requireNativeNvenc = Boolean(this.config.requireNativeNvenc && platform === "linux");
+		const blocker = this.getNativeNvencBlocker(platform);
+		if (blocker) {
+			this.nativeNvencWarning = `Native NVENC export skipped: ${blocker}`;
+			console.info(`[VideoExporter] ${this.nativeNvencWarning}`);
+			if (requireNativeNvenc) {
+				return { success: false, error: this.nativeNvencWarning };
+			}
+			return null;
+		}
+
+		this.cleanup();
+		this.cancelled = false;
+
+		try {
+			const streamingDecoder = new StreamingVideoDecoder();
+			this.streamingDecoder = streamingDecoder;
+			const videoInfo = await streamingDecoder.loadMetadata(this.config.videoUrl);
+
+			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
+			if (this.config.webcamVideoUrl) {
+				webcamDecoder = new StreamingVideoDecoder();
+				this.webcamDecoder = webcamDecoder;
+				webcamInfo = await webcamDecoder.loadMetadata(this.config.webcamVideoUrl);
+			}
+
+			const renderer = new FrameRenderer({
+				width: this.config.width,
+				height: this.config.height,
+				wallpaper: this.config.wallpaper,
+				zoomRegions: this.config.zoomRegions,
+				showShadow: this.config.showShadow,
+				shadowIntensity: this.config.shadowIntensity,
+				showBlur: this.config.showBlur,
+				motionBlurAmount: this.config.motionBlurAmount,
+				borderRadius: this.config.borderRadius,
+				padding: this.config.padding,
+				cropRegion: this.config.cropRegion,
+				cursorRecordingData: this.config.cursorRecordingData,
+				cursorScale: this.config.cursorScale,
+				cursorSmoothing: this.config.cursorSmoothing,
+				cursorMotionBlur: this.config.cursorMotionBlur,
+				cursorClickBounce: this.config.cursorClickBounce,
+				cursorClipToBounds: this.config.cursorClipToBounds,
+				cursorTheme: this.config.cursorTheme,
+				videoWidth: videoInfo.width,
+				videoHeight: videoInfo.height,
+				webcamSize: webcamInfo ? { width: webcamInfo.width, height: webcamInfo.height } : null,
+				webcamLayoutPreset: this.config.webcamLayoutPreset,
+				webcamMaskShape: this.config.webcamMaskShape,
+				webcamMirrored: this.config.webcamMirrored,
+				webcamReactiveZoom: this.config.webcamReactiveZoom,
+				webcamSizePreset: this.config.webcamSizePreset,
+				webcamPosition: this.config.webcamPosition,
+				annotationRegions: this.config.annotationRegions,
+				speedRegions: this.config.speedRegions,
+				previewWidth: this.config.previewWidth,
+				previewHeight: this.config.previewHeight,
+				cursorTelemetry: this.config.cursorTelemetry,
+				cursorClickTimestamps: this.config.cursorClickTimestamps,
+				platform,
+				useLinuxCpuReadback: true,
+			});
+			this.renderer = renderer;
+			await renderer.initialize();
+
+			const startResult = await window.electronAPI.startNativeNvencExport({
+				width: this.config.width,
+				height: this.config.height,
+				frameRate: this.config.frameRate,
+				bitrate: this.config.bitrate,
+				outputPath: this.config.nativeOutputPath!,
+				audioPath: this.config.nativeAudioPath,
+				sourceDurationSec: videoInfo.duration,
+				trimRegions: this.config.trimRegions,
+				speedRegions: this.config.speedRegions,
+			});
+			if (!startResult.success || !startResult.sessionId) {
+				this.nativeNvencWarning = `Native NVENC export unavailable: ${
+					startResult.message || startResult.error || "unknown reason"
+				}`;
+				console.warn("[VideoExporter] Native NVENC export unavailable:", startResult);
+				if (requireNativeNvenc) {
+					return { success: false, error: this.nativeNvencWarning };
+				}
+				return null;
+			}
+			nativeSessionId = startResult.sessionId;
+
+			const { totalFrames } = streamingDecoder.getExportMetrics(
+				this.config.frameRate,
+				this.config.trimRegions,
+				this.config.speedRegions,
+			);
+			let frameIndex = 0;
+			const perfStats = createNativeNvencPerfStats();
+			console.info("[native-nvenc-perf] Sampling export pipeline", {
+				totalFrames,
+				width: this.config.width,
+				height: this.config.height,
+				frameRate: this.config.frameRate,
+				hasWebcam: Boolean(this.config.webcamVideoUrl),
+				hasCursorOverlay: (this.config.cursorScale ?? 0) > 0,
+				zoomRegions: this.config.zoomRegions.length,
+				trimRegions: this.config.trimRegions?.length ?? 0,
+				speedRegions: this.config.speedRegions?.length ?? 0,
+				annotationRegions: this.config.annotationRegions?.length ?? 0,
+			});
+
+			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
+			webcamDecodePromise =
+				webcamDecoder && webcamFrameQueue
+					? (() => {
+							const queue = webcamFrameQueue;
+							return webcamDecoder
+								.decodeAll(
+									this.config.frameRate,
+									this.config.trimRegions,
+									this.config.speedRegions,
+									async (webcamFrame, _exportTimestampUs, webcamSourceTimestampMs) => {
+										while (queue.length >= 12 && !this.cancelled && !stopWebcamDecode) {
+											await new Promise((resolve) => setTimeout(resolve, 2));
+										}
+										if (this.cancelled || stopWebcamDecode) {
+											webcamFrame.close();
+											return;
+										}
+										queue.enqueue(webcamFrame, webcamSourceTimestampMs);
+									},
+									onWarning,
+								)
+								.catch((error) => {
+									webcamDecodeError = error instanceof Error ? error : new Error(String(error));
+									throw webcamDecodeError;
+								})
+								.finally(() => {
+									if (webcamDecodeError) {
+										queue.fail(webcamDecodeError);
+									} else {
+										queue.close();
+									}
+								});
+						})()
+					: null;
+
+			await streamingDecoder.decodeAll(
+				this.config.frameRate,
+				this.config.trimRegions,
+				this.config.speedRegions,
+				async (videoFrame, _exportTimestampUs, sourceTimestampMs) => {
+					let webcamFrame: VideoFrame | null = null;
+					const frameStartMs = performance.now();
+					const decodeWaitMs =
+						perfStats.lastFrameEndAtMs === null ? 0 : frameStartMs - perfStats.lastFrameEndAtMs;
+					let webcamWaitMs = 0;
+					let renderMs = 0;
+					let readbackMs = 0;
+					let ffmpegWriteMs = 0;
+					try {
+						if (this.cancelled) return;
+
+						const webcamWaitStartMs = performance.now();
+						webcamFrame = webcamFrameQueue
+							? await webcamFrameQueue.frameAt(sourceTimestampMs)
+							: null;
+						webcamWaitMs = performance.now() - webcamWaitStartMs;
+						if (this.cancelled) return;
+
+						const renderStartMs = performance.now();
+						await renderer.renderFrame(videoFrame, sourceTimestampMs * 1000, webcamFrame);
+						renderMs = performance.now() - renderStartMs;
+
+						const canvas = renderer.getCanvas();
+						const canvasCtx = canvas.getContext("2d")!;
+						const readbackStartMs = performance.now();
+						const imageData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
+						readbackMs = performance.now() - readbackStartMs;
+
+						const ffmpegWriteStartMs = performance.now();
+						const writeResult = await window.electronAPI.writeNativeNvencExportChunk(
+							nativeSessionId!,
+							imageData.data.buffer as ArrayBuffer,
+						);
+						ffmpegWriteMs = performance.now() - ffmpegWriteStartMs;
+						if (!writeResult.success) {
+							throw new Error(
+								writeResult.message || writeResult.error || "Native NVENC write failed",
+							);
+						}
+
+						const frameEndMs = performance.now();
+						recordNativeNvencPerfSample(perfStats, {
+							decodeWaitMs,
+							webcamWaitMs,
+							renderMs,
+							readbackMs,
+							ffmpegWriteMs,
+							callbackMs: frameEndMs - frameStartMs,
+							frameEndMs,
+						});
+
+						frameIndex++;
+						this.reportProgress({
+							currentFrame: frameIndex,
+							totalFrames,
+							percentage: (frameIndex / Math.max(totalFrames, 1)) * 100,
+							estimatedTimeRemaining: 0,
+						});
+						maybeLogNativeNvencPerf(perfStats, totalFrames);
+					} finally {
+						videoFrame.close();
+						webcamFrame?.close();
+					}
+				},
+				onWarning,
+			);
+
+			if (this.cancelled) {
+				await window.electronAPI.cancelNativeNvencExport(nativeSessionId);
+				nativeSessionId = null;
+				return { success: false, error: "Export cancelled" };
+			}
+
+			stopWebcamDecode = true;
+			webcamFrameQueue?.destroy();
+			webcamDecoder?.cancel();
+			await webcamDecodePromise;
+
+			this.reportProgress({
+				currentFrame: totalFrames,
+				totalFrames,
+				percentage: 100,
+				estimatedTimeRemaining: 0,
+				phase: "finalizing",
+			});
+			maybeLogNativeNvencPerf(perfStats, totalFrames, true);
+
+			const finishResult = await window.electronAPI.finishNativeNvencExport(nativeSessionId);
+			nativeSessionId = null;
+			if (!finishResult.success || !finishResult.path) {
+				this.nativeNvencWarning = `Native NVENC export failed: ${
+					finishResult.message || finishResult.error || finishResult.stderr || "unknown reason"
+				}`;
+				console.warn("[VideoExporter] Native NVENC export failed:", finishResult);
+				if (requireNativeNvenc) {
+					return { success: false, error: this.nativeNvencWarning };
+				}
+				return null;
+			}
+
+			return {
+				success: true,
+				path: finishResult.path,
+				warnings: warnings.length > 0 ? warnings : undefined,
+			};
+		} catch (error) {
+			this.nativeNvencWarning = `Native NVENC export failed: ${
+				error instanceof Error ? error.message : String(error)
+			}`;
+			console.warn("[VideoExporter] Native NVENC export failed, falling back:", error);
+			if (nativeSessionId) {
+				await window.electronAPI.cancelNativeNvencExport(nativeSessionId).catch(() => undefined);
+			}
+			if (requireNativeNvenc) {
+				return { success: false, error: this.nativeNvencWarning };
+			}
+			return null;
+		} finally {
+			stopWebcamDecode = true;
+			webcamFrameQueue?.destroy();
+			webcamDecoder?.cancel();
+			if (webcamDecodePromise) {
+				await webcamDecodePromise.catch(() => undefined);
+			}
+			this.cleanup();
+		}
+	}
+
 	private async exportWithEncoderPreference(
 		encoderPreference: HardwareAcceleration,
 	): Promise<ExportResult> {
@@ -212,6 +645,10 @@ export class VideoExporter {
 
 		try {
 			const platform = await getPlatform();
+			const useCpuFrameReadback = shouldUseCpuFrameReadback({
+				platform,
+				linuxFrameSource: this.config.linuxFrameSource,
+			});
 
 			const streamingDecoder = new StreamingVideoDecoder();
 			this.streamingDecoder = streamingDecoder;
@@ -263,6 +700,7 @@ export class VideoExporter {
 				cursorTelemetry: this.config.cursorTelemetry,
 				cursorClickTimestamps: this.config.cursorClickTimestamps,
 				platform,
+				useLinuxCpuReadback: useCpuFrameReadback,
 			});
 			this.renderer = renderer;
 			await renderer.initialize();
@@ -362,9 +800,9 @@ export class VideoExporter {
 
 						let exportFrame: VideoFrame;
 
-						// On some Linux systems the GPU shared-image path (EGL/Ozone) fails
-						// silently, producing empty frames, so we force a CPU readback instead.
-						if (platform === "linux") {
+						// On some Linux systems the GPU shared-image path (EGL/Ozone)
+						// fails silently, producing empty frames, so auto keeps CPU readback.
+						if (useCpuFrameReadback) {
 							const canvasCtx = canvas.getContext("2d")!;
 							const imageData = canvasCtx.getImageData(0, 0, canvas.width, canvas.height);
 							exportFrame = new VideoFrame(imageData.data.buffer, {

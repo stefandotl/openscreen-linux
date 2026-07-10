@@ -191,6 +191,42 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		startNativeNvencExport: (payload: {
+			width: number;
+			height: number;
+			frameRate: number;
+			bitrate: number;
+			outputPath: string;
+			audioPath?: string;
+			sourceDurationSec?: number;
+			trimRegions?: Array<{ startMs: number; endMs: number }>;
+			speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
+		}) => Promise<{
+			success: boolean;
+			sessionId?: string;
+			message?: string;
+			error?: string;
+		}>;
+		writeNativeNvencExportChunk: (
+			sessionId: string,
+			chunk: ArrayBuffer,
+		) => Promise<{
+			success: boolean;
+			message?: string;
+			error?: string;
+		}>;
+		finishNativeNvencExport: (sessionId: string) => Promise<{
+			success: boolean;
+			path?: string;
+			message?: string;
+			error?: string;
+			stderr?: string;
+		}>;
+		cancelNativeNvencExport: (sessionId: string) => Promise<{
+			success: boolean;
+			message?: string;
+			error?: string;
+		}>;
 		openVideoFilePicker: () => Promise<{ success: boolean; path?: string; canceled?: boolean }>;
 		setCurrentVideoPath: (path: string) => Promise<{ success: boolean }>;
 		setCurrentRecordingSession: (

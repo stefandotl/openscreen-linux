@@ -149,6 +149,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	writeExportToPath: (videoData: ArrayBuffer, filePath: string) => {
 		return ipcRenderer.invoke("write-export-to-path", videoData, filePath);
 	},
+	startNativeNvencExport: (payload: {
+		width: number;
+		height: number;
+		frameRate: number;
+		bitrate: number;
+		outputPath: string;
+		audioPath?: string;
+		sourceDurationSec?: number;
+		trimRegions?: Array<{ startMs: number; endMs: number }>;
+		speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
+	}) => {
+		return ipcRenderer.invoke("start-native-nvenc-export", payload);
+	},
+	writeNativeNvencExportChunk: (sessionId: string, chunk: ArrayBuffer) => {
+		return ipcRenderer.invoke("write-native-nvenc-export-chunk", sessionId, chunk);
+	},
+	finishNativeNvencExport: (sessionId: string) => {
+		return ipcRenderer.invoke("finish-native-nvenc-export", sessionId);
+	},
+	cancelNativeNvencExport: (sessionId: string) => {
+		return ipcRenderer.invoke("cancel-native-nvenc-export", sessionId);
+	},
 	openVideoFilePicker: () => {
 		return ipcRenderer.invoke("open-video-file-picker");
 	},
