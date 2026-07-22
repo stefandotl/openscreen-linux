@@ -8,6 +8,7 @@ import type { NativeMacRecordingRequest } from "../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
 import type { RecordingSession, StoreRecordedSessionInput } from "../src/lib/recordingSession";
 import type { ShortcutBinding } from "../src/lib/shortcuts";
+import type { SilenceDetectionResult, SilenceDetectionSettings } from "../src/lib/silenceDetection";
 import { NATIVE_BRIDGE_CHANNEL, type NativeBridgeRequest } from "../src/native/contracts";
 
 // Asset base URL is passed from the main process via webPreferences.additionalArguments
@@ -190,6 +191,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	preparePreviewAudioTrack: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-audio-track", filePath);
+	},
+	detectSilence: (
+		filePath: string,
+		settings: SilenceDetectionSettings,
+		sourceDurationMs?: number,
+	): Promise<SilenceDetectionResult> => {
+		return ipcRenderer.invoke("detect-silence", filePath, settings, sourceDurationMs);
 	},
 	clearCurrentVideoPath: () => {
 		return ipcRenderer.invoke("clear-current-video-path");

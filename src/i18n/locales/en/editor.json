@@ -63,6 +63,25 @@
 		"failed": "Could not generate captions.",
 		"truncated": "Only the first {{minutes}} minutes were transcribed."
 	},
+	"silenceDetection": {
+		"button": "Detect silence",
+		"dialogTitle": "Detect and trim silence",
+		"dialogDescription": "Analyze the audio locally and add editable trim regions for quiet pauses. This runs before export and does not change the GPU export path.",
+		"sensitivity": "Sensitivity",
+		"conservative": "Conservative (-48 dB)",
+		"balanced": "Balanced (-38 dB)",
+		"aggressive": "Aggressive (-30 dB)",
+		"minimumSilence": "Minimum silence duration",
+		"padding": "Keep audio around speech",
+		"milliseconds": "{{value}} ms",
+		"detect": "Create trims",
+		"cancel": "Cancel",
+		"analyzing": "Analyzing audio…",
+		"noneFound": "No new silence regions were found with these settings.",
+		"added": "Added {{count}} silence trims ({{seconds}} seconds).",
+		"noAudio": "This video has no usable audio track.",
+		"failed": "Could not detect silence."
+	},
 	"emptyState": {
 		"title": "No project open",
 		"description": "Import a video to start editing, or load an existing OpenScreen project.",

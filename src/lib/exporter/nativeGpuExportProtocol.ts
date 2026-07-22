@@ -1,6 +1,6 @@
 import type { SpeedRegion, TrimRegion } from "@/components/video-editor/types";
 
-export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 1 as const;
+export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 2 as const;
 
 export const NATIVE_GPU_EXPORT_CHANNELS = {
 	start: "start-native-gpu-export",
@@ -14,6 +14,8 @@ export interface NativeGpuExportFrame {
 	cameraScale: number;
 	cameraX: number;
 	cameraY: number;
+	motionBlurX: number;
+	motionBlurY: number;
 }
 
 export interface NativeGpuExportPlan {

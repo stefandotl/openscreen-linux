@@ -76,6 +76,35 @@ describe("native GPU export plan", () => {
 		expect(first.screenRect.width).toBeGreaterThan(1000);
 		expect(first.screenRect.height).toBeGreaterThan(560);
 		expect(first.overlay).toEqual({ startMs: 100, endMs: 800 });
+		expect(first.frames.every((frame) => frame.motionBlurX === 0 && frame.motionBlurY === 0)).toBe(
+			true,
+		);
+	});
+
+	it("plans directional motion blur only while the camera is moving", () => {
+		const plan = createNativeGpuExportPlan(
+			createConfig({
+				motionBlurAmount: 1,
+				zoomRegions: [
+					{
+						id: "zoom",
+						startMs: 100,
+						endMs: 900,
+						depth: 3,
+						focus: { cx: 0.2, cy: 0.7 },
+						focusMode: "manual",
+					},
+				],
+			}),
+			videoInfo,
+		);
+
+		expect(plan.frames[0]).toMatchObject({ motionBlurX: 0, motionBlurY: 0 });
+		expect(
+			plan.frames.some(
+				(frame) => Math.abs(frame.motionBlurX) > 0.5 || Math.abs(frame.motionBlurY) > 0.5,
+			),
+		).toBe(true);
 	});
 
 	it("supports the native GPU plan in landscape orientation", () => {
@@ -87,11 +116,12 @@ describe("native GPU export plan", () => {
 		expect(plan.screenRect.width).toBeGreaterThan(plan.screenRect.height);
 	});
 
-	it("fails loudly for effects the zero-copy compositor does not implement", () => {
+	it("supports blur effects and still fails loudly for unimplemented effects", () => {
 		const blockers = getNativeGpuExportBlockers(
 			createConfig({
 				borderRadius: 12,
 				showBlur: true,
+				motionBlurAmount: 0.8,
 				zoomRegions: [
 					{
 						id: "auto",
@@ -106,7 +136,8 @@ describe("native GPU export plan", () => {
 			videoInfo,
 		);
 
-		expect(blockers).toContain("background blur is not implemented");
+		expect(blockers).not.toContain("background blur is not implemented");
+		expect(blockers).not.toContain("motion blur is not implemented");
 		expect(blockers).toContain("recording roundness is not implemented");
 		expect(blockers).toContain("automatic cursor-follow zoom is not implemented");
 	});

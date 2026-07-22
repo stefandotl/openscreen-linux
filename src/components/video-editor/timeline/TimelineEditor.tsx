@@ -1,6 +1,7 @@
 import type { Range, Span } from "dnd-timeline";
 import { useTimelineContext } from "dnd-timeline";
 import {
+	AudioWaveform,
 	Captions,
 	Check,
 	ChevronDown,
@@ -95,6 +96,10 @@ interface TimelineEditorProps {
 	isGeneratingCaptions?: boolean;
 	/** Localized label for the auto-captions button (lives in the `editor` namespace). */
 	captionsLabel?: string;
+	/** Opens the local silence detection flow. */
+	onDetectSilence?: () => void;
+	isDetectingSilence?: boolean;
+	detectSilenceLabel?: string;
 }
 
 interface TimelineScaleConfig {
@@ -928,6 +933,9 @@ export default function TimelineEditor({
 	onGenerateCaptions,
 	isGeneratingCaptions = false,
 	captionsLabel,
+	onDetectSilence,
+	isDetectingSilence = false,
+	detectSilenceLabel,
 }: TimelineEditorProps) {
 	const t = useScopedT("timeline");
 	const totalMs = useMemo(() => Math.max(0, Math.round(videoDuration * 1000)), [videoDuration]);
@@ -1521,6 +1529,18 @@ export default function TimelineEditor({
 					>
 						<Scissors className="w-4 h-4" />
 					</Button>
+					{onDetectSilence && (
+						<Button
+							onClick={onDetectSilence}
+							disabled={isDetectingSilence || !videoUrl}
+							variant="ghost"
+							size="icon"
+							className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#ef4444] hover:bg-[#ef4444]/10 transition-all"
+							title={detectSilenceLabel}
+						>
+							<AudioWaveform className="w-4 h-4" />
+						</Button>
+					)}
 					<Button
 						onClick={handleAddAnnotation}
 						variant="ghost"

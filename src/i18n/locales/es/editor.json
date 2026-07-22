@@ -63,6 +63,25 @@
 		"failed": "No se pudieron generar los subtítulos.",
 		"truncated": "Solo se transcribieron los primeros {{minutes}} minutos."
 	},
+	"silenceDetection": {
+		"button": "Detectar silencio",
+		"dialogTitle": "Detectar y recortar silencio",
+		"dialogDescription": "Analiza el audio localmente y añade regiones de recorte editables para las pausas silenciosas. Se ejecuta antes de exportar y no modifica la ruta de exportación por GPU.",
+		"sensitivity": "Sensibilidad",
+		"conservative": "Conservador (-48 dB)",
+		"balanced": "Equilibrado (-38 dB)",
+		"aggressive": "Agresivo (-30 dB)",
+		"minimumSilence": "Duración mínima del silencio",
+		"padding": "Conservar audio alrededor de la voz",
+		"milliseconds": "{{value}} ms",
+		"detect": "Crear recortes",
+		"cancel": "Cancelar",
+		"analyzing": "Analizando audio…",
+		"noneFound": "No se encontraron nuevas regiones de silencio con estos ajustes.",
+		"added": "Se añadieron {{count}} recortes de silencio ({{seconds}} segundos).",
+		"noAudio": "Este vídeo no tiene una pista de audio utilizable.",
+		"failed": "No se pudo detectar el silencio."
+	},
 	"emptyState": {
 		"title": "No hay proyecto abierto",
 		"description": "Importa un video para empezar a editar o carga un proyecto de OpenScreen existente.",

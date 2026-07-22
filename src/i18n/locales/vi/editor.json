@@ -63,6 +63,25 @@
 		"failed": "Không thể tạo phụ đề.",
 		"truncated": "Chỉ {{minutes}} phút đầu tiên được chuyển thành văn bản."
 	},
+	"silenceDetection": {
+		"button": "Phát hiện khoảng lặng",
+		"dialogTitle": "Phát hiện và cắt khoảng lặng",
+		"dialogDescription": "Phân tích âm thanh cục bộ và thêm các vùng cắt có thể chỉnh sửa cho những khoảng lặng. Tác vụ chạy trước khi xuất và không thay đổi đường dẫn xuất GPU.",
+		"sensitivity": "Độ nhạy",
+		"conservative": "Thận trọng (-48 dB)",
+		"balanced": "Cân bằng (-38 dB)",
+		"aggressive": "Mạnh (-30 dB)",
+		"minimumSilence": "Thời lượng im lặng tối thiểu",
+		"padding": "Giữ âm thanh quanh lời nói",
+		"milliseconds": "{{value}} ms",
+		"detect": "Tạo vùng cắt",
+		"cancel": "Hủy",
+		"analyzing": "Đang phân tích âm thanh…",
+		"noneFound": "Không tìm thấy vùng im lặng mới với các thiết lập này.",
+		"added": "Đã thêm {{count}} vùng cắt im lặng ({{seconds}} giây).",
+		"noAudio": "Video này không có rãnh âm thanh khả dụng.",
+		"failed": "Không thể phát hiện khoảng lặng."
+	},
 	"emptyState": {
 		"title": "Không có dự án nào được mở",
 		"description": "Nhập video để bắt đầu chỉnh sửa hoặc tải một dự án OpenScreen hiện có.",

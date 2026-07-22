@@ -63,6 +63,25 @@
 		"failed": "자막을 생성할 수 없습니다.",
 		"truncated": "처음 {{minutes}}분만 전사되었습니다."
 	},
+	"silenceDetection": {
+		"button": "무음 감지",
+		"dialogTitle": "무음 감지 및 트리밍",
+		"dialogDescription": "오디오를 로컬에서 분석하고 조용한 구간에 편집 가능한 트리밍 영역을 추가합니다. 내보내기 전에 실행되며 GPU 내보내기 경로를 변경하지 않습니다.",
+		"sensitivity": "민감도",
+		"conservative": "보수적 (-48 dB)",
+		"balanced": "균형 (-38 dB)",
+		"aggressive": "적극적 (-30 dB)",
+		"minimumSilence": "최소 무음 길이",
+		"padding": "음성 주변 오디오 유지",
+		"milliseconds": "{{value}} ms",
+		"detect": "트리밍 만들기",
+		"cancel": "취소",
+		"analyzing": "오디오 분석 중…",
+		"noneFound": "이 설정으로 새 무음 영역을 찾지 못했습니다.",
+		"added": "무음 트리밍 {{count}}개를 추가했습니다({{seconds}}초).",
+		"noAudio": "이 비디오에는 사용할 수 있는 오디오 트랙이 없습니다.",
+		"failed": "무음을 감지하지 못했습니다."
+	},
 	"emptyState": {
 		"title": "열린 프로젝트 없음",
 		"description": "동영상을 가져와 편집을 시작하거나 기존 OpenScreen 프로젝트를 불러오세요.",

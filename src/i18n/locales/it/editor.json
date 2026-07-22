@@ -61,5 +61,24 @@
 		"noAudio": "Questo video non contiene audio utilizzabile per la trascrizione.",
 		"failed": "Impossibile generare i sottotitoli.",
 		"truncated": "Sono stati trascritti solo i primi {{minutes}} minuti."
+	},
+	"silenceDetection": {
+		"button": "Rileva silenzio",
+		"dialogTitle": "Rileva e taglia il silenzio",
+		"dialogDescription": "Analizza l’audio localmente e aggiunge aree di taglio modificabili per le pause silenziose. Viene eseguito prima dell’esportazione e non modifica il percorso di esportazione GPU.",
+		"sensitivity": "Sensibilità",
+		"conservative": "Conservativa (-48 dB)",
+		"balanced": "Bilanciata (-38 dB)",
+		"aggressive": "Aggressiva (-30 dB)",
+		"minimumSilence": "Durata minima del silenzio",
+		"padding": "Mantieni audio intorno alla voce",
+		"milliseconds": "{{value}} ms",
+		"detect": "Crea tagli",
+		"cancel": "Annulla",
+		"analyzing": "Analisi audio…",
+		"noneFound": "Nessuna nuova area di silenzio trovata con queste impostazioni.",
+		"added": "Aggiunti {{count}} tagli di silenzio ({{seconds}} secondi).",
+		"noAudio": "Questo video non contiene una traccia audio utilizzabile.",
+		"failed": "Impossibile rilevare il silenzio."
 	}
 }

@@ -63,6 +63,25 @@
 		"failed": "無法產生字幕。",
 		"truncated": "僅轉寫了最前 {{minutes}} 分鐘。"
 	},
+	"silenceDetection": {
+		"button": "偵測靜音",
+		"dialogTitle": "偵測並剪除靜音",
+		"dialogDescription": "在本機分析音訊，並為安靜停頓加入可編輯的剪輯區域。此操作在匯出前執行，不會變更 GPU 匯出路徑。",
+		"sensitivity": "靈敏度",
+		"conservative": "保守 (-48 dB)",
+		"balanced": "均衡 (-38 dB)",
+		"aggressive": "積極 (-30 dB)",
+		"minimumSilence": "最短靜音時間",
+		"padding": "保留語音前後音訊",
+		"milliseconds": "{{value}} 毫秒",
+		"detect": "建立剪輯",
+		"cancel": "取消",
+		"analyzing": "正在分析音訊…",
+		"noneFound": "使用這些設定未找到新的靜音區域。",
+		"added": "已加入 {{count}} 個靜音剪輯（{{seconds}} 秒）。",
+		"noAudio": "此影片沒有可用的音軌。",
+		"failed": "無法偵測靜音。"
+	},
 	"emptyState": {
 		"title": "未開啟任何專案",
 		"description": "匯入影片以開始編輯，或載入現有的 OpenScreen 專案。",

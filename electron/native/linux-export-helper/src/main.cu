@@ -159,6 +159,8 @@ struct PlannedFrame {
 	float cameraScale;
 	float cameraX;
 	float cameraY;
+	float motionBlurX;
+	float motionBlurY;
 };
 
 struct ExportPlan {
@@ -215,6 +217,14 @@ __device__ bool mapOutputToSource(
 	return true;
 }
 
+__device__ int motionBlurTapCount(float motionBlurX, float motionBlurY) {
+	const float targetBlur = hypotf(motionBlurX, motionBlurY) / 2.4f;
+	if (targetBlur <= 0.5f) return 1;
+	if (targetBlur > 8.0f) return 15;
+	if (targetBlur > 4.0f) return 11;
+	return 7;
+}
+
 __global__ void compositeLuma(
 	const uint8_t *sourceY,
 	int sourcePitch,
@@ -225,6 +235,8 @@ __global__ void compositeLuma(
 	int outputWidth,
 	int outputHeight,
 	SceneTransform transform,
+	float motionBlurX,
+	float motionBlurY,
 	const uint8_t *wallpaperY,
 	const uint8_t *overlayRgba) {
 	const int x = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -233,26 +245,36 @@ __global__ void compositeLuma(
 
 	const float fx = static_cast<float>(x) + 0.5f;
 	const float fy = static_cast<float>(y) + 0.5f;
-	float value = static_cast<float>(wallpaperY[y * outputWidth + x]);
-
-	float sourceX = 0.0f;
-	float sourceYCoordinate = 0.0f;
-	if (mapOutputToSource(
-			fx,
-			fy,
-			transform,
-			sourceWidth,
-			sourceHeight,
-			&sourceX,
-			&sourceYCoordinate)) {
-		value = samplePlane(
-			sourceY,
-			sourcePitch,
-			sourceWidth,
-			sourceHeight,
-			sourceX,
-			sourceYCoordinate);
+	const float wallpaperValue = static_cast<float>(wallpaperY[y * outputWidth + x]);
+	const int tapCount = motionBlurTapCount(motionBlurX, motionBlurY);
+	float value = 0.0f;
+	for (int tap = 0; tap < tapCount; tap++) {
+		const float tapPosition =
+			tapCount == 1 ? 0.0f : static_cast<float>(tap) / static_cast<float>(tapCount - 1) - 0.5f;
+		const float sampleOutputX = fx - motionBlurX * tapPosition;
+		const float sampleOutputY = fy - motionBlurY * tapPosition;
+		float tapValue = wallpaperValue;
+		float sourceX = 0.0f;
+		float sourceYCoordinate = 0.0f;
+		if (mapOutputToSource(
+				sampleOutputX,
+				sampleOutputY,
+				transform,
+				sourceWidth,
+				sourceHeight,
+				&sourceX,
+				&sourceYCoordinate)) {
+			tapValue = samplePlane(
+				sourceY,
+				sourcePitch,
+				sourceWidth,
+				sourceHeight,
+				sourceX,
+				sourceYCoordinate);
+		}
+		value += tapValue;
 	}
+	value /= static_cast<float>(tapCount);
 
 	if (overlayRgba) {
 		const int overlayOffset = (y * outputWidth + x) * 4;
@@ -276,6 +298,8 @@ __global__ void compositeChroma(
 	int outputWidth,
 	int outputHeight,
 	SceneTransform transform,
+	float motionBlurX,
+	float motionBlurY,
 	const uint8_t *wallpaperUv,
 	const uint8_t *overlayRgba) {
 	const int x = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -286,38 +310,52 @@ __global__ void compositeChroma(
 
 	const float outputX = static_cast<float>(x * 2) + 1.0f;
 	const float outputY = static_cast<float>(y * 2) + 1.0f;
-	float u = static_cast<float>(wallpaperUv[y * outputWidth + x * 2]);
-	float v = static_cast<float>(wallpaperUv[y * outputWidth + x * 2 + 1]);
-
-	float sourceX = 0.0f;
-	float sourceYCoordinate = 0.0f;
-	if (mapOutputToSource(
-			outputX,
-			outputY,
-			transform,
-			sourceWidth,
-			sourceHeight,
-			&sourceX,
-			&sourceYCoordinate)) {
-		const float sourceChromaX = sourceX * 0.5f;
-		const float sourceChromaY = sourceYCoordinate * 0.5f;
-		u = sampleInterleavedPlane(
-			sourceUv,
-			sourcePitch,
-			sourceWidth / 2,
-			sourceHeight / 2,
-			sourceChromaX,
-			sourceChromaY,
-			0);
-		v = sampleInterleavedPlane(
-			sourceUv,
-			sourcePitch,
-			sourceWidth / 2,
-			sourceHeight / 2,
-			sourceChromaX,
-			sourceChromaY,
-			1);
+	const float wallpaperU = static_cast<float>(wallpaperUv[y * outputWidth + x * 2]);
+	const float wallpaperV = static_cast<float>(wallpaperUv[y * outputWidth + x * 2 + 1]);
+	const int tapCount = motionBlurTapCount(motionBlurX, motionBlurY);
+	float u = 0.0f;
+	float v = 0.0f;
+	for (int tap = 0; tap < tapCount; tap++) {
+		const float tapPosition =
+			tapCount == 1 ? 0.0f : static_cast<float>(tap) / static_cast<float>(tapCount - 1) - 0.5f;
+		const float sampleOutputX = outputX - motionBlurX * tapPosition;
+		const float sampleOutputY = outputY - motionBlurY * tapPosition;
+		float tapU = wallpaperU;
+		float tapV = wallpaperV;
+		float sourceX = 0.0f;
+		float sourceYCoordinate = 0.0f;
+		if (mapOutputToSource(
+				sampleOutputX,
+				sampleOutputY,
+				transform,
+				sourceWidth,
+				sourceHeight,
+				&sourceX,
+				&sourceYCoordinate)) {
+			const float sourceChromaX = sourceX * 0.5f;
+			const float sourceChromaY = sourceYCoordinate * 0.5f;
+			tapU = sampleInterleavedPlane(
+				sourceUv,
+				sourcePitch,
+				sourceWidth / 2,
+				sourceHeight / 2,
+				sourceChromaX,
+				sourceChromaY,
+				0);
+			tapV = sampleInterleavedPlane(
+				sourceUv,
+				sourcePitch,
+				sourceWidth / 2,
+				sourceHeight / 2,
+				sourceChromaX,
+				sourceChromaY,
+				1);
+		}
+		u += tapU;
+		v += tapV;
 	}
+	u /= static_cast<float>(tapCount);
+	v /= static_cast<float>(tapCount);
 
 	if (overlayRgba) {
 		float alpha = 0.0f;
@@ -495,6 +533,8 @@ double compositeFrame(
 	const AVFrame *source,
 	AVFrame *output,
 	const SceneTransform &transform,
+	float motionBlurX,
+	float motionBlurY,
 	const GpuAssets &assets,
 	bool overlayActive) {
 	verifyDecodedFrame(source);
@@ -525,6 +565,8 @@ double compositeFrame(
 		outputWidth,
 		outputHeight,
 		transform,
+		motionBlurX,
+		motionBlurY,
 		assets.wallpaper,
 		overlayActive ? assets.overlay : nullptr);
 	requireRuntime(cudaGetLastError(), "compositeLuma launch");
@@ -542,6 +584,8 @@ double compositeFrame(
 		outputWidth,
 		outputHeight,
 		transform,
+		motionBlurX,
+		motionBlurY,
 		assets.wallpaper + static_cast<std::size_t>(outputWidth) * outputHeight,
 		overlayActive ? assets.overlay : nullptr);
 	requireRuntime(cudaGetLastError(), "compositeChroma launch");
@@ -579,7 +623,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 1) fail("Unsupported native GPU export plan version");
+	if (plan.version != 2) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
@@ -615,11 +659,19 @@ ExportPlan loadPlan(const std::string &planPath) {
 		fail("Native GPU export requires the default crop");
 	}
 	for (const auto &item : document.at("frames")) {
+		const float motionBlurX = item.at("motionBlurX").get<float>();
+		const float motionBlurY = item.at("motionBlurY").get<float>();
+		if (!std::isfinite(motionBlurX) || !std::isfinite(motionBlurY) ||
+			fabs(motionBlurX) > 128.0f || fabs(motionBlurY) > 128.0f) {
+			fail("Native GPU export motion blur vector is invalid");
+		}
 		plan.frames.push_back({
 			item.at("sourceTimestampMs").get<double>(),
 			item.at("cameraScale").get<float>(),
 			item.at("cameraX").get<float>(),
 			item.at("cameraY").get<float>(),
+			motionBlurX,
+			motionBlurY,
 		});
 	}
 	if (plan.wallpaperNv12Path.empty()) fail("Native GPU export wallpaper path is missing");
@@ -722,6 +774,8 @@ void renderOutputFrame(
 		sourceFrame,
 		outputFrame.get(),
 		transform,
+		plannedFrame.motionBlurX,
+		plannedFrame.motionBlurY,
 		assets,
 		overlayActive);
 	encodeFrame(state, outputFrame.get(), encodedPacket);

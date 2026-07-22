@@ -63,6 +63,25 @@
 		"failed": "Altyazılar oluşturulamadı.",
 		"truncated": "Yalnızca ilk {{minutes}} dakika yazıya döküldü."
 	},
+	"silenceDetection": {
+		"button": "Sessizliği algıla",
+		"dialogTitle": "Sessizliği algıla ve kırp",
+		"dialogDescription": "Sesi yerel olarak analiz eder ve sessiz duraklamalar için düzenlenebilir kırpma bölgeleri ekler. Dışa aktarmadan önce çalışır ve GPU dışa aktarma yolunu değiştirmez.",
+		"sensitivity": "Hassasiyet",
+		"conservative": "Tutucu (-48 dB)",
+		"balanced": "Dengeli (-38 dB)",
+		"aggressive": "Agresif (-30 dB)",
+		"minimumSilence": "Minimum sessizlik süresi",
+		"padding": "Konuşma çevresindeki sesi koru",
+		"milliseconds": "{{value}} ms",
+		"detect": "Kırpmaları oluştur",
+		"cancel": "İptal",
+		"analyzing": "Ses analiz ediliyor…",
+		"noneFound": "Bu ayarlarla yeni sessizlik bölgesi bulunamadı.",
+		"added": "{{count}} sessizlik kırpması eklendi ({{seconds}} saniye).",
+		"noAudio": "Bu videoda kullanılabilir bir ses parçası yok.",
+		"failed": "Sessizlik algılanamadı."
+	},
 	"emptyState": {
 		"title": "Açık proje yok",
 		"description": "Düzenlemeye başlamak için bir video içe aktarın veya mevcut bir OpenScreen projesi yükleyin.",

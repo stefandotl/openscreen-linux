@@ -233,6 +233,11 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		detectSilence: (
+			filePath: string,
+			settings: import("../src/lib/silenceDetection").SilenceDetectionSettings,
+			sourceDurationMs?: number,
+		) => Promise<import("../src/lib/silenceDetection").SilenceDetectionResult>;
 		clearCurrentVideoPath: () => Promise<{ success: boolean }>;
 		saveProjectFile: (
 			projectData: unknown,

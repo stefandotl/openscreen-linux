@@ -28,6 +28,13 @@ import {
 	type RecordingSession,
 	type StoreRecordedSessionInput,
 } from "../../src/lib/recordingSession";
+import {
+	buildSilenceTrimSpans,
+	normalizeSilenceDetectionSettings,
+	parseSilenceDetectionOutput,
+	type SilenceDetectionResult,
+	type SilenceDetectionSettings,
+} from "../../src/lib/silenceDetection";
 import type {
 	CursorRecordingData,
 	CursorRecordingSample,
@@ -2761,6 +2768,80 @@ export function registerIpcHandlers(
 			};
 		}
 	});
+
+	ipcMain.handle(
+		"detect-silence",
+		async (
+			_,
+			filePath: string,
+			settings: Partial<SilenceDetectionSettings> | null | undefined,
+			sourceDurationMs?: number,
+		): Promise<SilenceDetectionResult> => {
+			try {
+				const normalizedPath = await approveReadableVideoPath(filePath);
+				if (!normalizedPath) {
+					return {
+						success: false,
+						message: "File path is not approved or is not a supported video file",
+					};
+				}
+
+				const normalizedSettings = normalizeSilenceDetectionSettings(settings);
+				const filter = `silencedetect=noise=${normalizedSettings.noiseThresholdDb}dB:d=${(
+					normalizedSettings.minimumSilenceMs / 1000
+				).toFixed(3)}`;
+				const detection = await runProcess(getFfmpegBinary(), [
+					"-hide_banner",
+					"-nostdin",
+					"-nostats",
+					"-i",
+					normalizedPath,
+					"-map",
+					"0:a:0",
+					"-vn",
+					"-sn",
+					"-dn",
+					"-af",
+					filter,
+					"-f",
+					"null",
+					"-",
+				]);
+
+				if (detection.code !== 0) {
+					const output = `${detection.stderr}\n${detection.stdout}`;
+					if (/matches no streams|does not contain any stream|audio.*not found/i.test(output)) {
+						return { success: false, message: "This video has no usable audio track" };
+					}
+					throw new Error(detection.stderr.trim() || "FFmpeg silence detection failed");
+				}
+
+				const durationMs =
+					typeof sourceDurationMs === "number" &&
+					Number.isFinite(sourceDurationMs) &&
+					sourceDurationMs > 0
+						? sourceDurationMs
+						: undefined;
+				const intervals = parseSilenceDetectionOutput(detection.stderr, durationMs);
+				const regions = buildSilenceTrimSpans(intervals, normalizedSettings, durationMs);
+				return {
+					success: true,
+					regions,
+					removableDurationMs: regions.reduce(
+						(total, region) => total + region.endMs - region.startMs,
+						0,
+					),
+				};
+			} catch (error) {
+				console.error("Failed to detect silence:", error);
+				return {
+					success: false,
+					message: "Silence detection failed",
+					error: error instanceof Error ? error.message : String(error),
+				};
+			}
+		},
+	);
 
 	ipcMain.handle(
 		"save-project-file",

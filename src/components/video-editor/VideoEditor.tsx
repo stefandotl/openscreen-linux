@@ -56,6 +56,10 @@ import { computeFrameStepTime } from "@/lib/frameStep";
 import type { CursorCaptureMode, ProjectMedia } from "@/lib/recordingSession";
 import { matchesShortcut } from "@/lib/shortcuts";
 import {
+	DEFAULT_SILENCE_DETECTION_SETTINGS,
+	subtractExistingTrimSpans,
+} from "@/lib/silenceDetection";
+import {
 	getExportFolder,
 	getProjectFolder,
 	loadUserPreferences,
@@ -120,6 +124,7 @@ import VideoPlayback, { VideoPlaybackRef } from "./VideoPlayback";
 
 /** Single Sonner slot so auto-caption phases update in place instead of stacking. */
 const AUTO_CAPTION_PROGRESS_TOAST_ID = "auto-caption-progress";
+const SILENCE_DETECTION_PROGRESS_TOAST_ID = "silence-detection-progress";
 const MP4_EXPORT_FRAME_RATE = 30;
 
 function isClickInteractionType(interactionType: string | null | undefined) {
@@ -328,6 +333,18 @@ export default function VideoEditor() {
 	const [isAutoCaptioning, setIsAutoCaptioning] = useState(false);
 	const [showAutoCaptionsDialog, setShowAutoCaptionsDialog] = useState(false);
 	const [captionWordsMin, setCaptionWordsMin] = useState(2);
+	const [showSilenceDetectionDialog, setShowSilenceDetectionDialog] = useState(false);
+	const isDetectingSilenceRef = useRef(false);
+	const [isDetectingSilence, setIsDetectingSilence] = useState(false);
+	const [silenceNoiseThresholdDb, setSilenceNoiseThresholdDb] = useState(
+		DEFAULT_SILENCE_DETECTION_SETTINGS.noiseThresholdDb,
+	);
+	const [minimumSilenceMs, setMinimumSilenceMs] = useState(
+		DEFAULT_SILENCE_DETECTION_SETTINGS.minimumSilenceMs,
+	);
+	const [silencePaddingMs, setSilencePaddingMs] = useState(
+		DEFAULT_SILENCE_DETECTION_SETTINGS.paddingMs,
+	);
 	const [captionWordsMax, setCaptionWordsMax] = useState(7);
 	const exporterRef = useRef<VideoExporter | null>(null);
 
@@ -2222,6 +2239,91 @@ export default function VideoEditor() {
 		}
 	}, []);
 
+	const detectAndAddSilenceTrims = useCallback(async () => {
+		const sourcePath = videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : null);
+		if (!sourcePath) {
+			toast.error(t("errors.noVideoLoaded"));
+			return;
+		}
+		if (isDetectingSilenceRef.current) return;
+
+		isDetectingSilenceRef.current = true;
+		setIsDetectingSilence(true);
+		toast.loading(t("silenceDetection.analyzing"), {
+			id: SILENCE_DETECTION_PROGRESS_TOAST_ID,
+		});
+
+		try {
+			const result = await window.electronAPI.detectSilence(
+				sourcePath,
+				{
+					noiseThresholdDb: silenceNoiseThresholdDb,
+					minimumSilenceMs,
+					paddingMs: silencePaddingMs,
+				},
+				duration > 0 ? duration * 1000 : undefined,
+			);
+
+			toast.dismiss(SILENCE_DETECTION_PROGRESS_TOAST_ID);
+			if (!result.success) {
+				const isNoAudio = /no usable audio/i.test(result.message);
+				toast.error(isNoAudio ? t("silenceDetection.noAudio") : t("silenceDetection.failed"), {
+					description: result.error || result.message,
+				});
+				return;
+			}
+
+			const availableSpans = subtractExistingTrimSpans(result.regions, trimRegions);
+			if (availableSpans.length === 0) {
+				toast.info(t("silenceDetection.noneFound"));
+				return;
+			}
+
+			const newRegions: TrimRegion[] = availableSpans.map((span) => ({
+				id: `trim-${nextTrimIdRef.current++}`,
+				startMs: span.startMs,
+				endMs: span.endMs,
+			}));
+			pushState((prev) => ({ trimRegions: [...prev.trimRegions, ...newRegions] }));
+			setSelectedTrimId(newRegions[0].id);
+			setSelectedZoomId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+			setShowSilenceDetectionDialog(false);
+
+			const removableMs = availableSpans.reduce(
+				(total, span) => total + span.endMs - span.startMs,
+				0,
+			);
+			toast.success(
+				t("silenceDetection.added", {
+					count: String(newRegions.length),
+					seconds: (removableMs / 1000).toFixed(1),
+				}),
+			);
+		} catch (error) {
+			console.error("Silence detection failed:", error);
+			toast.dismiss(SILENCE_DETECTION_PROGRESS_TOAST_ID);
+			toast.error(t("silenceDetection.failed"), {
+				description: error instanceof Error ? error.message : String(error),
+			});
+		} finally {
+			isDetectingSilenceRef.current = false;
+			setIsDetectingSilence(false);
+		}
+	}, [
+		videoSourcePath,
+		videoPath,
+		t,
+		silenceNoiseThresholdDb,
+		minimumSilenceMs,
+		silencePaddingMs,
+		duration,
+		trimRegions,
+		pushState,
+	]);
+
 	const generateAutoCaptions = useCallback(
 		async (minWords: number, maxWords: number) => {
 			if (!videoPath) {
@@ -2417,6 +2519,96 @@ export default function VideoEditor() {
 						>
 							{t("newRecording.confirm")}
 						</button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				open={showSilenceDetectionDialog}
+				onOpenChange={(open) => {
+					if (!isDetectingSilence) setShowSilenceDetectionDialog(open);
+				}}
+			>
+				<DialogContent
+					className="sm:max-w-md"
+					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+				>
+					<DialogHeader>
+						<DialogTitle>{t("silenceDetection.dialogTitle")}</DialogTitle>
+						<DialogDescription>{t("silenceDetection.dialogDescription")}</DialogDescription>
+					</DialogHeader>
+					<div className="grid gap-4 py-2">
+						<div className="grid gap-2">
+							<Label htmlFor="silence-sensitivity">{t("silenceDetection.sensitivity")}</Label>
+							<Select
+								value={String(silenceNoiseThresholdDb)}
+								onValueChange={(value) => setSilenceNoiseThresholdDb(Number(value))}
+							>
+								<SelectTrigger id="silence-sensitivity" className="h-9">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="-48">{t("silenceDetection.conservative")}</SelectItem>
+									<SelectItem value="-38">{t("silenceDetection.balanced")}</SelectItem>
+									<SelectItem value="-30">{t("silenceDetection.aggressive")}</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="minimum-silence">{t("silenceDetection.minimumSilence")}</Label>
+							<Select
+								value={String(minimumSilenceMs)}
+								onValueChange={(value) => setMinimumSilenceMs(Number(value))}
+							>
+								<SelectTrigger id="minimum-silence" className="h-9">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{[400, 600, 1000, 1500, 2000].map((value) => (
+										<SelectItem key={value} value={String(value)}>
+											{t("silenceDetection.milliseconds", { value: String(value) })}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="grid gap-2">
+							<Label htmlFor="silence-padding">{t("silenceDetection.padding")}</Label>
+							<Select
+								value={String(silencePaddingMs)}
+								onValueChange={(value) => setSilencePaddingMs(Number(value))}
+							>
+								<SelectTrigger id="silence-padding" className="h-9">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									{[80, 150, 250, 400].map((value) => (
+										<SelectItem key={value} value={String(value)}>
+											{t("silenceDetection.milliseconds", { value: String(value) })}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+					</div>
+					<DialogFooter className="gap-2 sm:gap-0">
+						<Button
+							type="button"
+							variant="outline"
+							disabled={isDetectingSilence}
+							onClick={() => setShowSilenceDetectionDialog(false)}
+							className="border-white/20 bg-transparent text-white hover:bg-white/10"
+						>
+							{t("silenceDetection.cancel")}
+						</Button>
+						<Button
+							type="button"
+							disabled={isDetectingSilence}
+							onClick={() => void detectAndAddSilenceTrims()}
+							className="bg-[#ef4444] text-white hover:bg-[#dc2626]"
+						>
+							{isDetectingSilence ? t("silenceDetection.analyzing") : t("silenceDetection.detect")}
+						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
@@ -2918,6 +3110,15 @@ export default function VideoEditor() {
 									}
 									videoUrl={videoPath ?? undefined}
 									showTrimWaveform={showTrimWaveform}
+									detectSilenceLabel={t("silenceDetection.button")}
+									isDetectingSilence={isDetectingSilence}
+									onDetectSilence={() => {
+										if (!videoSourcePath && !videoPath) {
+											toast.error(t("errors.noVideoLoaded"));
+											return;
+										}
+										setShowSilenceDetectionDialog(true);
+									}}
 									captionsLabel={t("autoCaptions.button")}
 									isGeneratingCaptions={isAutoCaptioning}
 									onGenerateCaptions={() => {

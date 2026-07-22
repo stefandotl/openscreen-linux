@@ -63,6 +63,25 @@
 		"failed": "Impossible de générer les sous-titres.",
 		"truncated": "Seules les {{minutes}} premières minutes ont été transcrites."
 	},
+	"silenceDetection": {
+		"button": "Détecter les silences",
+		"dialogTitle": "Détecter et couper les silences",
+		"dialogDescription": "Analyse l’audio localement et ajoute des zones de coupe modifiables pour les pauses silencieuses. Cette analyse s’exécute avant l’export et ne modifie pas le chemin d’export GPU.",
+		"sensitivity": "Sensibilité",
+		"conservative": "Prudent (-48 dB)",
+		"balanced": "Équilibré (-38 dB)",
+		"aggressive": "Agressif (-30 dB)",
+		"minimumSilence": "Durée minimale du silence",
+		"padding": "Conserver l’audio autour de la voix",
+		"milliseconds": "{{value}} ms",
+		"detect": "Créer les coupes",
+		"cancel": "Annuler",
+		"analyzing": "Analyse de l’audio…",
+		"noneFound": "Aucune nouvelle zone de silence n’a été trouvée avec ces réglages.",
+		"added": "{{count}} coupes de silence ajoutées ({{seconds}} secondes).",
+		"noAudio": "Cette vidéo ne contient aucune piste audio exploitable.",
+		"failed": "Impossible de détecter les silences."
+	},
 	"emptyState": {
 		"title": "Aucun projet ouvert",
 		"description": "Importez une vidéo pour commencer à éditer, ou chargez un projet OpenScreen existant.",

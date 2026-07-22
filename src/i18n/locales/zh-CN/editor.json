@@ -63,6 +63,25 @@
 		"failed": "无法生成字幕。",
 		"truncated": "仅转写了最前 {{minutes}} 分钟。"
 	},
+	"silenceDetection": {
+		"button": "检测静音",
+		"dialogTitle": "检测并剪除静音",
+		"dialogDescription": "在本地分析音频，并为安静停顿添加可编辑的剪辑区域。此操作在导出前运行，不会更改 GPU 导出路径。",
+		"sensitivity": "灵敏度",
+		"conservative": "保守 (-48 dB)",
+		"balanced": "均衡 (-38 dB)",
+		"aggressive": "激进 (-30 dB)",
+		"minimumSilence": "最短静音时长",
+		"padding": "保留语音前后音频",
+		"milliseconds": "{{value}} 毫秒",
+		"detect": "创建剪辑",
+		"cancel": "取消",
+		"analyzing": "正在分析音频…",
+		"noneFound": "使用这些设置未找到新的静音区域。",
+		"added": "已添加 {{count}} 个静音剪辑（{{seconds}} 秒）。",
+		"noAudio": "此视频没有可用的音轨。",
+		"failed": "无法检测静音。"
+	},
 	"emptyState": {
 		"title": "未打开任何项目",
 		"description": "导入视频开始编辑，或加载已有的 OpenScreen 项目。",

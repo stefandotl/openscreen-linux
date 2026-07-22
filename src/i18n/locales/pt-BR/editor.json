@@ -60,5 +60,24 @@
 		"noAudio": "Este vídeo não tem áudio utilizável para transcrição.",
 		"failed": "Não foi possível gerar as legendas.",
 		"truncated": "Apenas os primeiros {{minutes}} minutos foram transcritos."
+	},
+	"silenceDetection": {
+		"button": "Detectar silêncio",
+		"dialogTitle": "Detectar e cortar silêncio",
+		"dialogDescription": "Analisa o áudio localmente e adiciona regiões de corte editáveis para pausas silenciosas. A análise ocorre antes da exportação e não altera o caminho de exportação pela GPU.",
+		"sensitivity": "Sensibilidade",
+		"conservative": "Conservador (-48 dB)",
+		"balanced": "Equilibrado (-38 dB)",
+		"aggressive": "Agressivo (-30 dB)",
+		"minimumSilence": "Duração mínima do silêncio",
+		"padding": "Manter áudio ao redor da fala",
+		"milliseconds": "{{value}} ms",
+		"detect": "Criar cortes",
+		"cancel": "Cancelar",
+		"analyzing": "Analisando áudio…",
+		"noneFound": "Nenhuma nova região de silêncio foi encontrada com estas configurações.",
+		"added": "{{count}} cortes de silêncio adicionados ({{seconds}} segundos).",
+		"noAudio": "Este vídeo não possui uma faixa de áudio utilizável.",
+		"failed": "Não foi possível detectar o silêncio."
 	}
 }

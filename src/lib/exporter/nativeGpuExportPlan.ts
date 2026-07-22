@@ -38,6 +38,10 @@ export const NATIVE_GPU_EXPORT_FRAME_RATE = 30;
 export const NATIVE_GPU_EXPORT_MAX_DIMENSION = 4096;
 
 const EPSILON = 0.0001;
+const MOTION_BLUR_PEAK_VELOCITY_PPS = 1400;
+const MOTION_BLUR_MAX_PX = 14;
+const MOTION_BLUR_VELOCITY_THRESHOLD_PPS = 12;
+const MOTION_BLUR_MAX_AMOUNT_BOOST = 2.2;
 
 export interface NativeGpuExportVideoInfo {
 	width: number;
@@ -106,8 +110,6 @@ export function getNativeGpuExportBlockers(
 	if (config.showShadow || config.shadowIntensity > EPSILON) {
 		blockers.push("recording shadow is not implemented");
 	}
-	if (config.showBlur) blockers.push("background blur is not implemented");
-	if ((config.motionBlurAmount ?? 0) > EPSILON) blockers.push("motion blur is not implemented");
 	if ((config.borderRadius ?? 0) > EPSILON) blockers.push("recording roundness is not implemented");
 	if (
 		(config.cursorScale ?? 0) > 0 &&
@@ -149,6 +151,7 @@ function createFrameTransforms(
 	const spring = createZoomSpringState();
 	let smoothedAutoFocus: ZoomFocus | null = null;
 	let previousTimeMs: number | null = null;
+	let previousApplied: { scale: number; x: number; y: number } | null = null;
 	let previousTargetProgress = 0;
 	let currentRotation: Rotation3D = { ...DEFAULT_ROTATION_3D };
 
@@ -242,13 +245,53 @@ function createFrameTransforms(
 				? (resetZoomSpring(spring, projected), projected)
 				: stepZoomSpring(spring, projected, deltaMs);
 		previousTimeMs = timeMs;
+		let motionBlurX = 0;
+		let motionBlurY = 0;
+		const motionBlurAmount = Math.min(1, Math.max(0, config.motionBlurAmount ?? 0));
+		if (previousApplied && deltaMs > 0 && deltaMs <= 80 && motionBlurAmount > EPSILON) {
+			const dtSeconds = Math.min(80, Math.max(1, deltaMs)) / 1000;
+			const dx = applied.x - previousApplied.x;
+			const dy = applied.y - previousApplied.y;
+			const dScale = applied.scale - previousApplied.scale;
+			const velocityX = dx / dtSeconds;
+			const velocityY = dy / dtSeconds;
+			const scaleVelocity =
+				Math.abs(dScale / dtSeconds) * Math.max(config.width, config.height) * 0.5;
+			const speed = Math.hypot(velocityX, velocityY) + scaleVelocity;
+			if (speed >= MOTION_BLUR_VELOCITY_THRESHOLD_PPS) {
+				const normalizedSpeed = Math.min(1, speed / MOTION_BLUR_PEAK_VELOCITY_PPS);
+				const amountResponse =
+					motionBlurAmount * (1 + (MOTION_BLUR_MAX_AMOUNT_BOOST - 1) * motionBlurAmount);
+				const targetBlur = normalizedSpeed * normalizedSpeed * MOTION_BLUR_MAX_PX * amountResponse;
+				const directionMagnitude = Math.hypot(velocityX, velocityY);
+				if (targetBlur > 0.5 && directionMagnitude > EPSILON) {
+					const velocityScale = targetBlur * 2.4;
+					motionBlurX = (velocityX / directionMagnitude) * velocityScale;
+					motionBlurY = (velocityY / directionMagnitude) * velocityScale;
+				}
+			}
+		}
+		previousApplied = applied;
 		return {
 			sourceTimestampMs: timeMs,
 			cameraScale: applied.scale,
 			cameraX: applied.x,
 			cameraY: applied.y,
+			motionBlurX,
+			motionBlurY,
 		};
 	});
+}
+
+function blurWallpaperCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
+	const canvas = document.createElement("canvas");
+	canvas.width = source.width;
+	canvas.height = source.height;
+	const context = canvas.getContext("2d");
+	if (!context) throw new Error("Failed to create background-blur canvas for native GPU export");
+	context.filter = "blur(6px)";
+	context.drawImage(source, 0, 0, source.width, source.height);
+	return canvas;
 }
 
 export function createNativeGpuExportPlan(
@@ -314,11 +357,14 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 	wallpaperPng: ArrayBuffer;
 	overlayPng?: ArrayBuffer;
 }> {
-	const wallpaperCanvas = await renderWallpaperCanvas(
+	const rawWallpaperCanvas = await renderWallpaperCanvas(
 		config.wallpaper,
 		config.width,
 		config.height,
 	);
+	const wallpaperCanvas = config.showBlur
+		? blurWallpaperCanvas(rawWallpaperCanvas)
+		: rawWallpaperCanvas;
 	const wallpaperPng = await canvasToPng(wallpaperCanvas);
 	const annotation = activeAnnotations(config)[0];
 	if (!annotation) return { wallpaperPng };

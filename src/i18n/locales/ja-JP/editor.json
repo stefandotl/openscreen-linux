@@ -63,6 +63,25 @@
 		"failed": "キャプションを生成できませんでした。",
 		"truncated": "最初の {{minutes}} 分のみが書き起こされました。"
 	},
+	"silenceDetection": {
+		"button": "無音を検出",
+		"dialogTitle": "無音を検出してトリム",
+		"dialogDescription": "音声をローカルで解析し、静かな間に編集可能なトリム領域を追加します。書き出し前に実行され、GPU 書き出し経路は変更しません。",
+		"sensitivity": "感度",
+		"conservative": "控えめ (-48 dB)",
+		"balanced": "標準 (-38 dB)",
+		"aggressive": "強め (-30 dB)",
+		"minimumSilence": "最小無音時間",
+		"padding": "音声の前後を保持",
+		"milliseconds": "{{value}} ms",
+		"detect": "トリムを作成",
+		"cancel": "キャンセル",
+		"analyzing": "音声を解析中…",
+		"noneFound": "この設定では新しい無音領域が見つかりませんでした。",
+		"added": "{{count}} 個の無音トリムを追加しました（{{seconds}} 秒）。",
+		"noAudio": "この動画には使用可能な音声トラックがありません。",
+		"failed": "無音を検出できませんでした。"
+	},
 	"emptyState": {
 		"title": "プロジェクトが開かれていません",
 		"description": "動画をインポートして編集を開始するか、既存の OpenScreen プロジェクトを読み込んでください。",
