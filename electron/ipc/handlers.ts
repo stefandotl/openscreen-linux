@@ -16,6 +16,11 @@ import {
 	shell,
 	systemPreferences,
 } from "electron";
+import {
+	CAPTION_TRANSCRIPTION_CHANNELS,
+	type CaptionTranscriptionRequest,
+	type CaptionTranscriptionStatus,
+} from "../../src/lib/captioning/captionTranscriptionProtocol";
 import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
 import {
@@ -42,6 +47,8 @@ import type {
 	ProjectFileResult,
 	ProjectPathResult,
 } from "../../src/native/contracts";
+import { ParakeetModelManager } from "../captioning/parakeetModelManager";
+import { ParakeetTranscriptionService } from "../captioning/parakeetTranscription";
 import { mainT } from "../i18n";
 import { RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
@@ -1471,11 +1478,58 @@ export function registerIpcHandlers(
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
+	const parakeetModelManager = new ParakeetModelManager(
+		path.join(app.getPath("userData"), "caption-models"),
+	);
+	const parakeetTranscriptionService = new ParakeetTranscriptionService();
+
 	registerNativeGpuExportHandlers({
 		getFfmpegBinary,
 		resolveApprovedVideoPath,
 		buildAudioTimelineFilter,
 	});
+
+	ipcMain.handle(
+		CAPTION_TRANSCRIPTION_CHANNELS.transcribe,
+		async (event, request: CaptionTranscriptionRequest) => {
+			const videoPath = await approveReadableVideoPath(request?.videoPath);
+			if (!videoPath) {
+				throw new Error("Caption source path is not approved or is not a supported video file");
+			}
+
+			const sendStatus = (status: CaptionTranscriptionStatus) => {
+				if (!event.sender.isDestroyed()) {
+					event.sender.send(CAPTION_TRANSCRIPTION_CHANNELS.status, status);
+				}
+			};
+			sendStatus({ phase: "model" });
+			await parakeetModelManager.ensureDownloaded((progress) => {
+				sendStatus({ phase: "download", percent: progress.percent });
+			});
+
+			const trimRegions = Array.isArray(request.trimRegions)
+				? request.trimRegions.filter(
+						(region) =>
+							Number.isFinite(region?.startMs) &&
+							Number.isFinite(region?.endMs) &&
+							region.endMs > region.startMs,
+					)
+				: [];
+			sendStatus({ phase: "transcribe" });
+			return parakeetTranscriptionService.transcribeVideo({
+				ffmpegBinary: getFfmpegBinary(),
+				videoPath,
+				modelDirectory: parakeetModelManager.modelDirectory,
+				modelFiles: parakeetModelManager.getModelFiles(),
+				trimRegions,
+				sourceDurationSec:
+					typeof request.sourceDurationSec === "number" &&
+					Number.isFinite(request.sourceDurationSec)
+						? request.sourceDurationSec
+						: undefined,
+			});
+		},
+	);
 
 	async function requestScreenAccess() {
 		if (process.platform !== "darwin") {

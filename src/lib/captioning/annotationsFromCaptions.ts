@@ -25,13 +25,13 @@ const CAPTION_STYLE: AnnotationTextStyle = {
 	textAlign: "center",
 };
 
-/** Nudge caption starts earlier (seconds); Whisper onsets run slightly late. Do not offset ends too, that pulls lines off-screen early. */
+/** Optional onset correction in seconds. Do not offset ends too, which pulls lines off-screen early. */
 const AUTO_CAPTION_START_BIAS_SEC = 0;
 
-/** Extra hold after Whisper's segment end (seconds); model end times run early vs trailing vowels. Separate from the start bias. */
+/** Optional hold after a model segment ends, separate from the start bias. */
 const AUTO_CAPTION_END_HOLD_SEC = 0;
 
-/** Inside one Whisper phrase, sub-lines can be shorter (do not steal time from neighbors). */
+/** Inside one model phrase, sub-lines can be shorter (do not steal time from neighbors). */
 const WORD_SPLIT_MIN_SPAN_SEC = 0.02;
 
 /** Brief linger after the last word in a line (seconds); trimmed if it would overlap the next line. */
@@ -43,7 +43,7 @@ const WORD_RUN_BREAK_GAP_SEC = 0.24;
 /** Min time between consecutive caption regions (seconds); keeps a visible gap so blocks don't read as one clip. Small so short pauses survive. */
 const MIN_CAPTION_TIMELINE_GAP_SEC = 0;
 
-/** Same text again with almost no gap or overlap; common Whisper/chunk artifact. */
+/** Same text again with almost no gap or overlap; common ASR/chunk artifact. */
 const DEDUPE_SAME_TEXT_MAX_GAP_SEC = 0.55;
 
 export const SAME_CONTENT_ECHO_MAX_GAP_SEC = 1.15;
@@ -274,7 +274,7 @@ export interface CaptionSegmentLayoutOptions {
 	/** Upper bound on words per on-screen caption (default 7). */
 	maxWordsPerCaption?: number;
 	/**
-	 * `word`: each `CaptionSegment` is a single token with Whisper word timestamps (default).
+	 * `word`: each `CaptionSegment` is one word with model timestamps (default).
 	 * `phrase`: merged phrase spans; use proportional line splitting inside each span.
 	 */
 	timestampGranularity?: "word" | "phrase";
@@ -319,7 +319,7 @@ function computeCaptionLineIndexRanges(
 }
 
 /**
- * Groups per-word segments into on-screen lines using each token's Whisper timestamps
+ * Groups per-word segments into on-screen lines using each word's model timestamps
  * (no proportional stretching across a long phrase span).
  */
 export function groupTimedCaptionWordsIntoLines(

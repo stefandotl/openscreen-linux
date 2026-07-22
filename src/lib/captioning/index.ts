@@ -7,11 +7,19 @@ export {
 	reconcileAutoCaptionTimelineGaps,
 	splitMergedCaptionsByWordBounds,
 } from "./annotationsFromCaptions";
-export { extractMono16kFromVideoUrl, MAX_CAPTION_AUDIO_SEC } from "./extractMono16k";
+export { MAX_CAPTION_AUDIO_SEC } from "./captionConstants";
+export type {
+	CaptionTranscriptionPhase,
+	CaptionTranscriptionRequest,
+	CaptionTranscriptionResult,
+	CaptionTranscriptionStatus,
+} from "./captionTranscriptionProtocol";
+export { CAPTION_TRANSCRIPTION_CHANNELS } from "./captionTranscriptionProtocol";
+export { extractMono16kFromVideoUrl } from "./extractMono16k";
 export { shiftTrimRegionsMsForCaptionBuffer, trimLeadingSilenceMono16k } from "./leadingSilence";
 export type {
+	CaptionEngine,
 	CaptionSegment,
 	CaptionTimestampGranularity,
-	TranscribeMono16kResult,
 } from "./transcribe";
-export { transcribeMono16kToSegments } from "./transcribe";
+export { transcribeVideoToSegments, transcribeWhisperMono16kToSegments } from "./transcribe";

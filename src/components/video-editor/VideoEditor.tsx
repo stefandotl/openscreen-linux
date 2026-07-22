@@ -26,12 +26,16 @@ import { INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory
 import { type Locale } from "@/i18n/config";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
 import {
+	type CaptionEngine,
+	type CaptionTranscriptionResult,
+	type CaptionTranscriptionStatus,
 	captionSegmentsToAnnotationRegions,
 	extractMono16kFromVideoUrl,
 	MAX_CAPTION_AUDIO_SEC,
 	reconcileAutoCaptionTimelineGaps,
 	shiftTrimRegionsMsForCaptionBuffer,
-	transcribeMono16kToSegments,
+	transcribeVideoToSegments,
+	transcribeWhisperMono16kToSegments,
 	trimLeadingSilenceMono16k,
 } from "@/lib/captioning";
 import {
@@ -332,6 +336,7 @@ export default function VideoEditor() {
 	const isAutoCaptioningRef = useRef(false);
 	const [isAutoCaptioning, setIsAutoCaptioning] = useState(false);
 	const [showAutoCaptionsDialog, setShowAutoCaptionsDialog] = useState(false);
+	const [captionEngine, setCaptionEngine] = useState<CaptionEngine>("parakeet");
 	const [captionWordsMin, setCaptionWordsMin] = useState(2);
 	const [showSilenceDetectionDialog, setShowSilenceDetectionDialog] = useState(false);
 	const isDetectingSilenceRef = useRef(false);
@@ -2325,7 +2330,7 @@ export default function VideoEditor() {
 	]);
 
 	const generateAutoCaptions = useCallback(
-		async (minWords: number, maxWords: number) => {
+		async (minWords: number, maxWords: number, engine: CaptionEngine) => {
 			if (!videoPath) {
 				toast.error(t("errors.noVideoLoaded"));
 				return;
@@ -2341,64 +2346,82 @@ export default function VideoEditor() {
 			setIsAutoCaptioning(true);
 			toast.loading(t("autoCaptions.generating"), { id: AUTO_CAPTION_PROGRESS_TOAST_ID });
 			try {
-				const { samples, truncated, durationSec } = await extractMono16kFromVideoUrl(videoPath);
-				if (!Number.isFinite(durationSec) || durationSec <= 0 || samples.length < 800) {
-					toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
-					toast.error(t("autoCaptions.noAudio"));
-					return;
-				}
-
-				const { samples: speechSamples, trimSec } = trimLeadingSilenceMono16k(samples);
-				if (speechSamples.length < 800) {
-					toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
-					toast.error(t("autoCaptions.noAudio"));
-					return;
-				}
-
-				const trimMs = Math.round(trimSec * 1000);
-				const trimRegionsForTranscribe = shiftTrimRegionsMsForCaptionBuffer(trimRegions, trimMs);
-
-				const transcribeOptions = {
-					onStatus: (phase: "model" | "transcribe") => {
-						if (phase === "model") {
-							toast.loading(t("autoCaptions.loadingModel"), {
+				const onTranscriptionStatus = ({ phase, percent }: CaptionTranscriptionStatus) => {
+					if (phase === "download" || phase === "model") {
+						toast.loading(
+							t(
+								engine === "parakeet"
+									? "autoCaptions.loadingModel"
+									: "autoCaptions.loadingWhisperModel",
+							),
+							{
 								id: AUTO_CAPTION_PROGRESS_TOAST_ID,
-							});
-						} else {
-							toast.loading(t("autoCaptions.transcribing"), {
-								id: AUTO_CAPTION_PROGRESS_TOAST_ID,
-							});
-						}
-					},
+								...(typeof percent === "number" ? { description: `${percent}%` } : {}),
+							},
+						);
+					} else {
+						toast.loading(t("autoCaptions.transcribing"), {
+							id: AUTO_CAPTION_PROGRESS_TOAST_ID,
+						});
+					}
 				};
 
-				let { segments: segmentsRaw, granularity } = await transcribeMono16kToSegments(
-					speechSamples,
-					{
-						trimRegions: trimRegionsForTranscribe,
-						...transcribeOptions,
-					},
-				);
-				let transcribedFromTrimmedBuffer = true;
-
-				// Leading-silence trimming can return empty even when the full source has
-				// speech. Retry once against the untrimmed buffer before giving up.
-				if (segmentsRaw.length === 0 && trimSec > 0) {
-					({ segments: segmentsRaw, granularity } = await transcribeMono16kToSegments(samples, {
+				let transcription: CaptionTranscriptionResult;
+				if (engine === "parakeet") {
+					transcription = await transcribeVideoToSegments(videoPath, {
 						trimRegions,
-						...transcribeOptions,
-					}));
-					transcribedFromTrimmedBuffer = false;
+						sourceDurationSec: duration,
+						onStatus: onTranscriptionStatus,
+					});
+				} else {
+					const extracted = await extractMono16kFromVideoUrl(videoPath);
+					if (
+						!Number.isFinite(extracted.durationSec) ||
+						extracted.durationSec <= 0 ||
+						extracted.samples.length < 800
+					) {
+						toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
+						toast.error(t("autoCaptions.noAudio"));
+						return;
+					}
+
+					const { samples: speechSamples, trimSec } = trimLeadingSilenceMono16k(extracted.samples);
+					if (speechSamples.length < 800) {
+						toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
+						toast.error(t("autoCaptions.noAudio"));
+						return;
+					}
+
+					const trimMs = Math.round(trimSec * 1000);
+					const shiftedTrims = shiftTrimRegionsMsForCaptionBuffer(trimRegions, trimMs);
+					let whisperResult = await transcribeWhisperMono16kToSegments(speechSamples, {
+						trimRegions: shiftedTrims,
+						onStatus: onTranscriptionStatus,
+					});
+					let usedTrimmedBuffer = true;
+					if (whisperResult.segments.length === 0 && trimSec > 0) {
+						whisperResult = await transcribeWhisperMono16kToSegments(extracted.samples, {
+							trimRegions,
+							onStatus: onTranscriptionStatus,
+						});
+						usedTrimmedBuffer = false;
+					}
+
+					transcription = {
+						...whisperResult,
+						segments:
+							usedTrimmedBuffer && trimSec > 0
+								? whisperResult.segments.map((segment) => ({
+										...segment,
+										startSec: segment.startSec + trimSec,
+										endSec: segment.endSec + trimSec,
+									}))
+								: whisperResult.segments,
+						truncated: extracted.truncated,
+					};
 				}
 
-				const segments =
-					transcribedFromTrimmedBuffer && trimSec > 0
-						? segmentsRaw.map((s) => ({
-								...s,
-								startSec: s.startSec + trimSec,
-								endSec: s.endSec + trimSec,
-							}))
-						: segmentsRaw;
+				const { segments, granularity, truncated } = transcription;
 
 				let { regions, nextNumericId, nextZIndex } = captionSegmentsToAnnotationRegions(
 					segments,
@@ -2447,13 +2470,17 @@ export default function VideoEditor() {
 				console.error(e);
 				toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
 				const detail = e instanceof Error ? e.message : String(e);
-				toast.error(t("autoCaptions.failed"), { description: detail });
+				if (/no usable audio|matches no streams|audio.*not found/i.test(detail)) {
+					toast.error(t("autoCaptions.noAudio"));
+				} else {
+					toast.error(t("autoCaptions.failed"), { description: detail });
+				}
 			} finally {
 				isAutoCaptioningRef.current = false;
 				setIsAutoCaptioning(false);
 			}
 		},
-		[videoPath, trimRegions, pushState, t],
+		[videoPath, trimRegions, duration, pushState, t],
 	);
 
 	const handleSaveDiagnostic = useCallback(async () => {
@@ -2624,6 +2651,21 @@ export default function VideoEditor() {
 					</DialogHeader>
 					<div className="grid gap-4 py-2">
 						<div className="grid gap-2">
+							<Label htmlFor="caption-engine">{t("autoCaptions.model")}</Label>
+							<Select
+								value={captionEngine}
+								onValueChange={(value) => setCaptionEngine(value as CaptionEngine)}
+							>
+								<SelectTrigger id="caption-engine" className="h-9">
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="parakeet">Parakeet TDT 0.6B · ~660 MB</SelectItem>
+									<SelectItem value="whisper-tiny">Whisper Tiny · ~75 MB</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+						<div className="grid gap-2">
 							<Label htmlFor="caption-min-words">{t("autoCaptions.minWords")}</Label>
 							<Select
 								value={String(captionWordsMin)}
@@ -2682,7 +2724,7 @@ export default function VideoEditor() {
 							disabled={isAutoCaptioning}
 							onClick={() => {
 								setShowAutoCaptionsDialog(false);
-								void generateAutoCaptions(captionWordsMin, captionWordsMax);
+								void generateAutoCaptions(captionWordsMin, captionWordsMax, captionEngine);
 							}}
 							className="bg-[#34B27B] text-white hover:bg-[#34B27B]/90"
 						>

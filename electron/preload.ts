@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import {
+	CAPTION_TRANSCRIPTION_CHANNELS,
+	type CaptionTranscriptionRequest,
+	type CaptionTranscriptionResult,
+	type CaptionTranscriptionStatus,
+} from "../src/lib/captioning/captionTranscriptionProtocol";
+import {
 	NATIVE_GPU_EXPORT_CHANNELS,
 	type NativeGpuExportProgress,
 	type NativeGpuExportRequest,
@@ -198,6 +204,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		sourceDurationMs?: number,
 	): Promise<SilenceDetectionResult> => {
 		return ipcRenderer.invoke("detect-silence", filePath, settings, sourceDurationMs);
+	},
+	transcribeVideoCaptions: (
+		request: CaptionTranscriptionRequest,
+	): Promise<CaptionTranscriptionResult> => {
+		return ipcRenderer.invoke(CAPTION_TRANSCRIPTION_CHANNELS.transcribe, request);
+	},
+	onCaptionTranscriptionStatus: (callback: (status: CaptionTranscriptionStatus) => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, status: CaptionTranscriptionStatus) => {
+			callback(status);
+		};
+		ipcRenderer.on(CAPTION_TRANSCRIPTION_CHANNELS.status, listener);
+		return () => ipcRenderer.removeListener(CAPTION_TRANSCRIPTION_CHANNELS.status, listener);
 	},
 	clearCurrentVideoPath: () => {
 		return ipcRenderer.invoke("clear-current-video-path");

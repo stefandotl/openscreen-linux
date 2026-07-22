@@ -238,6 +238,16 @@ interface Window {
 			settings: import("../src/lib/silenceDetection").SilenceDetectionSettings,
 			sourceDurationMs?: number,
 		) => Promise<import("../src/lib/silenceDetection").SilenceDetectionResult>;
+		transcribeVideoCaptions: (
+			request: import("../src/lib/captioning/captionTranscriptionProtocol").CaptionTranscriptionRequest,
+		) => Promise<
+			import("../src/lib/captioning/captionTranscriptionProtocol").CaptionTranscriptionResult
+		>;
+		onCaptionTranscriptionStatus: (
+			callback: (
+				status: import("../src/lib/captioning/captionTranscriptionProtocol").CaptionTranscriptionStatus,
+			) => void,
+		) => () => void;
 		clearCurrentVideoPath: () => Promise<{ success: boolean }>;
 		saveProjectFile: (
 			projectData: unknown,

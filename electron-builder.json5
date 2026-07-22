@@ -3,12 +3,14 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "com.siddharthvaddem.openscreen",
   "asar": true,
-  // .node binaries can't be dlopen'd from inside an asar — must live unpacked.
+  // Native addons and their shared libraries can't be loaded from inside an asar.
   "asarUnpack": [
-    "**/*.node"
+    "**/*.node",
+    "node_modules/sherpa-onnx-node/**/*",
+    "node_modules/sherpa-onnx-*/**/*"
   ],
   "productName": "OpenScreen Linux",
-  // Fetch the auto-caption model + ORT wasm into caption-assets/ before packaging (idempotent).
+  // Fetch the optional Whisper model + ORT wasm before packaging (idempotent).
   "beforePack": "scripts/before-pack.cjs",
   "npmRebuild": true,
   // sharp ships ABI-stable (napi) prebuilt binaries with bundled libvips. Building it from source
