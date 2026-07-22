@@ -166,7 +166,8 @@
 		"invalidImageType": "無効なファイル形式",
 		"imageFormatsOnly": "JPG、PNG、GIF、またはWebP画像ファイルを選択してください。",
 		"imageUploadSuccess": "画像を読み込みました。",
-		"failedImageUpload": "画像の読み込みに失敗しました"
+		"failedImageUpload": "画像の読み込みに失敗しました",
+		"wordHighlight": "読み上げ中の単語を強調"
 	},
 	"fontStyles": {
 		"classic": "クラシック",

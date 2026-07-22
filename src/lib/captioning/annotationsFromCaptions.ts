@@ -1,6 +1,6 @@
 import type { AnnotationRegion, AnnotationTextStyle } from "@/components/video-editor/types";
 
-import type { CaptionSegment } from "./transcribe";
+import type { CaptionSegment, CaptionWordSegment } from "./transcribe";
 
 /** Wide lower-third bar; `position.x` is top-left as % of container, so center with (100 - width) / 2. */
 const CAPTION_WIDTH = 92;
@@ -23,6 +23,8 @@ const CAPTION_STYLE: AnnotationTextStyle = {
 	fontStyle: "normal",
 	textDecoration: "none",
 	textAlign: "center",
+	wordHighlight: true,
+	wordHighlightColor: "#34B27B",
 };
 
 /** Optional onset correction in seconds. Do not offset ends too, which pulls lines off-screen early. */
@@ -108,7 +110,7 @@ function dedupeAdjacentCaptionRepeats(segments: CaptionSegment[]): CaptionSegmen
 				continue;
 			}
 		}
-		out.push({ startSec: seg.startSec, endSec: seg.endSec, text: t });
+		out.push({ startSec: seg.startSec, endSec: seg.endSec, text: t, words: seg.words });
 	}
 	return out;
 }
@@ -126,7 +128,7 @@ function finalizeCaptionSegmentsForPlayback(segments: CaptionSegment[]): Caption
 		let e = seg.endSec + AUTO_CAPTION_END_HOLD_SEC;
 		s = Math.max(0, s);
 		if (e <= s) e = s + 0.02;
-		return { startSec: s, endSec: e, text: seg.text.trim() };
+		return { startSec: s, endSec: e, text: seg.text.trim(), words: seg.words };
 	});
 
 	for (let i = 1; i < a.length; i++) {
@@ -350,6 +352,11 @@ export function groupTimedCaptionWordsIntoLines(
 				startSec: s,
 				endSec: e,
 				text: slice.map((w) => w.text.trim()).join(" "),
+				words: slice.map(({ startSec, endSec, text }) => ({
+					startSec,
+					endSec,
+					text: text.trim(),
+				})),
 			});
 		}
 	};
@@ -417,7 +424,7 @@ function wrapCaptionTextByWordBounds(text: string, minWords: number, maxWords: n
 	return ranges.map(({ from, to }) => words.slice(from, to).join(" ")).join("\n");
 }
 
-function expandPhraseSegmentToPseudoWords(segment: CaptionSegment): CaptionSegment[] {
+function expandPhraseSegmentToPseudoWords(segment: CaptionSegment): CaptionWordSegment[] {
 	const words = segment.text.trim().split(/\s+/).filter(Boolean);
 	if (words.length === 0) return [];
 	if (words.length === 1) {
@@ -454,19 +461,22 @@ export function groupPhraseCaptionSegmentsIntoLines(
 			const n = lineTexts.length;
 			const rawDur = only.endSec - only.startSec;
 			if (n > 1 && rawDur < n * WORD_SPLIT_MIN_SPAN_SEC) {
+				const combined = { ...only, text: lineTexts.join(" ") };
 				out.push({
 					startSec: only.startSec,
 					endSec: only.endSec,
-					text: lineTexts.join(" "),
+					text: combined.text,
+					words: expandPhraseSegmentToPseudoWords(combined),
 				});
 				continue;
 			}
 			const dur = Math.max(rawDur, WORD_SPLIT_MIN_SPAN_SEC * n);
 			if (n <= 1) {
+				const text = lineTexts[0] ?? wrapped;
+				const line = { startSec: only.startSec, endSec: only.endSec, text };
 				out.push({
-					startSec: only.startSec,
-					endSec: only.endSec,
-					text: lineTexts[0] ?? wrapped,
+					...line,
+					words: expandPhraseSegmentToPseudoWords(line),
 				});
 				continue;
 			}
@@ -475,10 +485,10 @@ export function groupPhraseCaptionSegmentsIntoLines(
 				const boundary = only.startSec + (dur * (i + 1)) / n;
 				const endSec =
 					i === n - 1 ? only.endSec : Math.max(startSec + WORD_SPLIT_MIN_SPAN_SEC, boundary);
+				const line = { startSec, endSec, text: lineTexts[i]! };
 				out.push({
-					startSec,
-					endSec,
-					text: lineTexts[i]!,
+					...line,
+					words: expandPhraseSegmentToPseudoWords(line),
 				});
 			}
 			continue;
@@ -575,6 +585,14 @@ export function captionSegmentsToAnnotationRegions(
 			type: "text",
 			content: seg.text,
 			annotationSource: "auto-caption",
+			captionWords: seg.words?.map((word) => ({
+				text: word.text,
+				startOffsetMs: Math.max(0, Math.round((word.startSec - seg.startSec) * 1000)),
+				endOffsetMs: Math.min(
+					endMs - startMs,
+					Math.max(1, Math.round((word.endSec - seg.startSec) * 1000)),
+				),
+			})),
 			position: { ...CAPTION_POSITION },
 			size: { ...CAPTION_SIZE },
 			style: { ...CAPTION_STYLE },

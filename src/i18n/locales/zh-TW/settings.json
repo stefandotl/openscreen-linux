@@ -163,6 +163,7 @@
 		"imageFormatsOnly": "請上傳 JPG、PNG、GIF 或 WebP 格式的圖片檔案。",
 		"imageUploadSuccess": "圖片上傳成功！",
 		"failedImageUpload": "上傳圖片失敗",
+		"wordHighlight": "醒目提示目前朗讀的詞",
 		"blurColor": "模糊顏色",
 		"blurColorBlack": "黑色",
 		"blurColorWhite": "白色",

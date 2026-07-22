@@ -76,6 +76,48 @@ describe("projectPersistence media compatibility", () => {
 		expect(normalizeProjectEditor({ webcamMirrored: "yes" as never }).webcamMirrored).toBe(false);
 	});
 
+	it("preserves valid caption word timing and highlight styling", () => {
+		const editor = normalizeProjectEditor({
+			annotationRegions: [
+				{
+					id: "caption",
+					startMs: 100,
+					endMs: 800,
+					type: "text",
+					content: "one two",
+					annotationSource: "auto-caption",
+					captionWords: [
+						{ text: "one", startOffsetMs: 0, endOffsetMs: 250 },
+						{ text: "two", startOffsetMs: 350, endOffsetMs: 700 },
+					],
+					position: { x: 4, y: 80 },
+					size: { width: 92, height: 12 },
+					style: {
+						color: "#fff",
+						backgroundColor: "transparent",
+						fontSize: 24,
+						fontFamily: "Inter",
+						fontWeight: "normal",
+						fontStyle: "normal",
+						textDecoration: "none",
+						textAlign: "center",
+						wordHighlight: true,
+						wordHighlightColor: "#123456",
+					},
+					zIndex: 1,
+				},
+			],
+		});
+
+		expect(editor.annotationRegions[0]).toMatchObject({
+			captionWords: [
+				{ text: "one", startOffsetMs: 0, endOffsetMs: 250 },
+				{ text: "two", startOffsetMs: 350, endOffsetMs: 700 },
+			],
+			style: { wordHighlight: true, wordHighlightColor: "#123456" },
+		});
+	});
+
 	it("normalizes blur region type and mosaic block size safely", () => {
 		const editor = normalizeProjectEditor({
 			annotationRegions: [

@@ -343,6 +343,22 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 						imageContent: typeof region.imageContent === "string" ? region.imageContent : undefined,
 						annotationSource:
 							region.annotationSource === "auto-caption" ? ("auto-caption" as const) : undefined,
+						captionWords: Array.isArray(region.captionWords)
+							? region.captionWords
+									.filter(
+										(word) =>
+											word &&
+											typeof word.text === "string" &&
+											isFiniteNumber(word.startOffsetMs) &&
+											isFiniteNumber(word.endOffsetMs) &&
+											word.endOffsetMs > word.startOffsetMs,
+									)
+									.map((word) => ({
+										text: word.text,
+										startOffsetMs: Math.max(0, word.startOffsetMs),
+										endOffsetMs: Math.max(1, word.endOffsetMs),
+									}))
+							: undefined,
 						position: {
 							x: clamp(
 								isFiniteNumber(region.position?.x)
@@ -379,6 +395,14 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 							...DEFAULT_ANNOTATION_STYLE,
 							...(region.style && typeof region.style === "object" ? region.style : {}),
 							textAnimation: normalizeTextAnimation(region.style?.textAnimation),
+							wordHighlight:
+								typeof region.style?.wordHighlight === "boolean"
+									? region.style.wordHighlight
+									: region.annotationSource === "auto-caption",
+							wordHighlightColor:
+								typeof region.style?.wordHighlightColor === "string"
+									? region.style.wordHighlightColor
+									: DEFAULT_ANNOTATION_STYLE.wordHighlightColor,
 						},
 						zIndex: isFiniteNumber(region.zIndex) ? region.zIndex : index + 1,
 						figureData: region.figureData

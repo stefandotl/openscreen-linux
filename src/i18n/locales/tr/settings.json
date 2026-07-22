@@ -162,6 +162,7 @@
 		"imageFormatsOnly": "Lütfen bir JPG, PNG, GIF veya WebP görüntü dosyası yükleyin.",
 		"imageUploadSuccess": "Görüntü başarıyla yüklendi!",
 		"failedImageUpload": "Görüntü yüklenemedi",
+		"wordHighlight": "Konuşulan kelimeyi vurgula",
 		"blurColor": "Bulanıklık Rengi",
 		"blurColorBlack": "Siyah",
 		"blurColorWhite": "Beyaz",

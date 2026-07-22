@@ -4,10 +4,15 @@ import type {
 	CaptionTranscriptionStatus,
 } from "./captionTranscriptionProtocol";
 
-export interface CaptionSegment {
+export interface CaptionWordSegment {
 	startSec: number;
 	endSec: number;
 	text: string;
+}
+
+export interface CaptionSegment extends CaptionWordSegment {
+	/** Word-level timing retained while transcription segments are grouped into visible lines. */
+	words?: CaptionWordSegment[];
 }
 
 export type CaptionTimestampGranularity = "word" | "phrase";

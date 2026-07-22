@@ -266,6 +266,7 @@ export class VideoExporter {
 			}
 			const plan = createNativeGpuExportPlan(this.config, videoInfo);
 			const assets = await createNativeGpuExportAssets(this.config);
+			plan.overlays = assets.overlays;
 			this.reportProgress({
 				currentFrame: 0,
 				totalFrames: plan.frames.length,
@@ -295,7 +296,8 @@ export class VideoExporter {
 				sourceDurationSec: videoInfo.duration,
 				trimRegions: this.config.trimRegions,
 				speedRegions: this.config.speedRegions,
-				...assets,
+				wallpaperPng: assets.wallpaperPng,
+				overlayPngs: assets.overlayPngs,
 			});
 			if (!startResult.success || !startResult.sessionId) {
 				return {

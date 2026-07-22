@@ -166,7 +166,8 @@
 		"invalidImageType": "Type de fichier invalide",
 		"imageFormatsOnly": "Veuillez téléverser un fichier image JPG, PNG, GIF ou WebP.",
 		"imageUploadSuccess": "Image téléversée avec succès !",
-		"failedImageUpload": "Échec du téléversement de l'image"
+		"failedImageUpload": "Échec du téléversement de l'image",
+		"wordHighlight": "Surligner le mot prononcé"
 	},
 	"fontStyles": {
 		"classic": "Classique",

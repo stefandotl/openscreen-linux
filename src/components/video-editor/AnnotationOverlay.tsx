@@ -6,6 +6,7 @@ import {
 	getMosaicGridOverlayColor,
 	getNormalizedMosaicBlockSize,
 } from "@/lib/blurEffects";
+import { getActiveCaptionWordIndex, tokenizeCaptionContent } from "@/lib/captionWordHighlight";
 import { cn } from "@/lib/utils";
 import { getArrowComponent } from "./ArrowSvgs";
 import {
@@ -288,6 +289,8 @@ export function AnnotationOverlay({
 		switch (annotation.type) {
 			case "text": {
 				const animationState = getTextAnimationState(annotation, currentTimeMs);
+				const activeWordIndex = getActiveCaptionWordIndex(annotation, currentTimeMs);
+				const contentTokens = tokenizeCaptionContent(annotation.content);
 				const typewriterClip =
 					animationState.revealProgress < 1
 						? `inset(0 ${100 - animationState.revealProgress * 100}% 0 0)`
@@ -329,7 +332,25 @@ export function AnnotationOverlay({
 								lineHeight: "1.4",
 							}}
 						>
-							{annotation.content}
+							{contentTokens.map((token, index) => {
+								if (token.wordIndex === null) return token.text;
+								const highlighted = token.wordIndex === activeWordIndex;
+								return (
+									<span
+										key={`${token.wordIndex}-${index}`}
+										style={{
+											backgroundColor: highlighted
+												? annotation.style.wordHighlightColor || "#34B27B"
+												: "transparent",
+											borderRadius: highlighted ? "0.18em" : undefined,
+											boxDecorationBreak: "clone",
+											WebkitBoxDecorationBreak: "clone",
+										}}
+									>
+										{token.text}
+									</span>
+								);
+							})}
 						</span>
 					</div>
 				);

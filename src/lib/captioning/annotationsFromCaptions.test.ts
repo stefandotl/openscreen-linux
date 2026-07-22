@@ -91,7 +91,27 @@ describe("captionSegmentsToAnnotationRegions", () => {
 		);
 
 		expect(regions).toHaveLength(1);
-		expect(regions[0]).toMatchObject({ content: "I I" });
+		expect(regions[0]).toMatchObject({
+			content: "I I",
+			captionWords: [
+				{ text: "I", startOffsetMs: 0, endOffsetMs: 120 },
+				{ text: "I", startOffsetMs: 130, endOffsetMs: 250 },
+			],
+			style: { wordHighlight: true, wordHighlightColor: "#34B27B" },
+		});
+	});
+
+	it("creates proportional fallback word timing from phrase timestamps", () => {
+		const { regions } = captionSegmentsToAnnotationRegions(
+			[{ startSec: 2, endSec: 3, text: "short longer" }],
+			1,
+			1,
+			{ minWordsPerCaption: 2, maxWordsPerCaption: 2, timestampGranularity: "phrase" },
+		);
+
+		expect(regions[0]?.captionWords).toHaveLength(2);
+		expect(regions[0]?.captionWords?.[0]?.startOffsetMs).toBe(0);
+		expect(regions[0]?.captionWords?.at(-1)?.endOffsetMs).toBe(1000);
 	});
 });
 

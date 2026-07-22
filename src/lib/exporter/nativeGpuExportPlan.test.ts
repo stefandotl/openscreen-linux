@@ -52,6 +52,15 @@ function staticTextAnnotation(overrides: Partial<AnnotationRegion> = {}): Annota
 	};
 }
 
+function highlightedCaption(overrides: Partial<AnnotationRegion>): AnnotationRegion {
+	const annotation = staticTextAnnotation(overrides);
+	return {
+		...annotation,
+		captionWords: [{ text: annotation.content, startOffsetMs: 0, endOffsetMs: 250 }],
+		style: { ...annotation.style, wordHighlight: true, wordHighlightColor: "#34B27B" },
+	};
+}
+
 describe("native GPU export plan", () => {
 	it("creates a deterministic 30 fps plan using the existing timeline and zoom math", () => {
 		const config = createConfig({
@@ -94,9 +103,9 @@ describe("native GPU export plan", () => {
 
 	it("accepts and orders sequential and overlapping annotations", () => {
 		const annotations = [
-			staticTextAnnotation({ id: "caption-1", startMs: 0, endMs: 300, zIndex: 5 }),
-			staticTextAnnotation({ id: "caption-2", startMs: 300, endMs: 600, zIndex: 5 }),
-			staticTextAnnotation({ id: "caption-3", startMs: 600, endMs: 900, zIndex: 5 }),
+			highlightedCaption({ id: "caption-1", startMs: 0, endMs: 300, zIndex: 5 }),
+			highlightedCaption({ id: "caption-2", startMs: 300, endMs: 600, zIndex: 5 }),
+			highlightedCaption({ id: "caption-3", startMs: 600, endMs: 900, zIndex: 5 }),
 			staticTextAnnotation({ id: "overlap-top", startMs: 350, endMs: 550, zIndex: 20 }),
 			staticTextAnnotation({ id: "overlap-bottom", startMs: 350, endMs: 550, zIndex: 2 }),
 		];

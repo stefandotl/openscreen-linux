@@ -25,6 +25,7 @@ import {
 	SelectValue,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useScopedT } from "@/contexts/I18nContext";
@@ -327,6 +328,22 @@ export function AnnotationSettingsPanel({
 									</SelectContent>
 								</Select>
 							</div>
+
+							{annotation.annotationSource === "auto-caption" || annotation.captionWords?.length ? (
+								<div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+									<label
+										htmlFor="annotation-word-highlight"
+										className="text-xs font-medium text-slate-200"
+									>
+										{t("annotation.wordHighlight")}
+									</label>
+									<Switch
+										id="annotation-word-highlight"
+										checked={annotation.style.wordHighlight === true}
+										onCheckedChange={(checked) => onStyleChange({ wordHighlight: checked })}
+									/>
+								</div>
+							) : null}
 
 							{/* Formatting Toggles */}
 							<div className="flex items-center justify-between gap-2">

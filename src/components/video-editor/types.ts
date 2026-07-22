@@ -282,6 +282,16 @@ export interface AnnotationTextStyle {
 	textDecoration: "none" | "underline";
 	textAlign: "left" | "center" | "right";
 	textAnimation?: AnnotationTextAnimation;
+	/** Highlights the currently spoken word when `captionWords` timing is available. */
+	wordHighlight?: boolean;
+	wordHighlightColor?: string;
+}
+
+export interface AnnotationCaptionWord {
+	text: string;
+	/** Timing relative to the annotation start, so moving a caption keeps its word sync. */
+	startOffsetMs: number;
+	endOffsetMs: number;
 }
 
 export interface AnnotationRegion {
@@ -298,6 +308,8 @@ export interface AnnotationRegion {
 	zIndex: number;
 	/** When set, layout/style edits on one region can sync to all auto-caption siblings. */
 	annotationSource?: "auto-caption";
+	/** Per-word timing retained from caption transcription. */
+	captionWords?: AnnotationCaptionWord[];
 	figureData?: FigureData;
 	blurData?: BlurData;
 }
@@ -322,6 +334,8 @@ export const DEFAULT_ANNOTATION_STYLE: AnnotationTextStyle = {
 	textDecoration: "none",
 	textAlign: "center",
 	textAnimation: "none",
+	wordHighlight: false,
+	wordHighlightColor: "#34B27B",
 };
 
 export const DEFAULT_FIGURE_DATA: FigureData = {

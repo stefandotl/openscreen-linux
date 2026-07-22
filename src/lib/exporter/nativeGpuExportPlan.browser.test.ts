@@ -83,5 +83,33 @@ describe("native GPU export assets", () => {
 			{ width: 256, height: 36 },
 			{ width: 256, height: 36 },
 		]);
+		expect(assets.overlays.map((overlay) => overlay.zIndex)).toEqual([2, 10, 20]);
+	});
+
+	it("creates a static caption plus tightly cropped timed word highlights", async () => {
+		const highlighted = caption("caption", 100, 900, 5);
+		highlighted.content = "one two";
+		highlighted.style.backgroundColor = "transparent";
+		highlighted.style.wordHighlight = true;
+		highlighted.style.wordHighlightColor = "#34B27B";
+		highlighted.captionWords = [
+			{ text: "one", startOffsetMs: 0, endOffsetMs: 300 },
+			{ text: "two", startOffsetMs: 400, endOffsetMs: 800 },
+		];
+
+		const assets = await createNativeGpuExportAssets({
+			...createConfig(false),
+			annotationRegions: [highlighted],
+		});
+
+		expect(assets.overlayPngs).toHaveLength(3);
+		expect(assets.overlays).toEqual([
+			{ startMs: 100, endMs: 900, x: 32, y: 108, width: 256, height: 36, zIndex: 5 },
+			expect.objectContaining({ startMs: 100, endMs: 400, zIndex: 5 }),
+			expect.objectContaining({ startMs: 500, endMs: 900, zIndex: 5 }),
+		]);
+		const sizes = await Promise.all(assets.overlayPngs.map(pngSize));
+		expect(sizes[1]!.width).toBeLessThan(sizes[0]!.width);
+		expect(sizes[2]!.width).toBeLessThan(sizes[0]!.width);
 	});
 });

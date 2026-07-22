@@ -23,6 +23,7 @@ import {
 	computeFocusFromTransform,
 	computeZoomTransform,
 } from "@/components/video-editor/videoPlayback/zoomTransform";
+import { getCaptionDisplayWords } from "@/lib/captionWordHighlight";
 import { computeCompositeLayout } from "@/lib/compositeLayout";
 import { renderAnnotations } from "./annotationRenderer";
 import { getContinuousExportSourceTimestampsMs } from "./exportTimeline";
@@ -390,6 +391,7 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<ArrayBuffer> {
 export async function createNativeGpuExportAssets(config: VideoExporterConfig): Promise<{
 	wallpaperPng: ArrayBuffer;
 	overlayPngs: ArrayBuffer[];
+	overlays: NativeGpuExportPlan["overlays"];
 }> {
 	const rawWallpaperCanvas = await renderWallpaperCanvas(
 		config.wallpaper,
@@ -405,6 +407,84 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 	const previewHeight = config.previewHeight ?? config.height;
 	const scaleFactor = (config.width / previewWidth + config.height / previewHeight) / 2;
 	const overlayPngs: ArrayBuffer[] = [];
+	const overlays: NativeGpuExportPlan["overlays"] = [];
+
+	const renderOverlay = async (
+		annotation: (typeof annotations)[number],
+		bounds: ReturnType<typeof annotationPixelBounds>,
+		currentTimeMs: number,
+		options?: { forceActiveCaptionWordIndex?: number; cropToAlpha?: boolean },
+	) => {
+		const overlayCanvas = document.createElement("canvas");
+		overlayCanvas.width = bounds.width;
+		overlayCanvas.height = bounds.height;
+		const context = overlayCanvas.getContext("2d");
+		if (!context) throw new Error("Failed to get 2D context for native GPU overlay");
+		context.translate(-bounds.x, -bounds.y);
+		await renderAnnotations(
+			context,
+			[annotation],
+			config.width,
+			config.height,
+			currentTimeMs,
+			scaleFactor,
+			options?.forceActiveCaptionWordIndex === undefined
+				? undefined
+				: {
+						mode: options.forceActiveCaptionWordIndex >= 0 ? "word-highlight-only" : "complete",
+						forceActiveCaptionWordIndex: options.forceActiveCaptionWordIndex,
+					},
+		);
+
+		if (!options?.cropToAlpha) {
+			return { canvas: overlayCanvas, bounds };
+		}
+
+		const pixels = context.getImageData(0, 0, bounds.width, bounds.height).data;
+		let minX = bounds.width;
+		let minY = bounds.height;
+		let maxX = -1;
+		let maxY = -1;
+		for (let y = 0; y < bounds.height; y++) {
+			for (let x = 0; x < bounds.width; x++) {
+				if ((pixels[(y * bounds.width + x) * 4 + 3] ?? 0) === 0) continue;
+				minX = Math.min(minX, x);
+				minY = Math.min(minY, y);
+				maxX = Math.max(maxX, x);
+				maxY = Math.max(maxY, y);
+			}
+		}
+		if (maxX < minX || maxY < minY) {
+			throw new Error(`Annotation ${annotation.id} produced an empty word highlight`);
+		}
+
+		const croppedCanvas = document.createElement("canvas");
+		croppedCanvas.width = maxX - minX + 1;
+		croppedCanvas.height = maxY - minY + 1;
+		const croppedContext = croppedCanvas.getContext("2d");
+		if (!croppedContext) throw new Error("Failed to crop native GPU word highlight");
+		croppedContext.drawImage(
+			overlayCanvas,
+			minX,
+			minY,
+			croppedCanvas.width,
+			croppedCanvas.height,
+			0,
+			0,
+			croppedCanvas.width,
+			croppedCanvas.height,
+		);
+		return {
+			canvas: croppedCanvas,
+			bounds: {
+				x: bounds.x + minX,
+				y: bounds.y + minY,
+				width: croppedCanvas.width,
+				height: croppedCanvas.height,
+			},
+		};
+	};
+
 	for (const annotation of annotations) {
 		const bounds = annotationPixelBounds(annotation, config);
 		if (bounds.width < 1 || bounds.height < 1) {
@@ -417,21 +497,38 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 				`${fontStyle} ${fontWeight} ${annotation.style.fontSize * scaleFactor}px ${annotation.style.fontFamily}`,
 			);
 		}
-		const overlayCanvas = document.createElement("canvas");
-		overlayCanvas.width = bounds.width;
-		overlayCanvas.height = bounds.height;
-		const context = overlayCanvas.getContext("2d");
-		if (!context) throw new Error("Failed to get 2D context for native GPU overlay");
-		context.translate(-bounds.x, -bounds.y);
-		await renderAnnotations(
-			context,
-			[annotation],
-			config.width,
-			config.height,
+		const timedWords = annotation.style.wordHighlight ? getCaptionDisplayWords(annotation) : [];
+		const base = await renderOverlay(
+			annotation,
+			bounds,
 			(annotation.startMs + annotation.endMs) / 2,
-			scaleFactor,
+			timedWords.length > 0 ? { forceActiveCaptionWordIndex: -1 } : undefined,
 		);
-		overlayPngs.push(await canvasToPng(overlayCanvas));
+		overlayPngs.push(await canvasToPng(base.canvas));
+		overlays.push({
+			startMs: annotation.startMs,
+			endMs: annotation.endMs,
+			...base.bounds,
+			zIndex: annotation.zIndex,
+		});
+
+		for (let wordIndex = 0; wordIndex < timedWords.length; wordIndex++) {
+			const word = timedWords[wordIndex]!;
+			const startMs = Math.max(annotation.startMs, annotation.startMs + word.startOffsetMs);
+			const endMs = Math.min(annotation.endMs, annotation.startMs + word.endOffsetMs);
+			if (endMs <= startMs) continue;
+			const highlight = await renderOverlay(annotation, bounds, (startMs + endMs) / 2, {
+				forceActiveCaptionWordIndex: wordIndex,
+				cropToAlpha: true,
+			});
+			overlayPngs.push(await canvasToPng(highlight.canvas));
+			overlays.push({
+				startMs,
+				endMs,
+				...highlight.bounds,
+				zIndex: annotation.zIndex,
+			});
+		}
 	}
-	return { wallpaperPng, overlayPngs };
+	return { wallpaperPng, overlayPngs, overlays };
 }

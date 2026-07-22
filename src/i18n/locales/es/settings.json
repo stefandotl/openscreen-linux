@@ -166,7 +166,8 @@
 		"invalidImageType": "Tipo de archivo no válido",
 		"imageFormatsOnly": "Por favor sube un archivo de imagen JPG, PNG, GIF o WebP.",
 		"imageUploadSuccess": "¡Imagen subida exitosamente!",
-		"failedImageUpload": "Error al subir la imagen"
+		"failedImageUpload": "Error al subir la imagen",
+		"wordHighlight": "Resaltar la palabra hablada"
 	},
 	"fontStyles": {
 		"classic": "Clásico",

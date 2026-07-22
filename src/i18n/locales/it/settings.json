@@ -165,7 +165,8 @@
 		"invalidImageType": "Tipo di file non valido",
 		"imageFormatsOnly": "Carica un file immagine JPG, PNG, GIF o WebP.",
 		"imageUploadSuccess": "Immagine caricata con successo!",
-		"failedImageUpload": "Impossibile caricare l'immagine"
+		"failedImageUpload": "Impossibile caricare l'immagine",
+		"wordHighlight": "Evidenzia la parola pronunciata"
 	},
 	"fontStyles": {
 		"classic": "Classico",

@@ -7,6 +7,7 @@ import {
 	getNormalizedMosaicBlockSize,
 	normalizeBlurType,
 } from "@/lib/blurEffects";
+import { getActiveCaptionWordIndex } from "@/lib/captionWordHighlight";
 
 let blurScratchCanvas: HTMLCanvasElement | null = null;
 let blurScratchCtx: CanvasRenderingContext2D | null = null;
@@ -259,6 +260,7 @@ function renderText(
 	height: number,
 	scaleFactor: number,
 	currentTimeMs: number,
+	options?: TextRenderOptions,
 ) {
 	const style = annotation.style;
 	const animationState = getTextAnimationState(annotation, currentTimeMs);
@@ -324,6 +326,10 @@ function renderText(
 	const lineHeight = scaledFontSize * 1.4;
 
 	const startY = textY - ((lines.length - 1) * lineHeight) / 2;
+	const activeWordIndex =
+		options?.forceActiveCaptionWordIndex ?? getActiveCaptionWordIndex(annotation, currentTimeMs);
+	const highlightOnly = options?.mode === "word-highlight-only";
+	let nextWordIndex = 0;
 
 	lines.forEach((line, index) => {
 		const currentY = startY + index * lineHeight;
@@ -332,6 +338,14 @@ function renderText(
 		const visibleCount = Math.ceil(graphemes.length * revealProgress);
 		const visibleLine = revealProgress >= 1 ? line : graphemes.slice(0, visibleCount).join("");
 		if (!visibleLine && revealProgress < 1) return;
+		const wordMatches = Array.from(line.matchAll(/\S+/g)).map((match, lineWordIndex) => ({
+			text: match[0],
+			start: match.index ?? 0,
+			wordIndex: nextWordIndex + lineWordIndex,
+		}));
+		nextWordIndex += wordMatches.length;
+		const activeWord = wordMatches.find((word) => word.wordIndex === activeWordIndex);
+		if (highlightOnly && !activeWord) return;
 
 		const previousAlign = ctx.textAlign;
 		const fullMetrics = ctx.measureText(line);
@@ -345,7 +359,7 @@ function renderText(
 			ctx.textAlign = "left";
 		}
 
-		if (style.backgroundColor && style.backgroundColor !== "transparent") {
+		if (!highlightOnly && style.backgroundColor && style.backgroundColor !== "transparent") {
 			const metrics = ctx.measureText(visibleLine);
 			const verticalPadding = scaledFontSize * 0.1;
 			const horizontalPadding = scaledFontSize * 0.2;
@@ -368,15 +382,42 @@ function renderText(
 			ctx.fill();
 		}
 
+		if (activeWord) {
+			const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
+			const wordWidth = ctx.measureText(activeWord.text).width;
+			const horizontalPadding = scaledFontSize * 0.12;
+			const verticalPadding = scaledFontSize * 0.08;
+			const highlightHeight = scaledFontSize * 1.15 + verticalPadding * 2;
+			ctx.fillStyle = style.wordHighlightColor || "#34B27B";
+			ctx.beginPath();
+			ctx.roundRect(
+				startX + prefixWidth - horizontalPadding,
+				currentY - highlightHeight / 2,
+				wordWidth + horizontalPadding * 2,
+				highlightHeight,
+				4 * scaleFactor,
+			);
+			ctx.fill();
+		}
+
 		ctx.fillStyle = style.color;
-		ctx.fillText(visibleLine, startX, currentY);
+		if (highlightOnly && activeWord) {
+			const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
+			ctx.fillText(activeWord.text, startX + prefixWidth, currentY);
+		} else {
+			ctx.fillText(visibleLine, startX, currentY);
+		}
 
 		if (style.textDecoration === "underline") {
-			const metrics = ctx.measureText(visibleLine);
-			let underlineX = startX;
+			const decoratedText = highlightOnly && activeWord ? activeWord.text : visibleLine;
+			const metrics = ctx.measureText(decoratedText);
+			let underlineX =
+				highlightOnly && activeWord
+					? startX + ctx.measureText(line.slice(0, activeWord.start)).width
+					: startX;
 			const underlineY = currentY + scaledFontSize * 0.15;
 
-			if (previousAlign === "left" || previousAlign === "start") {
+			if (!highlightOnly && (previousAlign === "left" || previousAlign === "start")) {
 				underlineX = textX;
 			}
 
@@ -392,6 +433,11 @@ function renderText(
 	});
 
 	ctx.restore();
+}
+
+export interface TextRenderOptions {
+	mode?: "complete" | "word-highlight-only";
+	forceActiveCaptionWordIndex?: number;
 }
 
 async function renderImage(
@@ -444,6 +490,7 @@ export async function renderAnnotations(
 	canvasHeight: number,
 	currentTimeMs: number,
 	scaleFactor: number = 1.0,
+	textRenderOptions?: TextRenderOptions,
 ): Promise<void> {
 	const activeAnnotations = annotations.filter(
 		(ann) => currentTimeMs >= ann.startMs && currentTimeMs < ann.endMs,
@@ -460,7 +507,17 @@ export async function renderAnnotations(
 
 		switch (annotation.type) {
 			case "text":
-				renderText(ctx, annotation, x, y, width, height, scaleFactor, currentTimeMs);
+				renderText(
+					ctx,
+					annotation,
+					x,
+					y,
+					width,
+					height,
+					scaleFactor,
+					currentTimeMs,
+					textRenderOptions,
+				);
 				break;
 
 			case "image":
