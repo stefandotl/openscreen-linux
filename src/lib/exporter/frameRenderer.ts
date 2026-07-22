@@ -60,17 +60,11 @@ import {
 	resolveInterpolatedNativeCursorFrame,
 	resolveNativeCursorRenderAsset,
 } from "@/lib/cursor/nativeCursor";
-import { BackgroundLoadError, classifyWallpaper, resolveImageWallpaperUrl } from "@/lib/wallpaper";
 import { drawCanvasClipPath } from "@/lib/webcamMaskShapes";
 import type { CursorRecordingData } from "@/native/contracts";
 import { renderAnnotations } from "./annotationRenderer";
-import {
-	getLinearGradientPoints,
-	getRadialGradientShape,
-	parseCssGradient,
-	resolveLinearGradientAngle,
-} from "./gradientParser";
 import { createThreeDPass, type ThreeDPass } from "./threeDPass";
+import { renderWallpaperCanvas } from "./wallpaperRenderer";
 import { drawWebcamFrameImage } from "./webcamFrameDrawing";
 
 interface FrameRenderConfig {
@@ -280,96 +274,11 @@ export class FrameRenderer {
 	}
 
 	private async setupBackground(): Promise<void> {
-		const wallpaper = this.config.wallpaper;
-
-		const bgCanvas = document.createElement("canvas");
-		bgCanvas.width = this.config.width;
-		bgCanvas.height = this.config.height;
-		const bgCtx = bgCanvas.getContext("2d")!;
-
-		const classified = classifyWallpaper(wallpaper);
-
-		if (classified.kind === "color") {
-			bgCtx.fillStyle = classified.value;
-			bgCtx.fillRect(0, 0, this.config.width, this.config.height);
-		} else if (classified.kind === "gradient") {
-			const parsedGradient = parseCssGradient(classified.value);
-			if (!parsedGradient) {
-				throw new BackgroundLoadError(classified.value);
-			}
-			const gradient =
-				parsedGradient.type === "linear"
-					? (() => {
-							const points = getLinearGradientPoints(
-								resolveLinearGradientAngle(parsedGradient.descriptor),
-								this.config.width,
-								this.config.height,
-							);
-							return bgCtx.createLinearGradient(points.x0, points.y0, points.x1, points.y1);
-						})()
-					: (() => {
-							const shape = getRadialGradientShape(
-								parsedGradient.descriptor,
-								this.config.width,
-								this.config.height,
-							);
-							return bgCtx.createRadialGradient(
-								shape.cx,
-								shape.cy,
-								0,
-								shape.cx,
-								shape.cy,
-								shape.radius,
-							);
-						})();
-
-			parsedGradient.stops.forEach((stop) => {
-				gradient.addColorStop(stop.offset, stop.color);
-			});
-
-			bgCtx.fillStyle = gradient;
-			bgCtx.fillRect(0, 0, this.config.width, this.config.height);
-		} else {
-			const imageUrl = resolveImageWallpaperUrl(classified.path);
-			const img = new Image();
-			if (imageUrl.startsWith("http") && !imageUrl.startsWith(window.location.origin)) {
-				img.crossOrigin = "anonymous";
-			}
-
-			try {
-				await new Promise<void>((resolve, reject) => {
-					img.onload = () => resolve();
-					img.onerror = (err) => reject(err);
-					img.src = imageUrl;
-				});
-			} catch (err) {
-				throw new BackgroundLoadError(imageUrl, err);
-			}
-
-			const imgAspect = img.width / img.height;
-			const canvasAspect = this.config.width / this.config.height;
-
-			let drawWidth: number;
-			let drawHeight: number;
-			let drawX: number;
-			let drawY: number;
-
-			if (imgAspect > canvasAspect) {
-				drawHeight = this.config.height;
-				drawWidth = drawHeight * imgAspect;
-				drawX = (this.config.width - drawWidth) / 2;
-				drawY = 0;
-			} else {
-				drawWidth = this.config.width;
-				drawHeight = drawWidth / imgAspect;
-				drawX = 0;
-				drawY = (this.config.height - drawHeight) / 2;
-			}
-
-			bgCtx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-		}
-
-		this.backgroundSprite = bgCanvas;
+		this.backgroundSprite = await renderWallpaperCanvas(
+			this.config.wallpaper,
+			this.config.width,
+			this.config.height,
+		);
 	}
 
 	async renderFrame(

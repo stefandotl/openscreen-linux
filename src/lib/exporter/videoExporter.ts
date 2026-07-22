@@ -12,15 +12,12 @@ import type { CursorRecordingData } from "@/native/contracts";
 import { getPlatform } from "@/utils/platformUtils";
 import { AudioProcessor } from "./audioEncoder";
 import { FrameRenderer } from "./frameRenderer";
-import { createPackedI420FrameBuffer, GpuI420FrameConverter } from "./i420Frame";
 import { VideoMuxer } from "./muxer";
-import { NativeNvdecVideoDecoder } from "./nativeNvdecVideoDecoder";
-import { NativeNvencFramePipeline } from "./nativeNvencFramePipeline";
 import {
-	closeNativeNvencFramePort,
-	waitForNativeNvencFramePort,
-	writeNativeNvencFrame,
-} from "./nativeNvencFramePort";
+	createNativeGpuExportAssets,
+	createNativeGpuExportPlan,
+	getNativeGpuExportBlockers,
+} from "./nativeGpuExportPlan";
 import { StreamingVideoDecoder } from "./streamingDecoder";
 import { TimestampedVideoFrameQueue } from "./timestampedVideoFrameQueue";
 import type { ExportConfig, ExportProgress, ExportResult } from "./types";
@@ -168,138 +165,6 @@ export function shouldUseCpuFrameReadback({
 	return true;
 }
 
-type NativeNvencPerfStats = {
-	startedAtMs: number;
-	lastLogAtMs: number;
-	lastFrameEndAtMs: number | null;
-	frames: number;
-	decodeWaitMs: number;
-	webcamWaitMs: number;
-	renderMs: number;
-	readbackMs: number;
-	framePostMs: number;
-	pipelineWaitMs: number;
-	writeAckMs: number;
-	writeAcknowledgements: number;
-	inFlight: number;
-	maxInFlight: number;
-	callbackMs: number;
-	maxDecodeWaitMs: number;
-	maxRenderMs: number;
-	maxReadbackMs: number;
-	maxFramePostMs: number;
-	maxPipelineWaitMs: number;
-	maxWriteAckMs: number;
-};
-
-function createNativeNvencPerfStats(): NativeNvencPerfStats {
-	const now = performance.now();
-	return {
-		startedAtMs: now,
-		lastLogAtMs: now,
-		lastFrameEndAtMs: null,
-		frames: 0,
-		decodeWaitMs: 0,
-		webcamWaitMs: 0,
-		renderMs: 0,
-		readbackMs: 0,
-		framePostMs: 0,
-		pipelineWaitMs: 0,
-		writeAckMs: 0,
-		writeAcknowledgements: 0,
-		inFlight: 0,
-		maxInFlight: 0,
-		callbackMs: 0,
-		maxDecodeWaitMs: 0,
-		maxRenderMs: 0,
-		maxReadbackMs: 0,
-		maxFramePostMs: 0,
-		maxPipelineWaitMs: 0,
-		maxWriteAckMs: 0,
-	};
-}
-
-function recordNativeNvencPerfSample(
-	stats: NativeNvencPerfStats,
-	sample: {
-		decodeWaitMs: number;
-		webcamWaitMs: number;
-		renderMs: number;
-		readbackMs: number;
-		framePostMs: number;
-		pipelineWaitMs: number;
-		callbackMs: number;
-		frameEndMs: number;
-	},
-) {
-	stats.frames++;
-	stats.decodeWaitMs += sample.decodeWaitMs;
-	stats.webcamWaitMs += sample.webcamWaitMs;
-	stats.renderMs += sample.renderMs;
-	stats.readbackMs += sample.readbackMs;
-	stats.framePostMs += sample.framePostMs;
-	stats.pipelineWaitMs += sample.pipelineWaitMs;
-	stats.inFlight++;
-	stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
-	stats.callbackMs += sample.callbackMs;
-	stats.maxDecodeWaitMs = Math.max(stats.maxDecodeWaitMs, sample.decodeWaitMs);
-	stats.maxRenderMs = Math.max(stats.maxRenderMs, sample.renderMs);
-	stats.maxReadbackMs = Math.max(stats.maxReadbackMs, sample.readbackMs);
-	stats.maxFramePostMs = Math.max(stats.maxFramePostMs, sample.framePostMs);
-	stats.maxPipelineWaitMs = Math.max(stats.maxPipelineWaitMs, sample.pipelineWaitMs);
-	stats.lastFrameEndAtMs = sample.frameEndMs;
-}
-
-function recordNativeNvencAcknowledgement(stats: NativeNvencPerfStats, acknowledgementMs: number) {
-	stats.writeAcknowledgements++;
-	stats.writeAckMs += acknowledgementMs;
-	stats.maxWriteAckMs = Math.max(stats.maxWriteAckMs, acknowledgementMs);
-	stats.inFlight = Math.max(0, stats.inFlight - 1);
-}
-
-function maybeLogNativeNvencPerf(stats: NativeNvencPerfStats, totalFrames: number, force = false) {
-	if (stats.frames === 0) return;
-
-	const now = performance.now();
-	const shouldLog = force || stats.frames % 120 === 0 || now - stats.lastLogAtMs >= 5000;
-	if (!shouldLog) return;
-
-	const frames = Math.max(stats.frames, 1);
-	const writeAcknowledgements = Math.max(stats.writeAcknowledgements, 1);
-	const elapsedSec = Math.max((now - stats.startedAtMs) / 1000, 0.001);
-	const avg = (value: number) => Number((value / frames).toFixed(2));
-	const ackAvg = (value: number) =>
-		stats.writeAcknowledgements > 0 ? Number((value / writeAcknowledgements).toFixed(2)) : 0;
-	const max = (value: number) => Number(value.toFixed(2));
-
-	const snapshot = {
-		frames: totalFrames > 0 ? `${stats.frames}/${totalFrames}` : stats.frames,
-		fps: Number((stats.frames / elapsedSec).toFixed(2)),
-		inFlight: stats.inFlight,
-		avgMs: {
-			decodeWait: avg(stats.decodeWaitMs),
-			webcamWait: avg(stats.webcamWaitMs),
-			render: avg(stats.renderMs),
-			readback: avg(stats.readbackMs),
-			framePost: avg(stats.framePostMs),
-			pipelineWait: avg(stats.pipelineWaitMs),
-			writeAck: ackAvg(stats.writeAckMs),
-			callback: avg(stats.callbackMs),
-		},
-		maxMs: {
-			decodeWait: max(stats.maxDecodeWaitMs),
-			render: max(stats.maxRenderMs),
-			readback: max(stats.maxReadbackMs),
-			framePost: max(stats.maxFramePostMs),
-			pipelineWait: max(stats.maxPipelineWaitMs),
-			writeAck: max(stats.maxWriteAckMs),
-			inFlight: stats.maxInFlight,
-		},
-	};
-	console.info(`[native-nvenc-perf] ${JSON.stringify(snapshot)}`);
-	stats.lastLogAtMs = now;
-}
-
 export class VideoExporter {
 	private config: VideoExporterConfig;
 	private streamingDecoder: StreamingVideoDecoder | null = null;
@@ -308,8 +173,7 @@ export class VideoExporter {
 	private muxer: VideoMuxer | null = null;
 	private audioProcessor: AudioProcessor | null = null;
 	private webcamDecoder: StreamingVideoDecoder | null = null;
-	private nativeNvdecDecoder: NativeNvdecVideoDecoder | null = null;
-	private nativeWebcamNvdecDecoder: NativeNvdecVideoDecoder | null = null;
+	private nativeGpuSessionId: string | null = null;
 	private cancelled = false;
 	private encodeQueue = 0;
 	// Keep a smaller queue for software encoding so Windows does not balloon memory.
@@ -326,7 +190,7 @@ export class VideoExporter {
 	}
 
 	async export(): Promise<ExportResult> {
-		const nativeResult = await this.tryNativeNvencExport();
+		const nativeResult = await this.tryNativeGpuExport();
 		if (nativeResult) {
 			return nativeResult;
 		}
@@ -366,325 +230,122 @@ export class VideoExporter {
 		};
 	}
 
-	private getNativeNvencBlocker(platform: string): string | null {
+	private getNativeGpuBridgeBlocker(platform: string): string | null {
 		if (platform !== "linux") return `platform is ${platform}`;
 		if (!this.config.nativeOutputPath) return "native output path is missing";
-		if (!window.electronAPI?.startNativeNvencExport) return "native NVENC IPC is unavailable";
-		if (!window.electronAPI?.startNativeNvdecDecode) return "native NVDEC IPC is unavailable";
-
+		if (!window.electronAPI?.startNativeGpuExport) return "native GPU export IPC is unavailable";
+		if (!window.electronAPI?.finishNativeGpuExport) return "native GPU finish IPC is unavailable";
+		if (!window.electronAPI?.cancelNativeGpuExport) return "native GPU cancel IPC is unavailable";
+		if (!window.electronAPI?.onNativeGpuExportProgress) {
+			return "native GPU progress IPC is unavailable";
+		}
 		return null;
 	}
 
-	private async tryNativeNvencExport(): Promise<ExportResult | null> {
-		let webcamFrameQueue: TimestampedVideoFrameQueue | null = null;
-		let stopWebcamDecode = false;
-		let webcamDecodeError: Error | null = null;
-		let webcamDecodePromise: Promise<void> | null = null;
-		let webcamDecoder: NativeNvdecVideoDecoder | null = null;
-		let nativeSessionId: string | null = null;
-		let i420Converter: GpuI420FrameConverter | null = null;
-
+	private async tryNativeGpuExport(): Promise<ExportResult | null> {
 		if (!this.config.preferNativeNvenc) return null;
 		const platform = await getPlatform();
-		const blocker = this.getNativeNvencBlocker(platform);
-		if (blocker) {
-			const error = `Native NVENC export unavailable: ${blocker}`;
-			console.error(`[VideoExporter] ${error}`);
-			return { success: false, error };
+		const bridgeBlocker = this.getNativeGpuBridgeBlocker(platform);
+		if (bridgeBlocker) {
+			return { success: false, error: `Required native GPU export unavailable: ${bridgeBlocker}` };
 		}
 
 		this.cleanup();
 		this.cancelled = false;
-
+		const metadataDecoder = new StreamingVideoDecoder();
+		this.streamingDecoder = metadataDecoder;
+		let removeProgressListener: (() => void) | null = null;
 		try {
-			const metadataDecoder = new StreamingVideoDecoder();
-			this.streamingDecoder = metadataDecoder;
 			const videoInfo = await metadataDecoder.loadMetadata(this.config.videoUrl);
-			const { totalFrames } = metadataDecoder.getExportMetrics(
-				this.config.frameRate,
-				this.config.trimRegions,
-				this.config.speedRegions,
-			);
-
-			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
-			if (this.config.webcamVideoUrl) {
-				const webcamMetadataDecoder = new StreamingVideoDecoder();
-				this.webcamDecoder = webcamMetadataDecoder;
-				webcamInfo = await webcamMetadataDecoder.loadMetadata(this.config.webcamVideoUrl);
-				webcamMetadataDecoder.destroy();
-				this.webcamDecoder = null;
+			const blockers = getNativeGpuExportBlockers(this.config, videoInfo);
+			if (blockers.length > 0) {
+				return {
+					success: false,
+					error: `Required native GPU export does not support this project: ${blockers.join("; ")}`,
+				};
 			}
-
-			metadataDecoder.destroy();
-			this.streamingDecoder = null;
-			const nativeDecoder = new NativeNvdecVideoDecoder({
-				inputPath: this.config.videoUrl,
-				width: videoInfo.width,
-				height: videoInfo.height,
-				duration: videoInfo.duration,
+			const plan = createNativeGpuExportPlan(this.config, videoInfo);
+			const assets = await createNativeGpuExportAssets(this.config);
+			this.reportProgress({
+				currentFrame: 0,
+				totalFrames: plan.frames.length,
+				percentage: 0,
+				estimatedTimeRemaining: 0,
 			});
-			this.nativeNvdecDecoder = nativeDecoder;
-			if (this.config.webcamVideoUrl && webcamInfo) {
-				webcamDecoder = new NativeNvdecVideoDecoder({
-					inputPath: this.config.webcamVideoUrl,
-					width: webcamInfo.width,
-					height: webcamInfo.height,
-					duration: webcamInfo.duration,
+
+			removeProgressListener = window.electronAPI.onNativeGpuExportProgress((progress) => {
+				if (progress.sessionId !== this.nativeGpuSessionId) return;
+				const totalFrames = Math.max(1, progress.totalFrames);
+				this.reportProgress({
+					currentFrame: progress.currentFrame,
+					totalFrames,
+					percentage: Math.min(100, (progress.currentFrame / totalFrames) * 100),
+					estimatedTimeRemaining:
+						progress.fps > 0
+							? Math.max(0, (totalFrames - progress.currentFrame) / progress.fps)
+							: 0,
+					...(progress.phase === "finalizing" ? { phase: "finalizing" as const } : {}),
 				});
-				this.nativeWebcamNvdecDecoder = webcamDecoder;
-			}
-
-			const renderer = new FrameRenderer({
-				width: this.config.width,
-				height: this.config.height,
-				wallpaper: this.config.wallpaper,
-				zoomRegions: this.config.zoomRegions,
-				showShadow: this.config.showShadow,
-				shadowIntensity: this.config.shadowIntensity,
-				showBlur: this.config.showBlur,
-				motionBlurAmount: this.config.motionBlurAmount,
-				borderRadius: this.config.borderRadius,
-				padding: this.config.padding,
-				cropRegion: this.config.cropRegion,
-				cursorRecordingData: this.config.cursorRecordingData,
-				cursorScale: this.config.cursorScale,
-				cursorSmoothing: this.config.cursorSmoothing,
-				cursorMotionBlur: this.config.cursorMotionBlur,
-				cursorClickBounce: this.config.cursorClickBounce,
-				cursorClipToBounds: this.config.cursorClipToBounds,
-				cursorTheme: this.config.cursorTheme,
-				videoWidth: videoInfo.width,
-				videoHeight: videoInfo.height,
-				webcamSize: webcamInfo ? { width: webcamInfo.width, height: webcamInfo.height } : null,
-				webcamLayoutPreset: this.config.webcamLayoutPreset,
-				webcamMaskShape: this.config.webcamMaskShape,
-				webcamMirrored: this.config.webcamMirrored,
-				webcamReactiveZoom: this.config.webcamReactiveZoom,
-				webcamSizePreset: this.config.webcamSizePreset,
-				webcamPosition: this.config.webcamPosition,
-				annotationRegions: this.config.annotationRegions,
-				speedRegions: this.config.speedRegions,
-				previewWidth: this.config.previewWidth,
-				previewHeight: this.config.previewHeight,
-				cursorTelemetry: this.config.cursorTelemetry,
-				cursorClickTimestamps: this.config.cursorClickTimestamps,
-				platform,
-				// The X11 NVENC path keeps the final canvas GPU-backed so the I420 shader
-				// does not immediately upload an explicit CPU readback to the GPU again.
-				useLinuxCpuReadback: false,
 			});
-			this.renderer = renderer;
-			await renderer.initialize();
-			i420Converter = new GpuI420FrameConverter(this.config.width, this.config.height);
-			const i420Frames = [
-				i420Converter.frame,
-				createPackedI420FrameBuffer(this.config.width, this.config.height),
-			];
 
-			const startResult = await window.electronAPI.startNativeNvencExport({
-				width: this.config.width,
-				height: this.config.height,
-				frameRate: this.config.frameRate,
-				bitrate: this.config.bitrate,
+			const startResult = await window.electronAPI.startNativeGpuExport({
+				plan,
 				outputPath: this.config.nativeOutputPath!,
 				audioPath: this.config.nativeAudioPath,
 				sourceDurationSec: videoInfo.duration,
 				trimRegions: this.config.trimRegions,
 				speedRegions: this.config.speedRegions,
+				...assets,
 			});
 			if (!startResult.success || !startResult.sessionId) {
-				const error = `Native NVENC export unavailable: ${
-					startResult.message || startResult.error || "unknown reason"
-				}`;
-				console.error("[VideoExporter] Native NVENC export unavailable:", startResult);
-				return { success: false, error };
+				return {
+					success: false,
+					error: `Required native GPU export failed to start: ${
+						startResult.error || startResult.message || "unknown reason"
+					}`,
+				};
 			}
-			nativeSessionId = startResult.sessionId;
-			const framePortResult = await waitForNativeNvencFramePort(nativeSessionId);
-			if (!framePortResult.success) {
-				throw new Error(framePortResult.message || "Required native NVENC frame port failed");
-			}
-
-			let frameIndex = 0;
-			const perfStats = createNativeNvencPerfStats();
-			const framePipeline = new NativeNvencFramePipeline(
-				i420Frames,
-				(chunk) => writeNativeNvencFrame(nativeSessionId!, chunk),
-				({ acknowledgementMs }) => recordNativeNvencAcknowledgement(perfStats, acknowledgementMs),
-			);
-			console.info("[native-nvenc-perf] Sampling export pipeline", {
-				totalFrames,
-				width: this.config.width,
-				height: this.config.height,
-				frameRate: this.config.frameRate,
-				inputPixelFormat: "yuv420p",
-				frameSource: "gpu-canvas",
-				frameBytes: i420Frames[0].data.byteLength,
-				pipelineDepth: framePipeline.depth,
-				hasWebcam: Boolean(this.config.webcamVideoUrl),
-				hasCursorOverlay: (this.config.cursorScale ?? 0) > 0,
-				zoomRegions: this.config.zoomRegions.length,
-				trimRegions: this.config.trimRegions?.length ?? 0,
-				speedRegions: this.config.speedRegions?.length ?? 0,
-				annotationRegions: this.config.annotationRegions?.length ?? 0,
-			});
-
-			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
-			webcamDecodePromise =
-				webcamDecoder && webcamFrameQueue
-					? (() => {
-							const queue = webcamFrameQueue;
-							return webcamDecoder
-								.decodeAll(
-									this.config.frameRate,
-									this.config.trimRegions,
-									this.config.speedRegions,
-									async (webcamFrame, _exportTimestampUs, webcamSourceTimestampMs) => {
-										while (queue.length >= 12 && !this.cancelled && !stopWebcamDecode) {
-											await new Promise((resolve) => setTimeout(resolve, 2));
-										}
-										if (this.cancelled || stopWebcamDecode) {
-											webcamFrame.close();
-											return;
-										}
-										queue.enqueue(webcamFrame, webcamSourceTimestampMs);
-									},
-								)
-								.catch((error) => {
-									webcamDecodeError = error instanceof Error ? error : new Error(String(error));
-									throw webcamDecodeError;
-								})
-								.finally(() => {
-									if (webcamDecodeError) {
-										queue.fail(webcamDecodeError);
-									} else {
-										queue.close();
-									}
-								});
-						})()
-					: null;
-
-			await nativeDecoder.decodeAll(
-				this.config.frameRate,
-				this.config.trimRegions,
-				this.config.speedRegions,
-				async (videoFrame, _exportTimestampUs, sourceTimestampMs) => {
-					let webcamFrame: VideoFrame | null = null;
-					const frameStartMs = performance.now();
-					const decodeWaitMs =
-						perfStats.lastFrameEndAtMs === null ? 0 : frameStartMs - perfStats.lastFrameEndAtMs;
-					let webcamWaitMs = 0;
-					let renderMs = 0;
-					let readbackMs = 0;
-					let framePostMs = 0;
-					let pipelineWaitMs = 0;
-					try {
-						if (this.cancelled) return;
-
-						const webcamWaitStartMs = performance.now();
-						webcamFrame = webcamFrameQueue
-							? await webcamFrameQueue.frameAt(sourceTimestampMs)
-							: null;
-						webcamWaitMs = performance.now() - webcamWaitStartMs;
-						if (this.cancelled) return;
-
-						const renderStartMs = performance.now();
-						await renderer.renderFrame(videoFrame, sourceTimestampMs * 1000, webcamFrame);
-						renderMs = performance.now() - renderStartMs;
-
-						const canvas = renderer.getCanvas();
-						const acquisition = await framePipeline.acquire();
-						pipelineWaitMs = acquisition.pipelineWaitMs;
-						const readbackStartMs = performance.now();
-						i420Converter!.convert(canvas, acquisition.frame);
-						readbackMs = performance.now() - readbackStartMs;
-
-						framePostMs = framePipeline.submit(acquisition.frame).framePostMs;
-
-						const frameEndMs = performance.now();
-						recordNativeNvencPerfSample(perfStats, {
-							decodeWaitMs,
-							webcamWaitMs,
-							renderMs,
-							readbackMs,
-							framePostMs,
-							pipelineWaitMs,
-							callbackMs: frameEndMs - frameStartMs,
-							frameEndMs,
-						});
-
-						frameIndex++;
-						this.reportProgress({
-							currentFrame: frameIndex,
-							totalFrames,
-							percentage: (frameIndex / Math.max(totalFrames, 1)) * 100,
-							estimatedTimeRemaining: 0,
-						});
-						maybeLogNativeNvencPerf(perfStats, totalFrames);
-					} finally {
-						videoFrame.close();
-						webcamFrame?.close();
-					}
-				},
-			);
-
+			this.nativeGpuSessionId = startResult.sessionId;
 			if (this.cancelled) {
-				closeNativeNvencFramePort(nativeSessionId);
-				await window.electronAPI.cancelNativeNvencExport(nativeSessionId);
-				nativeSessionId = null;
+				await window.electronAPI.cancelNativeGpuExport(startResult.sessionId);
+				this.nativeGpuSessionId = null;
 				return { success: false, error: "Export cancelled" };
 			}
-			await framePipeline.flush();
-
-			stopWebcamDecode = true;
-			webcamFrameQueue?.destroy();
-			webcamDecoder?.cancel();
-			await webcamDecodePromise;
-
+			const finishResult = await window.electronAPI.finishNativeGpuExport(startResult.sessionId);
+			this.nativeGpuSessionId = null;
+			if (this.cancelled) return { success: false, error: "Export cancelled" };
+			if (!finishResult.success || !finishResult.path) {
+				return {
+					success: false,
+					error: `Required native GPU export failed: ${
+						finishResult.error || finishResult.message || finishResult.stderr || "unknown reason"
+					}`,
+				};
+			}
 			this.reportProgress({
-				currentFrame: totalFrames,
-				totalFrames,
+				currentFrame: plan.frames.length,
+				totalFrames: plan.frames.length,
 				percentage: 100,
 				estimatedTimeRemaining: 0,
 				phase: "finalizing",
 			});
-			maybeLogNativeNvencPerf(perfStats, totalFrames, true);
-
-			const finishedSessionId = nativeSessionId;
-			const finishResult = await window.electronAPI.finishNativeNvencExport(finishedSessionId);
-			closeNativeNvencFramePort(finishedSessionId);
-			nativeSessionId = null;
-			if (!finishResult.success || !finishResult.path) {
-				const error = `Native NVENC export failed: ${
-					finishResult.message || finishResult.error || finishResult.stderr || "unknown reason"
-				}`;
-				console.warn("[VideoExporter] Native NVENC export failed:", finishResult);
-				return { success: false, error };
-			}
-
-			return {
-				success: true,
-				path: finishResult.path,
-			};
+			return { success: true, path: finishResult.path };
 		} catch (error) {
-			const nativeError = `Native NVENC export failed: ${
-				error instanceof Error ? error.message : String(error)
-			}`;
-			console.error("[VideoExporter] Required native NVENC export failed:", error);
-			if (nativeSessionId) {
-				closeNativeNvencFramePort(nativeSessionId);
-				await window.electronAPI.cancelNativeNvencExport(nativeSessionId).catch(() => undefined);
+			const sessionId = this.nativeGpuSessionId;
+			this.nativeGpuSessionId = null;
+			if (sessionId) {
+				await window.electronAPI.cancelNativeGpuExport(sessionId).catch(() => undefined);
 			}
-			return { success: false, error: nativeError };
+			return {
+				success: false,
+				error: `Required native GPU export failed: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			};
 		} finally {
-			stopWebcamDecode = true;
-			webcamFrameQueue?.destroy();
-			webcamDecoder?.cancel();
-			if (webcamDecodePromise) {
-				await webcamDecodePromise.catch(() => undefined);
-			}
-			i420Converter?.destroy();
-			this.cleanup();
+			removeProgressListener?.();
+			metadataDecoder.destroy();
+			if (this.streamingDecoder === metadataDecoder) this.streamingDecoder = null;
 		}
 	}
 
@@ -1094,8 +755,11 @@ export class VideoExporter {
 		if (this.webcamDecoder) {
 			this.webcamDecoder.cancel();
 		}
-		this.nativeNvdecDecoder?.cancel();
-		this.nativeWebcamNvdecDecoder?.cancel();
+		const nativeGpuSessionId = this.nativeGpuSessionId;
+		this.nativeGpuSessionId = null;
+		if (nativeGpuSessionId) {
+			void window.electronAPI.cancelNativeGpuExport(nativeGpuSessionId);
+		}
 		if (this.audioProcessor) {
 			this.audioProcessor.cancel();
 		}
@@ -1130,16 +794,6 @@ export class VideoExporter {
 				console.warn("Error destroying webcam decoder:", e);
 			}
 			this.webcamDecoder = null;
-		}
-
-		if (this.nativeNvdecDecoder) {
-			this.nativeNvdecDecoder.destroy();
-			this.nativeNvdecDecoder = null;
-		}
-
-		if (this.nativeWebcamNvdecDecoder) {
-			this.nativeWebcamNvdecDecoder.destroy();
-			this.nativeWebcamNvdecDecoder = null;
 		}
 
 		if (this.renderer) {

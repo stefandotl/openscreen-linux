@@ -191,52 +191,22 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
-		startNativeNvdecDecode: (payload: {
-			inputPath: string;
-			width: number;
-			height: number;
-			frameRate: number;
-			timelineSegments: Array<{ startSec: number; endSec: number; speed: number }>;
-			totalFrames: number;
-		}) => Promise<{
-			success: boolean;
-			sessionId?: string;
-			message?: string;
-			error?: string;
-		}>;
-		cancelNativeNvdecDecode: (sessionId: string) => Promise<{
+		startNativeGpuExport: (
+			payload: import("../src/lib/exporter/nativeGpuExportProtocol").NativeGpuExportRequest,
+		) => Promise<import("../src/lib/exporter/nativeGpuExportProtocol").NativeGpuExportStartResult>;
+		finishNativeGpuExport: (
+			sessionId: string,
+		) => Promise<import("../src/lib/exporter/nativeGpuExportProtocol").NativeGpuExportFinishResult>;
+		cancelNativeGpuExport: (sessionId: string) => Promise<{
 			success: boolean;
 			message?: string;
 			error?: string;
 		}>;
-		startNativeNvencExport: (payload: {
-			width: number;
-			height: number;
-			frameRate: number;
-			bitrate: number;
-			outputPath: string;
-			audioPath?: string;
-			sourceDurationSec?: number;
-			trimRegions?: Array<{ startMs: number; endMs: number }>;
-			speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
-		}) => Promise<{
-			success: boolean;
-			sessionId?: string;
-			message?: string;
-			error?: string;
-		}>;
-		finishNativeNvencExport: (sessionId: string) => Promise<{
-			success: boolean;
-			path?: string;
-			message?: string;
-			error?: string;
-			stderr?: string;
-		}>;
-		cancelNativeNvencExport: (sessionId: string) => Promise<{
-			success: boolean;
-			message?: string;
-			error?: string;
-		}>;
+		onNativeGpuExportProgress: (
+			callback: (
+				progress: import("../src/lib/exporter/nativeGpuExportProtocol").NativeGpuExportProgress,
+			) => void,
+		) => () => void;
 		openVideoFilePicker: () => Promise<{ success: boolean; path?: string; canceled?: boolean }>;
 		setCurrentVideoPath: (path: string) => Promise<{ success: boolean }>;
 		setCurrentRecordingSession: (

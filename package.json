@@ -1,7 +1,7 @@
 {
 	"name": "openscreen",
 	"private": true,
-	"version": "1.5.0",
+	"version": "1.5.1",
 	"type": "module",
 	"packageManager": "npm@10.9.4",
 	"engines": {
@@ -13,7 +13,7 @@
 		"email": "svaddem@asu.edu"
 	},
 	"scripts": {
-		"dev": "vite",
+		"dev": "npm run build:native:linux-export && vite",
 		"build": "tsc && vite build && electron-builder",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
@@ -25,7 +25,8 @@
 		"build:native:win": "node scripts/build-windows-wgc-helper.mjs",
 		"build:win": "npm run build:native:win && tsc && vite build && electron-builder --win --config.npmRebuild=false",
 		"build:native:linux-cursor": "node scripts/build-linux-cursor-helper.mjs",
-		"build:linux": "npm run build:native:linux-cursor && tsc && vite build && electron-builder --linux AppImage deb pacman --config.npmRebuild=false",
+		"build:native:linux-export": "node scripts/build-linux-export-helper.mjs",
+		"build:linux": "npm run build:native:linux-cursor && npm run build:native:linux-export && tsc && vite build && electron-builder --linux AppImage deb pacman --config.npmRebuild=false",
 		"test": "vitest --run",
 		"test:watch": "vitest",
 		"test:cursor-native:win": "node scripts/test-windows-native-cursor.mjs",

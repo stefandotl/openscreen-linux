@@ -1,12 +1,11 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { constants as fsConstants } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { DesktopCapturerSource, MessagePortMain } from "electron";
+import type { DesktopCapturerSource } from "electron";
 import {
 	app,
 	BrowserWindow,
@@ -17,10 +16,6 @@ import {
 	shell,
 	systemPreferences,
 } from "electron";
-import {
-	EXPORT_TIMELINE_EPSILON_SEC,
-	type ExportTimelineSegment,
-} from "../../src/lib/exporter/exportTimeline";
 import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
 import {
@@ -47,11 +42,7 @@ import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/rec
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
-import {
-	cancelNativeNvdecSession,
-	connectNativeNvdecSessionPort,
-	startNativeNvdecSession,
-} from "./nativeNvdec";
+import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 const PROJECT_FILE_EXTENSION = "openscreen";
@@ -75,167 +66,10 @@ const nativeMacCaptureEvents = new EventEmitter();
 // Paths the user approved via file picker or project load (i.e. outside the default dirs).
 const approvedPaths = new Set<string>();
 
-type NativeNvencExportSession = {
-	process: ChildProcessWithoutNullStreams;
-	outputPath: string;
-	stderr: string;
-	framePort?: MessagePortMain;
-	exitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | null; error?: Error }>;
-	writePerf: {
-		startedAtMs: number;
-		lastLogAtMs: number;
-		frames: number;
-		bytes: number;
-		bufferWrapMs: number;
-		pipeWriteMs: number;
-		maxPipeWriteMs: number;
-	};
-};
-
-const nativeNvencExportSessions = new Map<string, NativeNvencExportSession>();
 const TIMELINE_EPSILON_SEC = 0.0001;
-
-function tailText(text: string, maxLength = 8000) {
-	return text.length > maxLength ? text.slice(text.length - maxLength) : text;
-}
-
-function maybeLogNativeNvencMainPerf(session: NativeNvencExportSession, force = false) {
-	const stats = session.writePerf;
-	if (stats.frames === 0) return;
-
-	const now = performance.now();
-	if (!force && stats.frames % 120 !== 0 && now - stats.lastLogAtMs < 5000) return;
-
-	const elapsedSec = Math.max((now - stats.startedAtMs) / 1000, 0.001);
-	const pipeSec = Math.max(stats.pipeWriteMs / 1000, 0.001);
-	const mib = stats.bytes / (1024 * 1024);
-	console.info(
-		`[native-nvenc-main-perf] ${JSON.stringify({
-			frames: stats.frames,
-			feedFps: Number((stats.frames / elapsedSec).toFixed(2)),
-			feedMiBps: Number((mib / elapsedSec).toFixed(2)),
-			avgMs: {
-				bufferWrap: Number((stats.bufferWrapMs / stats.frames).toFixed(3)),
-				pipeWrite: Number((stats.pipeWriteMs / stats.frames).toFixed(2)),
-			},
-			maxPipeWriteMs: Number(stats.maxPipeWriteMs.toFixed(2)),
-			pipeMiBps: Number((mib / pipeSec).toFixed(2)),
-		})}`,
-	);
-	stats.lastLogAtMs = now;
-}
-
-async function writeNativeNvencExportFrame(
-	sessionId: string,
-	chunk: ArrayBuffer,
-): Promise<{ success: boolean; message?: string; error?: string }> {
-	const session = nativeNvencExportSessions.get(sessionId);
-	if (!session) {
-		return { success: false, message: "Native NVENC export session not found" };
-	}
-	if (session.process.stdin.destroyed) {
-		return { success: false, message: "Native NVENC export stdin is closed" };
-	}
-
-	try {
-		const bufferWrapStartedAtMs = performance.now();
-		const buffer = Buffer.from(chunk);
-		const bufferWrapMs = performance.now() - bufferWrapStartedAtMs;
-		const pipeWriteStartedAtMs = performance.now();
-		await new Promise<void>((resolve, reject) => {
-			session.process.stdin.write(buffer, (error) => {
-				if (error) reject(error);
-				else resolve();
-			});
-		});
-		const pipeWriteMs = performance.now() - pipeWriteStartedAtMs;
-		session.writePerf.frames++;
-		session.writePerf.bytes += chunk.byteLength;
-		session.writePerf.bufferWrapMs += bufferWrapMs;
-		session.writePerf.pipeWriteMs += pipeWriteMs;
-		session.writePerf.maxPipeWriteMs = Math.max(session.writePerf.maxPipeWriteMs, pipeWriteMs);
-		maybeLogNativeNvencMainPerf(session);
-		return { success: true };
-	} catch (error) {
-		return {
-			success: false,
-			message: "Failed to write native NVENC export frame",
-			error: String(error),
-		};
-	}
-}
 
 function getFfmpegBinary() {
 	return process.env.OPENSCREEN_FFMPEG_PATH || "ffmpeg";
-}
-
-function buildNativeNvencArgs(input: {
-	width: number;
-	height: number;
-	frameRate: number;
-	bitrate: number;
-	outputPath: string;
-	audioPath?: string;
-	sourceDurationSec?: number;
-	trimRegions?: Array<{ startMs: number; endMs: number }>;
-	speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
-}) {
-	const bitrate = Math.max(500_000, Math.round(input.bitrate));
-	const maxRate = Math.round(bitrate * 1.5);
-	const bufferSize = Math.round(bitrate * 2);
-	const audioTimelineFilter = input.audioPath
-		? buildAudioTimelineFilter(input.sourceDurationSec, input.trimRegions, input.speedRegions)
-		: null;
-
-	return [
-		"-hide_banner",
-		"-y",
-		"-f",
-		"rawvideo",
-		"-pix_fmt",
-		"yuv420p",
-		"-s",
-		`${input.width}x${input.height}`,
-		"-r",
-		String(input.frameRate),
-		"-i",
-		"pipe:0",
-		...(input.audioPath ? ["-i", input.audioPath] : []),
-		...(audioTimelineFilter ? ["-filter_complex", audioTimelineFilter.filter] : []),
-		"-map",
-		"0:v:0",
-		...(input.audioPath
-			? ["-map", audioTimelineFilter ? audioTimelineFilter.outputLabel : "1:a?"]
-			: []),
-		"-c:v",
-		"h264_nvenc",
-		"-preset",
-		"p4",
-		"-tune",
-		"hq",
-		"-rc",
-		"vbr",
-		"-b:v",
-		String(bitrate),
-		"-maxrate",
-		String(maxRate),
-		"-bufsize",
-		String(bufferSize),
-		"-pix_fmt",
-		"yuv420p",
-		"-color_range",
-		"tv",
-		"-colorspace",
-		"bt709",
-		"-color_primaries",
-		"bt709",
-		"-color_trc",
-		"bt709",
-		...(input.audioPath ? ["-c:a", "aac", "-b:a", "128k", "-shortest"] : []),
-		"-movflags",
-		"+faststart",
-		input.outputPath,
-	];
 }
 
 function buildAudioTimelineFilter(
@@ -1630,6 +1464,12 @@ export function registerIpcHandlers(
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
+	registerNativeGpuExportHandlers({
+		getFfmpegBinary,
+		resolveApprovedVideoPath,
+		buildAudioTimelineFilter,
+	});
+
 	async function requestScreenAccess() {
 		if (process.platform !== "darwin") {
 			return { success: true, granted: true, status: "granted" };
@@ -2812,348 +2652,6 @@ export function registerIpcHandlers(
 				error: String(error),
 			};
 		}
-	});
-
-	ipcMain.handle(
-		"start-native-nvenc-export",
-		async (
-			_,
-			payload: {
-				width: number;
-				height: number;
-				frameRate: number;
-				bitrate: number;
-				outputPath: string;
-				audioPath?: string;
-				sourceDurationSec?: number;
-				trimRegions?: Array<{ startMs: number; endMs: number }>;
-				speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
-			},
-		) => {
-			try {
-				const outputPath =
-					typeof payload.outputPath === "string" ? path.normalize(payload.outputPath) : "";
-				if (!path.isAbsolute(outputPath) || !outputPath.toLowerCase().endsWith(".mp4")) {
-					return { success: false, message: "Invalid output path" };
-				}
-
-				const width = Number(payload.width);
-				const height = Number(payload.height);
-				const frameRate = Number(payload.frameRate);
-				const bitrate = Number(payload.bitrate);
-				if (
-					!Number.isFinite(width) ||
-					!Number.isFinite(height) ||
-					!Number.isFinite(frameRate) ||
-					!Number.isFinite(bitrate) ||
-					width < 2 ||
-					height < 2 ||
-					frameRate <= 0 ||
-					bitrate <= 0
-				) {
-					return { success: false, message: "Invalid export settings" };
-				}
-
-				let audioPath: string | undefined;
-				if (payload.audioPath) {
-					const normalizedAudioPath = normalizeVideoSourcePath(payload.audioPath);
-					if (
-						normalizedAudioPath &&
-						path.isAbsolute(normalizedAudioPath) &&
-						hasAllowedImportVideoExtension(normalizedAudioPath)
-					) {
-						const stats = await fs.stat(normalizedAudioPath).catch(() => null);
-						if (stats?.isFile()) {
-							audioPath = normalizedAudioPath;
-						}
-					}
-				}
-
-				await fs.mkdir(path.dirname(outputPath), { recursive: true });
-				const args = buildNativeNvencArgs({
-					width: Math.round(width),
-					height: Math.round(height),
-					frameRate,
-					bitrate,
-					outputPath,
-					audioPath,
-					sourceDurationSec: payload.sourceDurationSec,
-					trimRegions: payload.trimRegions,
-					speedRegions: payload.speedRegions,
-				});
-				console.info("[native-nvenc] Starting ffmpeg export", {
-					ffmpeg: getFfmpegBinary(),
-					width: Math.round(width),
-					height: Math.round(height),
-					frameRate,
-					bitrate,
-					inputPixelFormat: "yuv420p",
-					audio: Boolean(audioPath),
-					trimRegions: payload.trimRegions?.length ?? 0,
-					speedRegions: payload.speedRegions?.length ?? 0,
-					outputPath,
-				});
-
-				const child = spawn(getFfmpegBinary(), args, {
-					stdio: ["pipe", "pipe", "pipe"],
-				});
-				const sessionId = randomUUID();
-				const session: NativeNvencExportSession = {
-					process: child,
-					outputPath,
-					stderr: "",
-					writePerf: {
-						startedAtMs: performance.now(),
-						lastLogAtMs: performance.now(),
-						frames: 0,
-						bytes: 0,
-						bufferWrapMs: 0,
-						pipeWriteMs: 0,
-						maxPipeWriteMs: 0,
-					},
-					exitPromise: new Promise((resolve) => {
-						child.once("error", (error) => resolve({ code: null, signal: null, error }));
-						child.once("close", (code, signal) => resolve({ code, signal }));
-					}),
-				};
-
-				child.stderr.on("data", (chunk: Buffer) => {
-					session.stderr = tailText(session.stderr + chunk.toString("utf-8"));
-				});
-				child.stdout.on("data", () => {
-					// Drain stdout; ffmpeg normally writes progress to stderr.
-				});
-				nativeNvencExportSessions.set(sessionId, session);
-
-				return { success: true, sessionId };
-			} catch (error) {
-				console.error("Failed to start native NVENC export:", error);
-				return {
-					success: false,
-					message: "Failed to start native NVENC export",
-					error: String(error),
-				};
-			}
-		},
-	);
-
-	ipcMain.handle(
-		"start-native-nvdec-decode",
-		async (
-			_,
-			payload: {
-				inputPath: string;
-				width: number;
-				height: number;
-				frameRate: number;
-				timelineSegments: ExportTimelineSegment[];
-				totalFrames: number;
-			},
-		) => {
-			try {
-				const inputPath = resolveApprovedVideoPath(payload.inputPath);
-				if (!inputPath) {
-					return { success: false, message: "Invalid or unapproved NVDEC input path" };
-				}
-				const stats = await fs.stat(inputPath).catch(() => null);
-				if (!stats?.isFile()) {
-					return { success: false, message: "NVDEC input file does not exist" };
-				}
-
-				const width = Number(payload.width);
-				const height = Number(payload.height);
-				const frameRate = Number(payload.frameRate);
-				const totalFrames = Number(payload.totalFrames);
-				const timelineSegments = Array.isArray(payload.timelineSegments)
-					? payload.timelineSegments.map((segment) => ({
-							startSec: Number(segment?.startSec),
-							endSec: Number(segment?.endSec),
-							speed: Number(segment?.speed),
-						}))
-					: [];
-				const timelineIsValid =
-					timelineSegments.length > 0 &&
-					timelineSegments.length <= 1000 &&
-					timelineSegments.every((segment, index) => {
-						const previous = timelineSegments[index - 1];
-						return (
-							Number.isFinite(segment.startSec) &&
-							Number.isFinite(segment.endSec) &&
-							Number.isFinite(segment.speed) &&
-							segment.startSec >= 0 &&
-							segment.endSec > segment.startSec &&
-							segment.endSec <= 86_400 &&
-							segment.speed > 0 &&
-							segment.speed <= 100 &&
-							(!previous || segment.startSec >= previous.endSec - EXPORT_TIMELINE_EPSILON_SEC)
-						);
-					});
-				const expectedTotalFrames = timelineSegments.reduce((sum, segment) => {
-					const durationSec = segment.endSec - segment.startSec - EXPORT_TIMELINE_EPSILON_SEC;
-					return sum + Math.max(0, Math.ceil((durationSec / segment.speed) * frameRate));
-				}, 0);
-				if (
-					!Number.isInteger(width) ||
-					!Number.isInteger(height) ||
-					!Number.isFinite(frameRate) ||
-					width < 2 ||
-					height < 2 ||
-					width % 2 !== 0 ||
-					height % 2 !== 0 ||
-					frameRate <= 0 ||
-					frameRate > 240 ||
-					!Number.isInteger(totalFrames) ||
-					totalFrames < 1 ||
-					totalFrames > 20_736_000 ||
-					!timelineIsValid ||
-					totalFrames !== expectedTotalFrames
-				) {
-					return { success: false, message: "Invalid native NVDEC settings" };
-				}
-
-				const sessionId = startNativeNvdecSession({
-					inputPath,
-					width,
-					height,
-					frameRate,
-					timelineSegments,
-					totalFrames,
-					ffmpegPath: getFfmpegBinary(),
-				});
-				return { success: true, sessionId };
-			} catch (error) {
-				console.error("Failed to start native NVDEC decode:", error);
-				return {
-					success: false,
-					message: "Failed to start required native NVDEC decode",
-					error: String(error),
-				};
-			}
-		},
-	);
-
-	ipcMain.on("connect-native-nvdec-decode-port", (event, sessionId: unknown) => {
-		const port = event.ports[0];
-		if (!port || typeof sessionId !== "string") {
-			port?.close();
-			return;
-		}
-		connectNativeNvdecSessionPort(sessionId, port);
-	});
-
-	ipcMain.handle("cancel-native-nvdec-decode", async (_, sessionId: string) => {
-		if (typeof sessionId === "string") cancelNativeNvdecSession(sessionId);
-		return { success: true };
-	});
-
-	ipcMain.on("connect-native-nvenc-export-port", (event, sessionId: unknown) => {
-		const port = event.ports[0];
-		const session =
-			typeof sessionId === "string" ? nativeNvencExportSessions.get(sessionId) : undefined;
-		if (!port || !session || typeof sessionId !== "string") {
-			port?.close();
-			return;
-		}
-
-		session.framePort?.close();
-		session.framePort = port;
-		let writeQueue = Promise.resolve();
-		port.on("message", (messageEvent) => {
-			const data = messageEvent.data as { requestId?: unknown; chunk?: unknown };
-			const requestId = typeof data?.requestId === "number" ? data.requestId : -1;
-			if (requestId === 1) {
-				console.info("[native-nvenc] First transferable frame received", {
-					bytes: data?.chunk instanceof ArrayBuffer ? data.chunk.byteLength : null,
-					payloadType: Object.prototype.toString.call(data?.chunk),
-				});
-			}
-			writeQueue = writeQueue
-				.then(async () => {
-					const result =
-						data?.chunk instanceof ArrayBuffer
-							? await writeNativeNvencExportFrame(sessionId, data.chunk)
-							: { success: false, message: "Invalid native NVENC frame payload" };
-					port.postMessage({ requestId, result });
-				})
-				.catch((error) => {
-					port.postMessage({
-						requestId,
-						result: {
-							success: false,
-							message: "Native NVENC frame port failed",
-							error: String(error),
-						},
-					});
-				});
-		});
-		port.on("close", () => {
-			if (session.framePort === port) session.framePort = undefined;
-		});
-		port.start();
-		port.postMessage({ type: "ready" });
-		console.info("[native-nvenc] Transferable frame port connected", { sessionId });
-	});
-
-	ipcMain.handle("finish-native-nvenc-export", async (_, sessionId: string) => {
-		const session = nativeNvencExportSessions.get(sessionId);
-		if (!session) {
-			return { success: false, message: "Native NVENC export session not found" };
-		}
-
-		try {
-			session.framePort?.close();
-			session.process.stdin.end();
-			const result = await session.exitPromise;
-			maybeLogNativeNvencMainPerf(session, true);
-			nativeNvencExportSessions.delete(sessionId);
-
-			if (result.error || result.code !== 0) {
-				console.warn("[native-nvenc] ffmpeg export failed", {
-					code: result.code,
-					signal: result.signal,
-					error: result.error?.message,
-					stderr: session.stderr,
-				});
-				return {
-					success: false,
-					message: "Native NVENC export failed",
-					error: result.error?.message || `ffmpeg exited with code ${result.code}`,
-					stderr: session.stderr,
-				};
-			}
-
-			console.info("[native-nvenc] ffmpeg export completed", { outputPath: session.outputPath });
-			return {
-				success: true,
-				path: session.outputPath,
-				message: "Video exported successfully",
-				stderr: session.stderr,
-			};
-		} catch (error) {
-			session.framePort?.close();
-			nativeNvencExportSessions.delete(sessionId);
-			return {
-				success: false,
-				message: "Failed to finish native NVENC export",
-				error: String(error),
-				stderr: session.stderr,
-			};
-		}
-	});
-
-	ipcMain.handle("cancel-native-nvenc-export", async (_, sessionId: string) => {
-		const session = nativeNvencExportSessions.get(sessionId);
-		if (!session) {
-			return { success: true };
-		}
-
-		nativeNvencExportSessions.delete(sessionId);
-		session.framePort?.close();
-		session.process.stdin.destroy();
-		if (!session.process.killed) {
-			session.process.kill("SIGKILL");
-		}
-		return { success: true };
 	});
 
 	ipcMain.handle("open-video-file-picker", async () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	buildExportTimelineSegments,
+	getContinuousExportSourceTimestampsMs,
 	getExportSourceTimestampsMs,
 	getExportTimelineMetrics,
 } from "./exportTimeline";
@@ -39,5 +40,18 @@ describe("export timeline", () => {
 		expect(timestamps).toHaveLength(metrics.totalFrames);
 		expect(timestamps[0]).toBe(0);
 		expect(timestamps.at(-1)).toBeLessThan(10_000);
+	});
+
+	it("keeps CFR cadence continuous across fractional trim boundaries", () => {
+		const timestamps = getContinuousExportSourceTimestampsMs(1, 30, [
+			{ startMs: 50, endMs: 100 },
+			{ startMs: 150, endMs: 300 },
+		]);
+
+		expect(timestamps).toHaveLength(24);
+		expect(timestamps[0]).toBe(0);
+		expect(timestamps[1]).toBeCloseTo(1000 / 30);
+		expect(timestamps[2]).toBeCloseTo(100 + (1000 / 30) * 2 - 50);
+		expect(timestamps.at(-1)).toBeCloseTo(300 + (1000 / 30) * 23 - 100);
 	});
 });

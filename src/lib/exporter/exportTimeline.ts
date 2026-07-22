@@ -118,3 +118,46 @@ export function getExportSourceTimestampsMs(
 
 	return timestamps;
 }
+
+export function getContinuousExportSourceTimestampsMs(
+	totalDuration: number,
+	targetFrameRate: number,
+	trimRegions?: TrimRegion[],
+	speedRegions?: SpeedRegion[],
+): number[] {
+	const segments = buildExportTimelineSegments(totalDuration, trimRegions, speedRegions);
+	let outputCursorSec = 0;
+	const mappedSegments = segments.map((segment) => {
+		const outputStartSec = outputCursorSec;
+		outputCursorSec += (segment.endSec - segment.startSec) / segment.speed;
+		return {
+			...segment,
+			outputStartSec,
+			outputEndSec: outputCursorSec,
+		};
+	});
+	const effectiveDuration = mappedSegments.at(-1)?.outputEndSec ?? 0;
+	const frameCount = Math.max(
+		0,
+		Math.ceil((effectiveDuration - EXPORT_TIMELINE_EPSILON_SEC) * targetFrameRate),
+	);
+	const timestamps: number[] = [];
+	let segmentIndex = 0;
+
+	for (let frameIndex = 0; frameIndex < frameCount; frameIndex++) {
+		const outputTimeSec = frameIndex / targetFrameRate;
+		while (
+			segmentIndex < mappedSegments.length - 1 &&
+			outputTimeSec >= mappedSegments[segmentIndex].outputEndSec
+		) {
+			segmentIndex++;
+		}
+		const segment = mappedSegments[segmentIndex];
+		if (!segment) break;
+		const sourceTimeSec =
+			segment.startSec + (outputTimeSec - segment.outputStartSec) * segment.speed;
+		timestamps.push(Math.min(sourceTimeSec, segment.endSec) * 1000);
+	}
+
+	return timestamps;
+}

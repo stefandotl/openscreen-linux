@@ -1,6 +1,9 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import { NATIVE_NVDEC_FRAME_PORT_MESSAGE } from "../src/lib/exporter/nativeNvdecFramePortProtocol";
-import { NATIVE_NVENC_FRAME_PORT_MESSAGE } from "../src/lib/exporter/nativeNvencFramePortProtocol";
+import {
+	NATIVE_GPU_EXPORT_CHANNELS,
+	type NativeGpuExportProgress,
+	type NativeGpuExportRequest,
+} from "../src/lib/exporter/nativeGpuExportProtocol";
 import type { NativeMacRecordingRequest } from "../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
 import type { RecordingSession, StoreRecordedSessionInput } from "../src/lib/recordingSession";
@@ -151,61 +154,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	writeExportToPath: (videoData: ArrayBuffer, filePath: string) => {
 		return ipcRenderer.invoke("write-export-to-path", videoData, filePath);
 	},
-	startNativeNvdecDecode: async (payload: {
-		inputPath: string;
-		width: number;
-		height: number;
-		frameRate: number;
-		timelineSegments: Array<{ startSec: number; endSec: number; speed: number }>;
-		totalFrames: number;
-	}) => {
-		const result = await ipcRenderer.invoke("start-native-nvdec-decode", payload);
-		if (result.success && result.sessionId) {
-			const channel = new MessageChannel();
-			ipcRenderer.postMessage("connect-native-nvdec-decode-port", result.sessionId, [
-				channel.port1,
-			]);
-			window.postMessage(
-				{ type: NATIVE_NVDEC_FRAME_PORT_MESSAGE, sessionId: result.sessionId },
-				"*",
-				[channel.port2],
-			);
-		}
-		return result;
+	startNativeGpuExport: (payload: NativeGpuExportRequest) => {
+		return ipcRenderer.invoke(NATIVE_GPU_EXPORT_CHANNELS.start, payload);
 	},
-	cancelNativeNvdecDecode: async (sessionId: string) => {
-		return ipcRenderer.invoke("cancel-native-nvdec-decode", sessionId);
+	finishNativeGpuExport: (sessionId: string) => {
+		return ipcRenderer.invoke(NATIVE_GPU_EXPORT_CHANNELS.finish, sessionId);
 	},
-	startNativeNvencExport: async (payload: {
-		width: number;
-		height: number;
-		frameRate: number;
-		bitrate: number;
-		outputPath: string;
-		audioPath?: string;
-		sourceDurationSec?: number;
-		trimRegions?: Array<{ startMs: number; endMs: number }>;
-		speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
-	}) => {
-		const result = await ipcRenderer.invoke("start-native-nvenc-export", payload);
-		if (result.success && result.sessionId) {
-			const channel = new MessageChannel();
-			ipcRenderer.postMessage("connect-native-nvenc-export-port", result.sessionId, [
-				channel.port1,
-			]);
-			window.postMessage(
-				{ type: NATIVE_NVENC_FRAME_PORT_MESSAGE, sessionId: result.sessionId },
-				"*",
-				[channel.port2],
-			);
-		}
-		return result;
+	cancelNativeGpuExport: (sessionId: string) => {
+		return ipcRenderer.invoke(NATIVE_GPU_EXPORT_CHANNELS.cancel, sessionId);
 	},
-	finishNativeNvencExport: async (sessionId: string) => {
-		return ipcRenderer.invoke("finish-native-nvenc-export", sessionId);
-	},
-	cancelNativeNvencExport: async (sessionId: string) => {
-		return ipcRenderer.invoke("cancel-native-nvenc-export", sessionId);
+	onNativeGpuExportProgress: (callback: (progress: NativeGpuExportProgress) => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, progress: NativeGpuExportProgress) => {
+			callback(progress);
+		};
+		ipcRenderer.on(NATIVE_GPU_EXPORT_CHANNELS.progress, listener);
+		return () => ipcRenderer.removeListener(NATIVE_GPU_EXPORT_CHANNELS.progress, listener);
 	},
 	openVideoFilePicker: () => {
 		return ipcRenderer.invoke("open-video-file-picker");
