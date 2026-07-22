@@ -97,7 +97,11 @@ describe("captionSegmentsToAnnotationRegions", () => {
 				{ text: "I", startOffsetMs: 0, endOffsetMs: 120 },
 				{ text: "I", startOffsetMs: 130, endOffsetMs: 250 },
 			],
-			style: { wordHighlight: true, wordHighlightColor: "#34B27B" },
+			style: {
+				wordHighlight: true,
+				wordHighlightMode: "background",
+				wordHighlightColor: "#34B27B",
+			},
 		});
 	});
 

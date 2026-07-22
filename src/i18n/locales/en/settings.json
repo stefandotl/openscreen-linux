@@ -168,7 +168,11 @@
 		"imageFormatsOnly": "Please upload a JPG, PNG, GIF, or WebP image file.",
 		"imageUploadSuccess": "Image uploaded successfully!",
 		"failedImageUpload": "Failed to upload image",
-		"wordHighlight": "Highlight spoken word"
+		"wordHighlight": "Highlight spoken word",
+		"wordHighlightStyle": "Style",
+		"wordHighlightBackground": "Background",
+		"wordHighlightText": "Text color",
+		"wordHighlightColor": "Color"
 	},
 	"fontStyles": {
 		"classic": "Classic",

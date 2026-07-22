@@ -56,6 +56,27 @@ async function pngSize(png: ArrayBuffer) {
 	return size;
 }
 
+async function pngContainsColor(
+	png: ArrayBuffer,
+	matches: (red: number, green: number, blue: number, alpha: number) => boolean,
+) {
+	const bitmap = await createImageBitmap(new Blob([png], { type: "image/png" }));
+	const canvas = document.createElement("canvas");
+	canvas.width = bitmap.width;
+	canvas.height = bitmap.height;
+	const context = canvas.getContext("2d");
+	if (!context) throw new Error("Could not inspect rendered overlay PNG");
+	context.drawImage(bitmap, 0, 0);
+	bitmap.close();
+	const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+	for (let index = 0; index < pixels.length; index += 4) {
+		if (matches(pixels[index]!, pixels[index + 1]!, pixels[index + 2]!, pixels[index + 3]!)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 describe("native GPU export assets", () => {
 	it("bakes background blur into the static wallpaper asset", async () => {
 		const sharp = await createNativeGpuExportAssets(createConfig(false));
@@ -111,5 +132,31 @@ describe("native GPU export assets", () => {
 		const sizes = await Promise.all(assets.overlayPngs.map(pngSize));
 		expect(sizes[1]!.width).toBeLessThan(sizes[0]!.width);
 		expect(sizes[2]!.width).toBeLessThan(sizes[0]!.width);
+	});
+
+	it("renders text-color word highlights with the selected color", async () => {
+		const highlighted = caption("caption", 100, 900, 5);
+		highlighted.content = "one two";
+		highlighted.style.backgroundColor = "transparent";
+		highlighted.style.wordHighlight = true;
+		highlighted.style.wordHighlightMode = "text";
+		highlighted.style.wordHighlightColor = "#ff0066";
+		highlighted.captionWords = [
+			{ text: "one", startOffsetMs: 0, endOffsetMs: 300 },
+			{ text: "two", startOffsetMs: 400, endOffsetMs: 800 },
+		];
+
+		const assets = await createNativeGpuExportAssets({
+			...createConfig(false),
+			annotationRegions: [highlighted],
+		});
+
+		expect(assets.overlayPngs).toHaveLength(3);
+		expect(
+			await pngContainsColor(
+				assets.overlayPngs[1]!,
+				(red, green, blue, alpha) => red > 240 && green < 20 && blue > 80 && alpha > 200,
+			),
+		).toBe(true);
 	});
 });

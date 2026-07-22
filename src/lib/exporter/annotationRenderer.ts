@@ -329,6 +329,7 @@ function renderText(
 	const activeWordIndex =
 		options?.forceActiveCaptionWordIndex ?? getActiveCaptionWordIndex(annotation, currentTimeMs);
 	const highlightOnly = options?.mode === "word-highlight-only";
+	const highlightTextOnly = style.wordHighlightMode === "text";
 	let nextWordIndex = 0;
 
 	lines.forEach((line, index) => {
@@ -382,7 +383,7 @@ function renderText(
 			ctx.fill();
 		}
 
-		if (activeWord) {
+		if (activeWord && !highlightTextOnly) {
 			const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
 			const wordWidth = ctx.measureText(activeWord.text).width;
 			const horizontalPadding = scaledFontSize * 0.12;
@@ -400,12 +401,18 @@ function renderText(
 			ctx.fill();
 		}
 
-		ctx.fillStyle = style.color;
 		if (highlightOnly && activeWord) {
 			const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
+			ctx.fillStyle = highlightTextOnly ? style.wordHighlightColor || "#34B27B" : style.color;
 			ctx.fillText(activeWord.text, startX + prefixWidth, currentY);
 		} else {
+			ctx.fillStyle = style.color;
 			ctx.fillText(visibleLine, startX, currentY);
+			if (activeWord && highlightTextOnly) {
+				const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
+				ctx.fillStyle = style.wordHighlightColor || "#34B27B";
+				ctx.fillText(activeWord.text, startX + prefixWidth, currentY);
+			}
 		}
 
 		if (style.textDecoration === "underline") {
@@ -421,7 +428,8 @@ function renderText(
 				underlineX = textX;
 			}
 
-			ctx.strokeStyle = style.color;
+			ctx.strokeStyle =
+				highlightOnly && highlightTextOnly ? style.wordHighlightColor || "#34B27B" : style.color;
 			ctx.lineWidth = Math.max(1, scaledFontSize / 16);
 			ctx.beginPath();
 			ctx.moveTo(underlineX, underlineY);

@@ -335,13 +335,18 @@ export function AnnotationOverlay({
 							{contentTokens.map((token, index) => {
 								if (token.wordIndex === null) return token.text;
 								const highlighted = token.wordIndex === activeWordIndex;
+								const highlightText = highlighted && annotation.style.wordHighlightMode === "text";
 								return (
 									<span
 										key={`${token.wordIndex}-${index}`}
 										style={{
-											backgroundColor: highlighted
+											color: highlightText
 												? annotation.style.wordHighlightColor || "#34B27B"
-												: "transparent",
+												: undefined,
+											backgroundColor:
+												highlighted && !highlightText
+													? annotation.style.wordHighlightColor || "#34B27B"
+													: "transparent",
 											borderRadius: highlighted ? "0.18em" : undefined,
 											boxDecorationBreak: "clone",
 											WebkitBoxDecorationBreak: "clone",

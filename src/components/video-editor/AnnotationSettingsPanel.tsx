@@ -308,7 +308,7 @@ export function AnnotationSettingsPanel({
 
 							<div>
 								<label className="mb-2 block text-xs font-medium text-slate-200">
-									{t("annotation.textAnimation")}
+									{t("textAnimation.title")}
 								</label>
 								<Select
 									value={normalizeTextAnimation(annotation.style.textAnimation)}
@@ -317,7 +317,7 @@ export function AnnotationSettingsPanel({
 									}
 								>
 									<SelectTrigger className="h-9 w-full border-white/10 bg-white/5 text-xs text-slate-200">
-										<SelectValue placeholder={t("annotation.selectAnimation")} />
+										<SelectValue placeholder={t("textAnimation.selectAnimation")} />
 									</SelectTrigger>
 									<SelectContent className="max-h-[240px] border-white/10 bg-[#1a1a1c] text-slate-200">
 										{TEXT_ANIMATION_OPTIONS.map((option) => (
@@ -330,18 +330,90 @@ export function AnnotationSettingsPanel({
 							</div>
 
 							{annotation.annotationSource === "auto-caption" || annotation.captionWords?.length ? (
-								<div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-									<label
-										htmlFor="annotation-word-highlight"
-										className="text-xs font-medium text-slate-200"
-									>
-										{t("annotation.wordHighlight")}
-									</label>
-									<Switch
-										id="annotation-word-highlight"
-										checked={annotation.style.wordHighlight === true}
-										onCheckedChange={(checked) => onStyleChange({ wordHighlight: checked })}
-									/>
+								<div className="space-y-3 rounded-lg border border-white/[0.06] bg-white/[0.03] p-3">
+									<div className="flex items-center justify-between gap-3">
+										<label
+											htmlFor="annotation-word-highlight"
+											className="text-xs font-medium text-slate-200"
+										>
+											{t("annotation.wordHighlight")}
+										</label>
+										<Switch
+											id="annotation-word-highlight"
+											checked={annotation.style.wordHighlight === true}
+											onCheckedChange={(checked) => onStyleChange({ wordHighlight: checked })}
+										/>
+									</div>
+
+									{annotation.style.wordHighlight === true ? (
+										<div className="grid grid-cols-2 gap-2 border-t border-white/[0.06] pt-3">
+											<div>
+												<label className="mb-2 block text-[11px] font-medium text-slate-400">
+													{t("annotation.wordHighlightStyle")}
+												</label>
+												<Select
+													value={annotation.style.wordHighlightMode || "background"}
+													onValueChange={(value) =>
+														onStyleChange({
+															wordHighlightMode: value === "text" ? "text" : "background",
+														})
+													}
+												>
+													<SelectTrigger className="h-9 w-full border-white/10 bg-white/5 text-xs text-slate-200">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent className="border-white/10 bg-[#1a1a1c] text-slate-200">
+														<SelectItem value="background">
+															{t("annotation.wordHighlightBackground")}
+														</SelectItem>
+														<SelectItem value="text">
+															{t("annotation.wordHighlightText")}
+														</SelectItem>
+													</SelectContent>
+												</Select>
+											</div>
+
+											<div>
+												<label className="mb-2 block text-[11px] font-medium text-slate-400">
+													{t("annotation.wordHighlightColor")}
+												</label>
+												<Popover>
+													<PopoverTrigger asChild>
+														<Button
+															variant="outline"
+															className="h-9 w-full justify-start gap-2 border-white/10 bg-white/5 px-2 hover:bg-white/10"
+														>
+															<span
+																className="h-4 w-4 rounded-full border border-white/20"
+																style={{
+																	backgroundColor: annotation.style.wordHighlightColor || "#34B27B",
+																}}
+															/>
+															<span className="truncate text-xs text-slate-300">
+																{annotation.style.wordHighlightColor || "#34B27B"}
+															</span>
+														</Button>
+													</PopoverTrigger>
+													<PopoverContent
+														side="top"
+														className="w-[260px] rounded-xl border border-white/10 bg-[#1a1a1c] p-3 shadow-xl"
+													>
+														<ColorPicker
+															selectedColor={annotation.style.wordHighlightColor || "#34B27B"}
+															colorPalette={colorPalette}
+															translations={{
+																colorWheel: t("annotation.colorWheel"),
+																colorPalette: t("annotation.colorPalette"),
+															}}
+															onUpdateColor={(color) =>
+																onStyleChange({ wordHighlightColor: color })
+															}
+														/>
+													</PopoverContent>
+												</Popover>
+											</div>
+										</div>
+									) : null}
 								</div>
 							) : null}
 

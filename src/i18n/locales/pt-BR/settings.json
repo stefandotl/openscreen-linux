@@ -163,7 +163,11 @@
 		"imageFormatsOnly": "Por favor, envie um arquivo de imagem JPG, PNG, GIF ou WebP.",
 		"imageUploadSuccess": "Imagem enviada com sucesso!",
 		"failedImageUpload": "Falha ao enviar imagem",
-		"wordHighlight": "Destacar a palavra falada"
+		"wordHighlight": "Destacar a palavra falada",
+		"wordHighlightStyle": "Estilo",
+		"wordHighlightBackground": "Fundo",
+		"wordHighlightText": "Cor do texto",
+		"wordHighlightColor": "Cor"
 	},
 	"fontStyles": {
 		"classic": "Clássico",
@@ -174,6 +178,17 @@
 		"simple": "Simples",
 		"modern": "Moderno",
 		"clean": "Clean"
+	},
+	"textAnimation": {
+		"title": "Animação de texto",
+		"selectAnimation": "Selecionar animação",
+		"none": "Nenhuma",
+		"fade": "Esmaecer",
+		"rise": "Subir",
+		"pop": "Saltar",
+		"slideLeft": "Deslizar para a esquerda",
+		"typewriter": "Máquina de escrever",
+		"pulse": "Pulsar"
 	},
 	"customFont": {
 		"dialogTitle": "Adicionar Google Font",

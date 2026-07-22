@@ -167,7 +167,11 @@
 		"imageFormatsOnly": "Пожалуйста, загрузите изображение JPG, PNG, GIF или WebP.",
 		"imageUploadSuccess": "Изображение успешно загружено!",
 		"failedImageUpload": "Не удалось загрузить изображение",
-		"wordHighlight": "Выделять произносимое слово"
+		"wordHighlight": "Выделять произносимое слово",
+		"wordHighlightStyle": "Стиль",
+		"wordHighlightBackground": "Фон",
+		"wordHighlightText": "Цвет текста",
+		"wordHighlightColor": "Цвет"
 	},
 	"fontStyles": {
 		"classic": "Классический",

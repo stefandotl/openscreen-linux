@@ -24,6 +24,7 @@ const CAPTION_STYLE: AnnotationTextStyle = {
 	textDecoration: "none",
 	textAlign: "center",
 	wordHighlight: true,
+	wordHighlightMode: "background",
 	wordHighlightColor: "#34B27B",
 };
 

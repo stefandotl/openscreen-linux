@@ -167,7 +167,11 @@
 		"imageFormatsOnly": "JPG、PNG、GIF、またはWebP画像ファイルを選択してください。",
 		"imageUploadSuccess": "画像を読み込みました。",
 		"failedImageUpload": "画像の読み込みに失敗しました",
-		"wordHighlight": "読み上げ中の単語を強調"
+		"wordHighlight": "読み上げ中の単語を強調",
+		"wordHighlightStyle": "スタイル",
+		"wordHighlightBackground": "背景",
+		"wordHighlightText": "文字色",
+		"wordHighlightColor": "色"
 	},
 	"fontStyles": {
 		"classic": "クラシック",

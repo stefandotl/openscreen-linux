@@ -284,6 +284,7 @@ export interface AnnotationTextStyle {
 	textAnimation?: AnnotationTextAnimation;
 	/** Highlights the currently spoken word when `captionWords` timing is available. */
 	wordHighlight?: boolean;
+	wordHighlightMode?: "background" | "text";
 	wordHighlightColor?: string;
 }
 
@@ -335,6 +336,7 @@ export const DEFAULT_ANNOTATION_STYLE: AnnotationTextStyle = {
 	textAlign: "center",
 	textAnimation: "none",
 	wordHighlight: false,
+	wordHighlightMode: "background",
 	wordHighlightColor: "#34B27B",
 };
 

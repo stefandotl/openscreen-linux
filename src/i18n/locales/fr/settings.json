@@ -167,7 +167,11 @@
 		"imageFormatsOnly": "Veuillez téléverser un fichier image JPG, PNG, GIF ou WebP.",
 		"imageUploadSuccess": "Image téléversée avec succès !",
 		"failedImageUpload": "Échec du téléversement de l'image",
-		"wordHighlight": "Surligner le mot prononcé"
+		"wordHighlight": "Surligner le mot prononcé",
+		"wordHighlightStyle": "Style",
+		"wordHighlightBackground": "Arrière-plan",
+		"wordHighlightText": "Couleur du texte",
+		"wordHighlightColor": "Couleur"
 	},
 	"fontStyles": {
 		"classic": "Classique",

@@ -133,8 +133,6 @@
 		"textPlaceholder": "輸入您的文字...",
 		"fontStyle": "字體樣式",
 		"selectStyle": "選擇樣式",
-		"textAnimation": "文字動畫",
-		"selectAnimation": "選擇動畫",
 		"size": "大小",
 		"customFonts": "自訂字體",
 		"textColor": "文字顏色",
@@ -164,6 +162,10 @@
 		"imageUploadSuccess": "圖片上傳成功！",
 		"failedImageUpload": "上傳圖片失敗",
 		"wordHighlight": "醒目提示目前朗讀的詞",
+		"wordHighlightStyle": "樣式",
+		"wordHighlightBackground": "背景",
+		"wordHighlightText": "文字顏色",
+		"wordHighlightColor": "顏色",
 		"blurColor": "模糊顏色",
 		"blurColorBlack": "黑色",
 		"blurColorWhite": "白色",
@@ -181,6 +183,17 @@
 		"simple": "簡約",
 		"modern": "現代",
 		"clean": "簡潔"
+	},
+	"textAnimation": {
+		"title": "文字動畫",
+		"selectAnimation": "選擇動畫",
+		"none": "無",
+		"fade": "淡入",
+		"rise": "上升",
+		"pop": "彈出",
+		"slideLeft": "向左滑動",
+		"typewriter": "打字機",
+		"pulse": "脈衝"
 	},
 	"customFont": {
 		"dialogTitle": "新增 Google 字體",

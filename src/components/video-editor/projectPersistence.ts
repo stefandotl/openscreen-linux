@@ -399,6 +399,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 								typeof region.style?.wordHighlight === "boolean"
 									? region.style.wordHighlight
 									: region.annotationSource === "auto-caption",
+							wordHighlightMode: region.style?.wordHighlightMode === "text" ? "text" : "background",
 							wordHighlightColor:
 								typeof region.style?.wordHighlightColor === "string"
 									? region.style.wordHighlightColor

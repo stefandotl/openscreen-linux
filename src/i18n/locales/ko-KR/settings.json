@@ -167,7 +167,11 @@
 		"imageFormatsOnly": "JPG, PNG, GIF 또는 WebP 이미지 파일을 업로드해 주세요.",
 		"imageUploadSuccess": "이미지가 성공적으로 업로드되었습니다!",
 		"failedImageUpload": "이미지 업로드에 실패했습니다",
-		"wordHighlight": "말하는 단어 강조"
+		"wordHighlight": "말하는 단어 강조",
+		"wordHighlightStyle": "스타일",
+		"wordHighlightBackground": "배경",
+		"wordHighlightText": "텍스트 색상",
+		"wordHighlightColor": "색상"
 	},
 	"fontStyles": {
 		"classic": "클래식",

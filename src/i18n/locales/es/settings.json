@@ -167,7 +167,11 @@
 		"imageFormatsOnly": "Por favor sube un archivo de imagen JPG, PNG, GIF o WebP.",
 		"imageUploadSuccess": "¡Imagen subida exitosamente!",
 		"failedImageUpload": "Error al subir la imagen",
-		"wordHighlight": "Resaltar la palabra hablada"
+		"wordHighlight": "Resaltar la palabra hablada",
+		"wordHighlightStyle": "Estilo",
+		"wordHighlightBackground": "Fondo",
+		"wordHighlightText": "Color del texto",
+		"wordHighlightColor": "Color"
 	},
 	"fontStyles": {
 		"classic": "Clásico",

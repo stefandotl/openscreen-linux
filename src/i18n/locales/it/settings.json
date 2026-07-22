@@ -166,7 +166,11 @@
 		"imageFormatsOnly": "Carica un file immagine JPG, PNG, GIF o WebP.",
 		"imageUploadSuccess": "Immagine caricata con successo!",
 		"failedImageUpload": "Impossibile caricare l'immagine",
-		"wordHighlight": "Evidenzia la parola pronunciata"
+		"wordHighlight": "Evidenzia la parola pronunciata",
+		"wordHighlightStyle": "Stile",
+		"wordHighlightBackground": "Sfondo",
+		"wordHighlightText": "Colore del testo",
+		"wordHighlightColor": "Colore"
 	},
 	"fontStyles": {
 		"classic": "Classico",

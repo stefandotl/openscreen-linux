@@ -132,8 +132,6 @@
 		"textPlaceholder": "Metninizi girin...",
 		"fontStyle": "Yazı Tipi Stili",
 		"selectStyle": "Stil seçin",
-		"textAnimation": "Metin Animasyonu",
-		"selectAnimation": "Animasyon seçin",
 		"size": "Boyut",
 		"customFonts": "Özel Yazı Tipleri",
 		"textColor": "Metin Rengi",
@@ -163,6 +161,10 @@
 		"imageUploadSuccess": "Görüntü başarıyla yüklendi!",
 		"failedImageUpload": "Görüntü yüklenemedi",
 		"wordHighlight": "Konuşulan kelimeyi vurgula",
+		"wordHighlightStyle": "Stil",
+		"wordHighlightBackground": "Arka plan",
+		"wordHighlightText": "Metin rengi",
+		"wordHighlightColor": "Renk",
 		"blurColor": "Bulanıklık Rengi",
 		"blurColorBlack": "Siyah",
 		"blurColorWhite": "Beyaz",
@@ -180,6 +182,17 @@
 		"simple": "Sade",
 		"modern": "Modern",
 		"clean": "Temiz"
+	},
+	"textAnimation": {
+		"title": "Metin Animasyonu",
+		"selectAnimation": "Animasyon seçin",
+		"none": "Yok",
+		"fade": "Solma",
+		"rise": "Yükselme",
+		"pop": "Sıçrama",
+		"slideLeft": "Sola kayma",
+		"typewriter": "Daktilo",
+		"pulse": "Nabız"
 	},
 	"customFont": {
 		"dialogTitle": "Google Yazı Tipi Ekle",

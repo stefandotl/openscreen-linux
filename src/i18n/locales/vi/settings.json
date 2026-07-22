@@ -132,8 +132,6 @@
 		"textPlaceholder": "Nhập văn bản của bạn...",
 		"fontStyle": "Kiểu phông chữ",
 		"selectStyle": "Chọn kiểu",
-		"textAnimation": "Hoạt ảnh văn bản",
-		"selectAnimation": "Chọn hoạt ảnh",
 		"size": "Kích thước",
 		"customFonts": "Phông chữ tùy chỉnh",
 		"textColor": "Màu văn bản",
@@ -168,6 +166,10 @@
 		"imageUploadSuccess": "Tải lên hình ảnh thành công!",
 		"failedImageUpload": "Tải lên hình ảnh thất bại",
 		"wordHighlight": "Làm nổi bật từ đang nói",
+		"wordHighlightStyle": "Kiểu",
+		"wordHighlightBackground": "Nền",
+		"wordHighlightText": "Màu chữ",
+		"wordHighlightColor": "Màu",
 		"colorPalette": "Bảng màu",
 		"colorWheel": "Vòng màu"
 	},
@@ -180,6 +182,17 @@
 		"simple": "Đơn giản",
 		"modern": "Hiện đại",
 		"clean": "Sạch sẽ"
+	},
+	"textAnimation": {
+		"title": "Hoạt ảnh văn bản",
+		"selectAnimation": "Chọn hoạt ảnh",
+		"none": "Không có",
+		"fade": "Mờ dần",
+		"rise": "Đi lên",
+		"pop": "Bật lên",
+		"slideLeft": "Trượt sang trái",
+		"typewriter": "Máy đánh chữ",
+		"pulse": "Nhịp đập"
 	},
 	"customFont": {
 		"dialogTitle": "Thêm Google Font",

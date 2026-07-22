@@ -132,8 +132,6 @@
 		"textPlaceholder": "أدخل النص هنا...",
 		"fontStyle": "نمط الخط",
 		"selectStyle": "حدد النمط",
-		"textAnimation": "تحريك النص",
-		"selectAnimation": "حدد الحركة",
 		"size": "الحجم",
 		"customFonts": "خطوط مخصصة",
 		"textColor": "لون النص",
@@ -169,7 +167,11 @@
 		"imageFormatsOnly": "يرجى رفع ملف صورة JPG أو PNG أو GIF أو WebP.",
 		"imageUploadSuccess": "تم رفع الصورة بنجاح!",
 		"failedImageUpload": "فشل في رفع الصورة",
-		"wordHighlight": "تمييز الكلمة المنطوقة"
+		"wordHighlight": "تمييز الكلمة المنطوقة",
+		"wordHighlightStyle": "النمط",
+		"wordHighlightBackground": "الخلفية",
+		"wordHighlightText": "لون النص",
+		"wordHighlightColor": "اللون"
 	},
 	"fontStyles": {
 		"classic": "كلاسيكي",
@@ -180,6 +182,17 @@
 		"simple": "بسيط",
 		"modern": "حديث",
 		"clean": "نظيف"
+	},
+	"textAnimation": {
+		"title": "تحريك النص",
+		"selectAnimation": "حدد الحركة",
+		"none": "بدون",
+		"fade": "تلاشي",
+		"rise": "ارتفاع",
+		"pop": "انبثاق",
+		"slideLeft": "انزلاق لليسار",
+		"typewriter": "آلة كاتبة",
+		"pulse": "نبض"
 	},
 	"customFont": {
 		"dialogTitle": "إضافة خط Google",
