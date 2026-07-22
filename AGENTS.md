@@ -23,7 +23,7 @@ Run commands from the repository root unless the command says otherwise. Use tar
 - **Main process**: `electron/main.ts`. Window setup lives in `electron/windows.ts`; IPC registration and native export orchestration live in `electron/ipc/handlers.ts`.
 - **Preload bridge**: `electron/preload.ts`, exposed through `contextBridge`. Keep its public API synchronized with `electron/electron-env.d.ts`.
 - **Renderer**: `src/main.tsx` and `src/App.tsx`. The main editor is `src/components/video-editor/VideoEditor.tsx`; preview rendering is centered in `VideoPlayback.tsx` and `videoPlayback/`.
-- **Export pipeline**: `StreamingVideoDecoder` decodes source frames, `FrameRenderer` composites PixiJS and Canvas effects, and Linux MP4 export converts the final canvas to packed I420 before sending it through a dedicated `MessagePort` to FFmpeg using `h264_nvenc`. The normal MP4 export rate is 30 fps.
+- **Export pipeline**: `StreamingVideoDecoder` decodes source frames, `FrameRenderer` composites PixiJS and Canvas effects, and Linux MP4 export converts the final canvas to packed BT.709 I420 with a WebGL2 shader before sending it through a dedicated `MessagePort` to FFmpeg using `h264_nvenc`. The normal MP4 export rate is 30 fps.
 - **GIF pipeline** is separate and has explicit 15/20/25/30 fps settings.
 - **Linux recording** uses Electron/Chromium capture. The native Linux helper records cursor position and click timing; build it with `npm run build:native:linux-cursor`.
 - **Captions** run locally using `@xenova/transformers`, ONNX Runtime Web, workers, and files under `src/lib/captioning/`.
@@ -37,6 +37,8 @@ Run commands from the repository root unless the command says otherwise. Use tar
 - **NVENC means NVENC.** On the required Linux native path, OpenH264 or another software encoder is an error, not an acceptable fallback.
 - **Avoid large payloads through `ipcRenderer.invoke`.** Raw video frames use the dedicated transferable `MessagePort`; ordinary request/response IPC remains appropriate for small control messages.
 - **Do not put frame `ArrayBuffer`s in the `MessagePort` transfer list.** Electron can transfer the port to `MessagePortMain`, but transferring buffer ownership across that boundary stalls the frame message. Send the buffer as structured message data and verify receipt with the frame acknowledgement.
+- **Do not use `VideoFrame.copyTo({ format: "I420" })` for the rendered RGB canvas.** The Electron Chromium build does not support that pixel-format conversion. The required Linux path uses `GpuI420FrameConverter`; conversion failure must stop the export.
+- **Keep the native NVENC export canvas GPU-backed on the primary X11 target.** Enabling `useLinuxCpuReadback` there forces a full GPU-to-CPU readback followed by an immediate CPU-to-GPU upload into the I420 shader.
 - **Preserve renderer/main/preload contracts.** Any bridge change must update the preload implementation, global TypeScript declarations, handler registration, cleanup behavior, and focused tests together.
 - **Treat media paths as untrusted input.** Normalize and validate paths in the main process before filesystem or FFmpeg access. Do not move privileged filesystem or process access into the renderer.
 - **Keep edits scoped.** Preserve unrelated work in a dirty tree and do not rewrite generated files or broad areas merely to support a narrow fix.

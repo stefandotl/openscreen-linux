@@ -12,7 +12,7 @@ import type { CursorRecordingData } from "@/native/contracts";
 import { getPlatform } from "@/utils/platformUtils";
 import { AudioProcessor } from "./audioEncoder";
 import { FrameRenderer } from "./frameRenderer";
-import { copyCanvasToPackedI420, createPackedI420FrameBuffer } from "./i420Frame";
+import { GpuI420FrameConverter } from "./i420Frame";
 import { VideoMuxer } from "./muxer";
 import {
 	closeNativeNvencFramePort,
@@ -342,6 +342,7 @@ export class VideoExporter {
 		let webcamDecodePromise: Promise<void> | null = null;
 		let webcamDecoder: StreamingVideoDecoder | null = null;
 		let nativeSessionId: string | null = null;
+		let i420Converter: GpuI420FrameConverter | null = null;
 		const warnings: string[] = [];
 		const onWarning = (message: string) => warnings.push(message);
 
@@ -404,10 +405,14 @@ export class VideoExporter {
 				cursorTelemetry: this.config.cursorTelemetry,
 				cursorClickTimestamps: this.config.cursorClickTimestamps,
 				platform,
-				useLinuxCpuReadback: true,
+				// The X11 NVENC path keeps the final canvas GPU-backed so the I420 shader
+				// does not immediately upload an explicit CPU readback to the GPU again.
+				useLinuxCpuReadback: false,
 			});
 			this.renderer = renderer;
 			await renderer.initialize();
+			i420Converter = new GpuI420FrameConverter(this.config.width, this.config.height);
+			const i420Frame = i420Converter.frame;
 
 			const startResult = await window.electronAPI.startNativeNvencExport({
 				width: this.config.width,
@@ -440,13 +445,13 @@ export class VideoExporter {
 			);
 			let frameIndex = 0;
 			const perfStats = createNativeNvencPerfStats();
-			const i420Frame = createPackedI420FrameBuffer(this.config.width, this.config.height);
 			console.info("[native-nvenc-perf] Sampling export pipeline", {
 				totalFrames,
 				width: this.config.width,
 				height: this.config.height,
 				frameRate: this.config.frameRate,
 				inputPixelFormat: "yuv420p",
+				frameSource: "gpu-canvas",
 				frameBytes: i420Frame.data.byteLength,
 				hasWebcam: Boolean(this.config.webcamVideoUrl),
 				hasCursorOverlay: (this.config.cursorScale ?? 0) > 0,
@@ -521,13 +526,7 @@ export class VideoExporter {
 
 						const canvas = renderer.getCanvas();
 						const readbackStartMs = performance.now();
-						const outputTimestampUs = frameIndex * (1_000_000 / this.config.frameRate);
-						await copyCanvasToPackedI420(
-							canvas,
-							i420Frame,
-							outputTimestampUs,
-							1_000_000 / this.config.frameRate,
-						);
+						i420Converter!.convert(canvas);
 						readbackMs = performance.now() - readbackStartMs;
 
 						const ffmpegWriteStartMs = performance.now();
@@ -621,6 +620,7 @@ export class VideoExporter {
 			if (webcamDecodePromise) {
 				await webcamDecodePromise.catch(() => undefined);
 			}
+			i420Converter?.destroy();
 			this.cleanup();
 		}
 	}
