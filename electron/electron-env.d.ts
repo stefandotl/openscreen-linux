@@ -191,6 +191,24 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		startNativeNvdecDecode: (payload: {
+			inputPath: string;
+			width: number;
+			height: number;
+			frameRate: number;
+			timelineSegments: Array<{ startSec: number; endSec: number; speed: number }>;
+			totalFrames: number;
+		}) => Promise<{
+			success: boolean;
+			sessionId?: string;
+			message?: string;
+			error?: string;
+		}>;
+		cancelNativeNvdecDecode: (sessionId: string) => Promise<{
+			success: boolean;
+			message?: string;
+			error?: string;
+		}>;
 		startNativeNvencExport: (payload: {
 			width: number;
 			height: number;

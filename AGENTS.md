@@ -23,7 +23,7 @@ Run commands from the repository root unless the command says otherwise. Use tar
 - **Main process**: `electron/main.ts`. Window setup lives in `electron/windows.ts`; IPC registration and native export orchestration live in `electron/ipc/handlers.ts`.
 - **Preload bridge**: `electron/preload.ts`, exposed through `contextBridge`. Keep its public API synchronized with `electron/electron-env.d.ts`.
 - **Renderer**: `src/main.tsx` and `src/App.tsx`. The main editor is `src/components/video-editor/VideoEditor.tsx`; preview rendering is centered in `VideoPlayback.tsx` and `videoPlayback/`.
-- **Export pipeline**: `StreamingVideoDecoder` decodes source frames, `FrameRenderer` composites PixiJS and Canvas effects, and Linux MP4 export converts the final canvas to packed BT.709 I420 with a WebGL2 shader before sending it through a dedicated `MessagePort` to FFmpeg using `h264_nvenc`. The normal MP4 export rate is 30 fps.
+- **Export pipeline**: On the required Linux MP4 path, `StreamingVideoDecoder` reads metadata only. Native FFmpeg decodes source video through CUDA/NVDEC, downloads packed NV12 frames, and sends them to the renderer through a bounded `MessagePort`. `FrameRenderer` composites PixiJS and Canvas effects, then a WebGL2 shader converts the final canvas to packed BT.709 I420 and a second `MessagePort` feeds FFmpeg using `h264_nvenc`. The normal MP4 export rate is 30 fps.
 - **GIF pipeline** is separate and has explicit 15/20/25/30 fps settings.
 - **Linux recording** uses Electron/Chromium capture. The native Linux helper records cursor position and click timing; build it with `npm run build:native:linux-cursor`.
 - **Captions** run locally using `@xenova/transformers`, ONNX Runtime Web, workers, and files under `src/lib/captioning/`.
@@ -34,9 +34,10 @@ Run commands from the repository root unless the command says otherwise. Use tar
 - **Fail fast and loud. No silent fallbacks for core behavior.** Do not add automatic codec downgrades, alternate export pipelines, empty return values, or `catch-and-continue` behavior that hides a required-path failure. When NVENC, the transferable frame port, media validation, or another required capability fails, stop and expose a precise error in logs and UI.
 - **Linux Mint + X11 + NVIDIA RTX 4060 Ti is the primary performance target for current export work.** Make this path correct and fast first. Do not weaken it to preserve speculative or unverified behavior on other platforms unless explicitly requested.
 - **Measure before optimizing.** For export performance, separate decode wait, frame rendering, Canvas readback, renderer-to-main transfer, FFmpeg pipe write, and NVENC utilization. Do not infer the bottleneck from total export time or GPU percentage alone.
-- **NVENC means NVENC.** On the required Linux native path, OpenH264 or another software encoder is an error, not an acceptable fallback.
+- **NVDEC/NVENC mean NVIDIA hardware.** On the required Linux native path, source decode must use FFmpeg CUDA/NVDEC and output encode must use `h264_nvenc`. WebCodecs/OpenH264, VAAPI experiments, or another software codec are errors, not acceptable fallbacks.
 - **Avoid large payloads through `ipcRenderer.invoke`.** Raw video frames use the dedicated transferable `MessagePort`; ordinary request/response IPC remains appropriate for small control messages.
-- **Do not put frame `ArrayBuffer`s in the `MessagePort` transfer list.** Electron can transfer the port to `MessagePortMain`, but transferring buffer ownership across that boundary stalls the frame message. Send the buffer as structured message data and verify receipt with the frame acknowledgement.
+- **Do not put frame `ArrayBuffer`s in either native `MessagePort` transfer list.** Electron can transfer the port to `MessagePortMain`, but transferring buffer ownership across that boundary stalls frame messages. Send buffers as structured message data and verify every decoded NV12 and rendered I420 frame with an acknowledgement.
+- **The native NVDEC input port allows one unacknowledged frame.** Main must wait until the renderer wraps the NV12 payload in a `VideoFrame`; the renderer may then process that frame while Main prepares the next. Preserve this bounded backpressure and strict frame order.
 - **The native frame port uses a bounded two-frame pipeline.** One packed I420 buffer may be acknowledged by Main/FFmpeg while the GPU fills the other. Preserve strict request order, per-frame acknowledgements, bounded backpressure, and the final flush before closing FFmpeg stdin.
 - **Do not use `VideoFrame.copyTo({ format: "I420" })` for the rendered RGB canvas.** The Electron Chromium build does not support that pixel-format conversion. The required Linux path uses `GpuI420FrameConverter`; conversion failure must stop the export.
 - **Keep the native NVENC export canvas GPU-backed on the primary X11 target.** Enabling `useLinuxCpuReadback` there forces a full GPU-to-CPU readback followed by an immediate CPU-to-GPU upload into the I420 shader.
@@ -48,7 +49,7 @@ Run commands from the repository root unless the command says otherwise. Use tar
 ## Export performance workflow
 
 1. Reproduce using `npm run dev` with the same project, output resolution, effects, trim regions, speed regions, and frame rate.
-2. Capture renderer `[native-nvenc-perf]` logs and main-process `[native-nvenc-main-perf]` logs.
+2. Capture renderer `[native-nvenc-perf]` logs and main-process `[native-nvdec-main-perf]` plus `[native-nvenc-main-perf]` logs.
 3. Check GPU engines with `nvidia-smi dmon` or `nvidia-smi pmon`; distinguish SM load, decoder load, and encoder load.
 4. Change only the measured bottleneck, then compare fps and per-stage timings against the same export.
 5. Keep diagnostic output readable as one-line JSON while profiling. Remove noisy instrumentation only after the behavior is stable.

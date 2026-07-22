@@ -17,6 +17,10 @@ import {
 	shell,
 	systemPreferences,
 } from "electron";
+import {
+	EXPORT_TIMELINE_EPSILON_SEC,
+	type ExportTimelineSegment,
+} from "../../src/lib/exporter/exportTimeline";
 import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
 import {
@@ -43,6 +47,11 @@ import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/rec
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
+import {
+	cancelNativeNvdecSession,
+	connectNativeNvdecSessionPort,
+	startNativeNvdecSession,
+} from "./nativeNvdec";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 const PROJECT_FILE_EXTENSION = "openscreen";
@@ -2927,6 +2936,115 @@ export function registerIpcHandlers(
 			}
 		},
 	);
+
+	ipcMain.handle(
+		"start-native-nvdec-decode",
+		async (
+			_,
+			payload: {
+				inputPath: string;
+				width: number;
+				height: number;
+				frameRate: number;
+				timelineSegments: ExportTimelineSegment[];
+				totalFrames: number;
+			},
+		) => {
+			try {
+				const inputPath = resolveApprovedVideoPath(payload.inputPath);
+				if (!inputPath) {
+					return { success: false, message: "Invalid or unapproved NVDEC input path" };
+				}
+				const stats = await fs.stat(inputPath).catch(() => null);
+				if (!stats?.isFile()) {
+					return { success: false, message: "NVDEC input file does not exist" };
+				}
+
+				const width = Number(payload.width);
+				const height = Number(payload.height);
+				const frameRate = Number(payload.frameRate);
+				const totalFrames = Number(payload.totalFrames);
+				const timelineSegments = Array.isArray(payload.timelineSegments)
+					? payload.timelineSegments.map((segment) => ({
+							startSec: Number(segment?.startSec),
+							endSec: Number(segment?.endSec),
+							speed: Number(segment?.speed),
+						}))
+					: [];
+				const timelineIsValid =
+					timelineSegments.length > 0 &&
+					timelineSegments.length <= 1000 &&
+					timelineSegments.every((segment, index) => {
+						const previous = timelineSegments[index - 1];
+						return (
+							Number.isFinite(segment.startSec) &&
+							Number.isFinite(segment.endSec) &&
+							Number.isFinite(segment.speed) &&
+							segment.startSec >= 0 &&
+							segment.endSec > segment.startSec &&
+							segment.endSec <= 86_400 &&
+							segment.speed > 0 &&
+							segment.speed <= 100 &&
+							(!previous || segment.startSec >= previous.endSec - EXPORT_TIMELINE_EPSILON_SEC)
+						);
+					});
+				const expectedTotalFrames = timelineSegments.reduce((sum, segment) => {
+					const durationSec = segment.endSec - segment.startSec - EXPORT_TIMELINE_EPSILON_SEC;
+					return sum + Math.max(0, Math.ceil((durationSec / segment.speed) * frameRate));
+				}, 0);
+				if (
+					!Number.isInteger(width) ||
+					!Number.isInteger(height) ||
+					!Number.isFinite(frameRate) ||
+					width < 2 ||
+					height < 2 ||
+					width % 2 !== 0 ||
+					height % 2 !== 0 ||
+					frameRate <= 0 ||
+					frameRate > 240 ||
+					!Number.isInteger(totalFrames) ||
+					totalFrames < 1 ||
+					totalFrames > 20_736_000 ||
+					!timelineIsValid ||
+					totalFrames !== expectedTotalFrames
+				) {
+					return { success: false, message: "Invalid native NVDEC settings" };
+				}
+
+				const sessionId = startNativeNvdecSession({
+					inputPath,
+					width,
+					height,
+					frameRate,
+					timelineSegments,
+					totalFrames,
+					ffmpegPath: getFfmpegBinary(),
+				});
+				return { success: true, sessionId };
+			} catch (error) {
+				console.error("Failed to start native NVDEC decode:", error);
+				return {
+					success: false,
+					message: "Failed to start required native NVDEC decode",
+					error: String(error),
+				};
+			}
+		},
+	);
+
+	ipcMain.on("connect-native-nvdec-decode-port", (event, sessionId: unknown) => {
+		const port = event.ports[0];
+		if (!port || typeof sessionId !== "string") {
+			port?.close();
+			return;
+		}
+		connectNativeNvdecSessionPort(sessionId, port);
+	});
+
+	ipcMain.handle("cancel-native-nvdec-decode", async (_, sessionId: string) => {
+		if (typeof sessionId === "string") cancelNativeNvdecSession(sessionId);
+		return { success: true };
+	});
 
 	ipcMain.on("connect-native-nvenc-export-port", (event, sessionId: unknown) => {
 		const port = event.ports[0];

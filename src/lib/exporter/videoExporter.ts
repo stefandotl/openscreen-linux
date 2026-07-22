@@ -14,6 +14,7 @@ import { AudioProcessor } from "./audioEncoder";
 import { FrameRenderer } from "./frameRenderer";
 import { createPackedI420FrameBuffer, GpuI420FrameConverter } from "./i420Frame";
 import { VideoMuxer } from "./muxer";
+import { NativeNvdecVideoDecoder } from "./nativeNvdecVideoDecoder";
 import { NativeNvencFramePipeline } from "./nativeNvencFramePipeline";
 import {
 	closeNativeNvencFramePort,
@@ -307,6 +308,8 @@ export class VideoExporter {
 	private muxer: VideoMuxer | null = null;
 	private audioProcessor: AudioProcessor | null = null;
 	private webcamDecoder: StreamingVideoDecoder | null = null;
+	private nativeNvdecDecoder: NativeNvdecVideoDecoder | null = null;
+	private nativeWebcamNvdecDecoder: NativeNvdecVideoDecoder | null = null;
 	private cancelled = false;
 	private encodeQueue = 0;
 	// Keep a smaller queue for software encoding so Windows does not balloon memory.
@@ -367,6 +370,7 @@ export class VideoExporter {
 		if (platform !== "linux") return `platform is ${platform}`;
 		if (!this.config.nativeOutputPath) return "native output path is missing";
 		if (!window.electronAPI?.startNativeNvencExport) return "native NVENC IPC is unavailable";
+		if (!window.electronAPI?.startNativeNvdecDecode) return "native NVDEC IPC is unavailable";
 
 		return null;
 	}
@@ -376,11 +380,9 @@ export class VideoExporter {
 		let stopWebcamDecode = false;
 		let webcamDecodeError: Error | null = null;
 		let webcamDecodePromise: Promise<void> | null = null;
-		let webcamDecoder: StreamingVideoDecoder | null = null;
+		let webcamDecoder: NativeNvdecVideoDecoder | null = null;
 		let nativeSessionId: string | null = null;
 		let i420Converter: GpuI420FrameConverter | null = null;
-		const warnings: string[] = [];
-		const onWarning = (message: string) => warnings.push(message);
 
 		if (!this.config.preferNativeNvenc) return null;
 		const platform = await getPlatform();
@@ -395,15 +397,41 @@ export class VideoExporter {
 		this.cancelled = false;
 
 		try {
-			const streamingDecoder = new StreamingVideoDecoder();
-			this.streamingDecoder = streamingDecoder;
-			const videoInfo = await streamingDecoder.loadMetadata(this.config.videoUrl);
+			const metadataDecoder = new StreamingVideoDecoder();
+			this.streamingDecoder = metadataDecoder;
+			const videoInfo = await metadataDecoder.loadMetadata(this.config.videoUrl);
+			const { totalFrames } = metadataDecoder.getExportMetrics(
+				this.config.frameRate,
+				this.config.trimRegions,
+				this.config.speedRegions,
+			);
 
 			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
 			if (this.config.webcamVideoUrl) {
-				webcamDecoder = new StreamingVideoDecoder();
-				this.webcamDecoder = webcamDecoder;
-				webcamInfo = await webcamDecoder.loadMetadata(this.config.webcamVideoUrl);
+				const webcamMetadataDecoder = new StreamingVideoDecoder();
+				this.webcamDecoder = webcamMetadataDecoder;
+				webcamInfo = await webcamMetadataDecoder.loadMetadata(this.config.webcamVideoUrl);
+				webcamMetadataDecoder.destroy();
+				this.webcamDecoder = null;
+			}
+
+			metadataDecoder.destroy();
+			this.streamingDecoder = null;
+			const nativeDecoder = new NativeNvdecVideoDecoder({
+				inputPath: this.config.videoUrl,
+				width: videoInfo.width,
+				height: videoInfo.height,
+				duration: videoInfo.duration,
+			});
+			this.nativeNvdecDecoder = nativeDecoder;
+			if (this.config.webcamVideoUrl && webcamInfo) {
+				webcamDecoder = new NativeNvdecVideoDecoder({
+					inputPath: this.config.webcamVideoUrl,
+					width: webcamInfo.width,
+					height: webcamInfo.height,
+					duration: webcamInfo.duration,
+				});
+				this.nativeWebcamNvdecDecoder = webcamDecoder;
 			}
 
 			const renderer = new FrameRenderer({
@@ -477,11 +505,6 @@ export class VideoExporter {
 				throw new Error(framePortResult.message || "Required native NVENC frame port failed");
 			}
 
-			const { totalFrames } = streamingDecoder.getExportMetrics(
-				this.config.frameRate,
-				this.config.trimRegions,
-				this.config.speedRegions,
-			);
 			let frameIndex = 0;
 			const perfStats = createNativeNvencPerfStats();
 			const framePipeline = new NativeNvencFramePipeline(
@@ -526,7 +549,6 @@ export class VideoExporter {
 										}
 										queue.enqueue(webcamFrame, webcamSourceTimestampMs);
 									},
-									onWarning,
 								)
 								.catch((error) => {
 									webcamDecodeError = error instanceof Error ? error : new Error(String(error));
@@ -542,7 +564,7 @@ export class VideoExporter {
 						})()
 					: null;
 
-			await streamingDecoder.decodeAll(
+			await nativeDecoder.decodeAll(
 				this.config.frameRate,
 				this.config.trimRegions,
 				this.config.speedRegions,
@@ -604,7 +626,6 @@ export class VideoExporter {
 						webcamFrame?.close();
 					}
 				},
-				onWarning,
 			);
 
 			if (this.cancelled) {
@@ -644,7 +665,6 @@ export class VideoExporter {
 			return {
 				success: true,
 				path: finishResult.path,
-				warnings: warnings.length > 0 ? warnings : undefined,
 			};
 		} catch (error) {
 			const nativeError = `Native NVENC export failed: ${
@@ -1074,6 +1094,8 @@ export class VideoExporter {
 		if (this.webcamDecoder) {
 			this.webcamDecoder.cancel();
 		}
+		this.nativeNvdecDecoder?.cancel();
+		this.nativeWebcamNvdecDecoder?.cancel();
 		if (this.audioProcessor) {
 			this.audioProcessor.cancel();
 		}
@@ -1108,6 +1130,16 @@ export class VideoExporter {
 				console.warn("Error destroying webcam decoder:", e);
 			}
 			this.webcamDecoder = null;
+		}
+
+		if (this.nativeNvdecDecoder) {
+			this.nativeNvdecDecoder.destroy();
+			this.nativeNvdecDecoder = null;
+		}
+
+		if (this.nativeWebcamNvdecDecoder) {
+			this.nativeWebcamNvdecDecoder.destroy();
+			this.nativeWebcamNvdecDecoder = null;
 		}
 
 		if (this.renderer) {

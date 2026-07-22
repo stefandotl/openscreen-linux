@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { NATIVE_NVDEC_FRAME_PORT_MESSAGE } from "../src/lib/exporter/nativeNvdecFramePortProtocol";
 import { NATIVE_NVENC_FRAME_PORT_MESSAGE } from "../src/lib/exporter/nativeNvencFramePortProtocol";
 import type { NativeMacRecordingRequest } from "../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
@@ -149,6 +150,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	writeExportToPath: (videoData: ArrayBuffer, filePath: string) => {
 		return ipcRenderer.invoke("write-export-to-path", videoData, filePath);
+	},
+	startNativeNvdecDecode: async (payload: {
+		inputPath: string;
+		width: number;
+		height: number;
+		frameRate: number;
+		timelineSegments: Array<{ startSec: number; endSec: number; speed: number }>;
+		totalFrames: number;
+	}) => {
+		const result = await ipcRenderer.invoke("start-native-nvdec-decode", payload);
+		if (result.success && result.sessionId) {
+			const channel = new MessageChannel();
+			ipcRenderer.postMessage("connect-native-nvdec-decode-port", result.sessionId, [
+				channel.port1,
+			]);
+			window.postMessage(
+				{ type: NATIVE_NVDEC_FRAME_PORT_MESSAGE, sessionId: result.sessionId },
+				"*",
+				[channel.port2],
+			);
+		}
+		return result;
+	},
+	cancelNativeNvdecDecode: async (sessionId: string) => {
+		return ipcRenderer.invoke("cancel-native-nvdec-decode", sessionId);
 	},
 	startNativeNvencExport: async (payload: {
 		width: number;
