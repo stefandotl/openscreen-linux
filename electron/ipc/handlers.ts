@@ -1481,7 +1481,10 @@ export function registerIpcHandlers(
 	const parakeetModelManager = new ParakeetModelManager(
 		path.join(app.getPath("userData"), "caption-models"),
 	);
-	const parakeetTranscriptionService = new ParakeetTranscriptionService();
+	const parakeetWorkerPath = app.isPackaged
+		? path.join(process.resourcesPath, "parakeetWorker.js")
+		: path.join(path.dirname(fileURLToPath(import.meta.url)), "parakeetWorker.js");
+	const parakeetTranscriptionService = new ParakeetTranscriptionService(parakeetWorkerPath);
 
 	registerNativeGpuExportHandlers({
 		getFfmpegBinary,
@@ -1519,7 +1522,6 @@ export function registerIpcHandlers(
 			return parakeetTranscriptionService.transcribeVideo({
 				ffmpegBinary: getFfmpegBinary(),
 				videoPath,
-				modelDirectory: parakeetModelManager.modelDirectory,
 				modelFiles: parakeetModelManager.getModelFiles(),
 				trimRegions,
 				sourceDurationSec:

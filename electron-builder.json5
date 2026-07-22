@@ -45,6 +45,12 @@
     {
       "from": "caption-assets",
       "to": "caption-assets"
+    },
+    {
+      // Keep the crash-isolated caption worker outside app.asar so Electron can
+      // execute it in Node mode on every packaged platform.
+      "from": "dist-electron/parakeetWorker.js",
+      "to": "parakeetWorker.js"
     }
   ],
 

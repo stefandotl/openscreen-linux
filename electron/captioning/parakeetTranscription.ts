@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { fork, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import { createRequire } from "node:module";
 import os from "node:os";
@@ -11,6 +11,8 @@ import type { ParakeetModelFiles } from "./parakeetModelManager";
 
 const require = createRequire(import.meta.url);
 
+const MAX_WORKER_DIAGNOSTIC_LENGTH = 8_000;
+
 interface SherpaRecognitionResult {
 	text?: string;
 	tokens?: string[];
@@ -18,21 +20,104 @@ interface SherpaRecognitionResult {
 	durations?: number[];
 }
 
-interface SherpaRecognizer {
-	createStream(): {
-		acceptWaveform(input: { sampleRate: number; samples: Float32Array }): void;
-	};
-	decodeAsync(stream: unknown): Promise<SherpaRecognitionResult>;
+interface ParakeetWorkerResponse {
+	ok: boolean;
+	result?: SherpaRecognitionResult;
+	error?: string;
 }
 
-interface SherpaModule {
-	OfflineRecognizer: {
-		createAsync(config: Record<string, unknown>): Promise<SherpaRecognizer>;
-	};
-	readWave(
-		filePath: string,
-		exposeExternalArrayBuffer: boolean,
-	): { sampleRate: number; samples: Float32Array };
+function isParakeetWorkerResponse(message: unknown): message is ParakeetWorkerResponse {
+	if (!message || typeof message !== "object") return false;
+	const candidate = message as Partial<ParakeetWorkerResponse>;
+	return typeof candidate.ok === "boolean";
+}
+
+function appendWorkerDiagnostic(current: string, chunk: unknown): string {
+	const combined = `${current}${String(chunk)}`;
+	return combined.slice(-MAX_WORKER_DIAGNOSTIC_LENGTH);
+}
+
+function workerExitError(
+	code: number | null,
+	signal: NodeJS.Signals | null,
+	stderr: string,
+): Error {
+	const exitReason = signal ? `signal ${signal}` : `exit code ${code ?? "unknown"}`;
+	const diagnostic = stderr.trim();
+	return new Error(
+		`Parakeet transcription process stopped with ${exitReason}${diagnostic ? `: ${diagnostic}` : ""}`,
+	);
+}
+
+async function recognizeInWorker(options: {
+	workerPath: string;
+	wavPath: string;
+	modelFiles: ParakeetModelFiles;
+}): Promise<SherpaRecognitionResult> {
+	return new Promise((resolve, reject) => {
+		const worker = fork(options.workerPath, [], {
+			env: {
+				...process.env,
+				ELECTRON_RUN_AS_NODE: "1",
+			},
+			stdio: ["ignore", "pipe", "pipe", "ipc"],
+		});
+		let settled = false;
+		let stderr = "";
+
+		worker.stdout?.on("data", (chunk) => {
+			stderr = appendWorkerDiagnostic(stderr, chunk);
+		});
+		worker.stderr?.on("data", (chunk) => {
+			stderr = appendWorkerDiagnostic(stderr, chunk);
+		});
+
+		const settle = (callback: () => void) => {
+			if (settled) return;
+			settled = true;
+			callback();
+		};
+
+		worker.once("error", (error) => {
+			settle(() =>
+				reject(new Error(`Failed to start Parakeet transcription process: ${error.message}`)),
+			);
+		});
+		worker.once("exit", (code, signal) => {
+			settle(() => reject(workerExitError(code, signal, stderr)));
+		});
+		worker.on("message", (message) => {
+			if (!isParakeetWorkerResponse(message)) {
+				settle(() =>
+					reject(new Error("Parakeet transcription process returned an invalid response")),
+				);
+				return;
+			}
+			if (!message.ok || !message.result) {
+				settle(() =>
+					reject(
+						new Error(message.error || "Parakeet transcription process failed without details"),
+					),
+				);
+				return;
+			}
+			settle(() => resolve(message.result as SherpaRecognitionResult));
+		});
+
+		worker.send(
+			{
+				sherpaModulePath: require.resolve("sherpa-onnx-node"),
+				wavPath: options.wavPath,
+				modelFiles: options.modelFiles,
+				numThreads: Math.max(1, Math.min(4, Number(process.env.OPENSCREEN_CAPTION_THREADS) || 2)),
+			},
+			(error) => {
+				if (error) {
+					settle(() => reject(new Error(`Failed to send audio to Parakeet: ${error.message}`)));
+				}
+			},
+		);
+	});
 }
 
 function normalizeTimestamp(value: number): number {
@@ -157,13 +242,11 @@ function extractCaptionAudio(
 }
 
 export class ParakeetTranscriptionService {
-	private recognizer: SherpaRecognizer | null = null;
-	private loadedModelDirectory = "";
+	constructor(private readonly workerPath: string) {}
 
 	async transcribeVideo(options: {
 		ffmpegBinary: string;
 		videoPath: string;
-		modelDirectory: string;
 		modelFiles: ParakeetModelFiles;
 		trimRegions: TrimRegion[];
 		sourceDurationSec?: number;
@@ -172,21 +255,11 @@ export class ParakeetTranscriptionService {
 		const wavPath = path.join(tempDirectory, "caption-audio.wav");
 		try {
 			await extractCaptionAudio(options.ffmpegBinary, options.videoPath, wavPath);
-			const sherpa = require("sherpa-onnx-node") as SherpaModule;
-			const activeRecognizer = await this.loadRecognizer(
-				sherpa,
-				options.modelDirectory,
-				options.modelFiles,
-			);
-			// Electron disables V8 external ArrayBuffers. `false` makes sherpa copy samples into a
-			// regular Float32Array before the native recognizer consumes them.
-			const wave = sherpa.readWave(wavPath, false);
-			if (wave.sampleRate !== 16_000 || wave.samples.length < 800) {
-				throw new Error("This video has no usable audio track for captions");
-			}
-			const stream = activeRecognizer.createStream();
-			stream.acceptWaveform({ sampleRate: wave.sampleRate, samples: wave.samples });
-			const result = await activeRecognizer.decodeAsync(stream);
+			const result = await recognizeInWorker({
+				workerPath: this.workerPath,
+				wavPath,
+				modelFiles: options.modelFiles,
+			});
 			const segments = parakeetResultToWordSegments(result).filter(
 				(segment) => !overlapsTrimRegion(segment, options.trimRegions),
 			);
@@ -200,31 +273,5 @@ export class ParakeetTranscriptionService {
 		} finally {
 			await fs.rm(tempDirectory, { recursive: true, force: true });
 		}
-	}
-
-	private async loadRecognizer(
-		sherpa: SherpaModule,
-		modelDirectory: string,
-		files: ParakeetModelFiles,
-	): Promise<SherpaRecognizer> {
-		if (this.recognizer && this.loadedModelDirectory === modelDirectory) return this.recognizer;
-
-		this.recognizer = await sherpa.OfflineRecognizer.createAsync({
-			featConfig: { sampleRate: 16_000, featureDim: 80 },
-			modelConfig: {
-				transducer: {
-					encoder: files.encoder,
-					decoder: files.decoder,
-					joiner: files.joiner,
-				},
-				tokens: files.tokens,
-				numThreads: Math.max(1, Math.min(4, Number(process.env.OPENSCREEN_CAPTION_THREADS) || 2)),
-				provider: "cpu",
-				modelType: "nemo_transducer",
-				debug: 0,
-			},
-		});
-		this.loadedModelDirectory = modelDirectory;
-		return this.recognizer;
 	}
 }
