@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { AnnotationRegion } from "@/components/video-editor/types";
 import { createNativeGpuExportAssets } from "./nativeGpuExportPlan";
 import type { VideoExporterConfig } from "./videoExporter";
 
@@ -24,6 +25,37 @@ function createConfig(showBlur: boolean): VideoExporterConfig {
 	};
 }
 
+function caption(id: string, startMs: number, endMs: number, zIndex: number): AnnotationRegion {
+	return {
+		id,
+		startMs,
+		endMs,
+		type: "text",
+		content: id,
+		position: { x: 10, y: 60 },
+		size: { width: 80, height: 20 },
+		style: {
+			color: "#ffffff",
+			backgroundColor: "#000000",
+			fontSize: 24,
+			fontFamily: "sans-serif",
+			fontWeight: "bold",
+			fontStyle: "normal",
+			textDecoration: "none",
+			textAlign: "center",
+			textAnimation: "none",
+		},
+		zIndex,
+	};
+}
+
+async function pngSize(png: ArrayBuffer) {
+	const bitmap = await createImageBitmap(new Blob([png], { type: "image/png" }));
+	const size = { width: bitmap.width, height: bitmap.height };
+	bitmap.close();
+	return size;
+}
+
 describe("native GPU export assets", () => {
 	it("bakes background blur into the static wallpaper asset", async () => {
 		const sharp = await createNativeGpuExportAssets(createConfig(false));
@@ -32,5 +64,24 @@ describe("native GPU export assets", () => {
 		expect(sharp.wallpaperPng.byteLength).toBeGreaterThan(100);
 		expect(blurred.wallpaperPng.byteLength).toBeGreaterThan(100);
 		expect(new Uint8Array(blurred.wallpaperPng)).not.toEqual(new Uint8Array(sharp.wallpaperPng));
+	});
+
+	it("creates one cropped PNG per annotation in z-order", async () => {
+		const assets = await createNativeGpuExportAssets({
+			...createConfig(false),
+			annotationRegions: [
+				caption("top", 200, 700, 20),
+				caption("bottom", 0, 500, 2),
+				caption("middle", 500, 900, 10),
+			],
+		});
+
+		expect(assets.overlayPngs).toHaveLength(3);
+		expect(assets.overlayPngs.every((png) => png.byteLength > 100)).toBe(true);
+		expect(await Promise.all(assets.overlayPngs.map(pngSize))).toEqual([
+			{ width: 256, height: 36 },
+			{ width: 256, height: 36 },
+			{ width: 256, height: 36 },
+		]);
 	});
 });

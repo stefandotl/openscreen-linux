@@ -12,6 +12,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <cuda.h>
@@ -163,15 +164,23 @@ struct PlannedFrame {
 	float motionBlurY;
 };
 
+struct PlannedOverlay {
+	std::string rgbaPath;
+	double startMs = -1.0;
+	double endMs = -1.0;
+	int x = 0;
+	int y = 0;
+	int width = 0;
+	int height = 0;
+	int zIndex = 0;
+};
+
 struct ExportPlan {
 	int version = 0;
 	int width = 0;
 	int height = 0;
 	std::string inputPath;
 	std::string wallpaperNv12Path;
-	std::string overlayRgbaPath;
-	double overlayStartMs = -1.0;
-	double overlayEndMs = -1.0;
 	float screenX = 0.0f;
 	float screenY = 0.0f;
 	float screenWidth = 0.0f;
@@ -180,11 +189,22 @@ struct ExportPlan {
 	int sourceHeight = 0;
 	int64_t bitrate = 0;
 	std::vector<PlannedFrame> frames;
+	std::vector<PlannedOverlay> overlays;
+};
+
+struct GpuOverlay {
+	uint8_t *pixels = nullptr;
+	double startMs = -1.0;
+	double endMs = -1.0;
+	int x = 0;
+	int y = 0;
+	int width = 0;
+	int height = 0;
 };
 
 struct GpuAssets {
 	uint8_t *wallpaper = nullptr;
-	uint8_t *overlay = nullptr;
+	std::vector<GpuOverlay> overlays;
 };
 
 SceneTransform plannedSceneTransform(const ExportPlan &plan, const PlannedFrame &frame) {
@@ -237,8 +257,7 @@ __global__ void compositeLuma(
 	SceneTransform transform,
 	float motionBlurX,
 	float motionBlurY,
-	const uint8_t *wallpaperY,
-	const uint8_t *overlayRgba) {
+	const uint8_t *wallpaperY) {
 	const int x = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
 	const int y = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
 	if (x >= outputWidth || y >= outputHeight) return;
@@ -276,15 +295,6 @@ __global__ void compositeLuma(
 	}
 	value /= static_cast<float>(tapCount);
 
-	if (overlayRgba) {
-		const int overlayOffset = (y * outputWidth + x) * 4;
-		const float red = static_cast<float>(overlayRgba[overlayOffset]);
-		const float green = static_cast<float>(overlayRgba[overlayOffset + 1]);
-		const float blue = static_cast<float>(overlayRgba[overlayOffset + 2]);
-		const float alpha = static_cast<float>(overlayRgba[overlayOffset + 3]) / 255.0f;
-		const float overlayY = 16.0f + 0.182586f * red + 0.614231f * green + 0.062007f * blue;
-		value = value * (1.0f - alpha) + overlayY * alpha;
-	}
 	outputY[y * outputPitch + x] = static_cast<uint8_t>(clampFloat(value, 16.0f, 235.0f));
 }
 
@@ -300,8 +310,7 @@ __global__ void compositeChroma(
 	SceneTransform transform,
 	float motionBlurX,
 	float motionBlurY,
-	const uint8_t *wallpaperUv,
-	const uint8_t *overlayRgba) {
+	const uint8_t *wallpaperUv) {
 	const int x = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
 	const int y = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
 	const int outputChromaWidth = outputWidth / 2;
@@ -357,35 +366,87 @@ __global__ void compositeChroma(
 	u /= static_cast<float>(tapCount);
 	v /= static_cast<float>(tapCount);
 
-	if (overlayRgba) {
-		float alpha = 0.0f;
-		float red = 0.0f;
-		float green = 0.0f;
-		float blue = 0.0f;
-		for (int dy = 0; dy < 2; dy++) {
-			for (int dx = 0; dx < 2; dx++) {
-				const int overlayOffset = ((y * 2 + dy) * outputWidth + x * 2 + dx) * 4;
-				const float pixelAlpha = static_cast<float>(overlayRgba[overlayOffset + 3]) / 255.0f;
-				alpha += pixelAlpha;
-				red += static_cast<float>(overlayRgba[overlayOffset]) * pixelAlpha;
-				green += static_cast<float>(overlayRgba[overlayOffset + 1]) * pixelAlpha;
-				blue += static_cast<float>(overlayRgba[overlayOffset + 2]) * pixelAlpha;
-			}
-		}
-		if (alpha > 0.0f) {
-			red /= alpha;
-			green /= alpha;
-			blue /= alpha;
-			const float blend = alpha * 0.25f;
-			const float overlayU = 128.0f - 0.100644f * red - 0.338572f * green + 0.439216f * blue;
-			const float overlayV = 128.0f + 0.439216f * red - 0.398942f * green - 0.040274f * blue;
-			u = u * (1.0f - blend) + overlayU * blend;
-			v = v * (1.0f - blend) + overlayV * blend;
-		}
-	}
 	outputUv[y * outputPitch + x * 2] = static_cast<uint8_t>(clampFloat(u, 16.0f, 240.0f));
 	outputUv[y * outputPitch + x * 2 + 1] =
 		static_cast<uint8_t>(clampFloat(v, 16.0f, 240.0f));
+}
+
+__global__ void compositeOverlayLuma(
+	uint8_t *outputY,
+	int outputPitch,
+	const uint8_t *overlayRgba,
+	int overlayX,
+	int overlayY,
+	int overlayWidth,
+	int overlayHeight) {
+	const int x = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int y = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (x >= overlayWidth || y >= overlayHeight) return;
+
+	const int overlayOffset = (y * overlayWidth + x) * 4;
+	const float red = static_cast<float>(overlayRgba[overlayOffset]);
+	const float green = static_cast<float>(overlayRgba[overlayOffset + 1]);
+	const float blue = static_cast<float>(overlayRgba[overlayOffset + 2]);
+	const float alpha = static_cast<float>(overlayRgba[overlayOffset + 3]) / 255.0f;
+	if (alpha <= 0.0f) return;
+	const int outputOffset = (overlayY + y) * outputPitch + overlayX + x;
+	const float value = static_cast<float>(outputY[outputOffset]);
+	const float overlayValue = 16.0f + 0.182586f * red + 0.614231f * green + 0.062007f * blue;
+	outputY[outputOffset] = static_cast<uint8_t>(
+		clampFloat(value * (1.0f - alpha) + overlayValue * alpha, 16.0f, 235.0f));
+}
+
+__global__ void compositeOverlayChroma(
+	uint8_t *outputUv,
+	int outputPitch,
+	const uint8_t *overlayRgba,
+	int overlayX,
+	int overlayY,
+	int overlayWidth,
+	int overlayHeight,
+	int chromaStartX,
+	int chromaStartY,
+	int chromaWidth,
+	int chromaHeight) {
+	const int localChromaX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localChromaY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (localChromaX >= chromaWidth || localChromaY >= chromaHeight) return;
+	const int chromaX = chromaStartX + localChromaX;
+	const int chromaY = chromaStartY + localChromaY;
+
+	float alpha = 0.0f;
+	float red = 0.0f;
+	float green = 0.0f;
+	float blue = 0.0f;
+	for (int dy = 0; dy < 2; dy++) {
+		for (int dx = 0; dx < 2; dx++) {
+			const int outputX = chromaX * 2 + dx;
+			const int outputY = chromaY * 2 + dy;
+			const int localX = outputX - overlayX;
+			const int localY = outputY - overlayY;
+			if (localX < 0 || localY < 0 || localX >= overlayWidth || localY >= overlayHeight) continue;
+			const int overlayOffset = (localY * overlayWidth + localX) * 4;
+			const float pixelAlpha = static_cast<float>(overlayRgba[overlayOffset + 3]) / 255.0f;
+			alpha += pixelAlpha;
+			red += static_cast<float>(overlayRgba[overlayOffset]) * pixelAlpha;
+			green += static_cast<float>(overlayRgba[overlayOffset + 1]) * pixelAlpha;
+			blue += static_cast<float>(overlayRgba[overlayOffset + 2]) * pixelAlpha;
+		}
+	}
+	if (alpha <= 0.0f) return;
+	red /= alpha;
+	green /= alpha;
+	blue /= alpha;
+	const float blend = alpha * 0.25f;
+	const int outputOffset = chromaY * outputPitch + chromaX * 2;
+	const float currentU = static_cast<float>(outputUv[outputOffset]);
+	const float currentV = static_cast<float>(outputUv[outputOffset + 1]);
+	const float overlayU = 128.0f - 0.100644f * red - 0.338572f * green + 0.439216f * blue;
+	const float overlayV = 128.0f + 0.439216f * red - 0.398942f * green - 0.040274f * blue;
+	outputUv[outputOffset] = static_cast<uint8_t>(
+		clampFloat(currentU * (1.0f - blend) + overlayU * blend, 16.0f, 240.0f));
+	outputUv[outputOffset + 1] = static_cast<uint8_t>(
+		clampFloat(currentV * (1.0f - blend) + overlayV * blend, 16.0f, 240.0f));
 }
 
 struct ExportState {
@@ -536,7 +597,7 @@ double compositeFrame(
 	float motionBlurX,
 	float motionBlurY,
 	const GpuAssets &assets,
-	bool overlayActive) {
+	double sourceTimestampMs) {
 	verifyDecodedFrame(source);
 	if (output->format != AV_PIX_FMT_CUDA || !output->data[0] || !output->data[1]) {
 		fail("NVENC output frame is not a valid CUDA frame");
@@ -567,8 +628,7 @@ double compositeFrame(
 		transform,
 		motionBlurX,
 		motionBlurY,
-		assets.wallpaper,
-		overlayActive ? assets.overlay : nullptr);
+		assets.wallpaper);
 	requireRuntime(cudaGetLastError(), "compositeLuma launch");
 
 	const dim3 chromaGrid(
@@ -586,9 +646,47 @@ double compositeFrame(
 		transform,
 		motionBlurX,
 		motionBlurY,
-		assets.wallpaper + static_cast<std::size_t>(outputWidth) * outputHeight,
-		overlayActive ? assets.overlay : nullptr);
+		assets.wallpaper + static_cast<std::size_t>(outputWidth) * outputHeight);
 	requireRuntime(cudaGetLastError(), "compositeChroma launch");
+
+	for (const auto &overlay : assets.overlays) {
+		if (sourceTimestampMs < overlay.startMs || sourceTimestampMs >= overlay.endMs) continue;
+		const dim3 overlayLumaGrid(
+			(overlay.width + block.x - 1) / block.x,
+			(overlay.height + block.y - 1) / block.y);
+		compositeOverlayLuma<<<overlayLumaGrid, block, 0, stream>>>(
+			output->data[0],
+			output->linesize[0],
+			overlay.pixels,
+			overlay.x,
+			overlay.y,
+			overlay.width,
+			overlay.height);
+		requireRuntime(cudaGetLastError(), "compositeOverlayLuma launch");
+
+		const int chromaStartX = overlay.x / 2;
+		const int chromaStartY = overlay.y / 2;
+		const int chromaEndX = (overlay.x + overlay.width + 1) / 2;
+		const int chromaEndY = (overlay.y + overlay.height + 1) / 2;
+		const int chromaWidth = chromaEndX - chromaStartX;
+		const int chromaHeight = chromaEndY - chromaStartY;
+		const dim3 overlayChromaGrid(
+			(chromaWidth + block.x - 1) / block.x,
+			(chromaHeight + block.y - 1) / block.y);
+		compositeOverlayChroma<<<overlayChromaGrid, block, 0, stream>>>(
+			output->data[1],
+			output->linesize[1],
+			overlay.pixels,
+			overlay.x,
+			overlay.y,
+			overlay.width,
+			overlay.height,
+			chromaStartX,
+			chromaStartY,
+			chromaWidth,
+			chromaHeight);
+		requireRuntime(cudaGetLastError(), "compositeOverlayChroma launch");
+	}
 	requireRuntime(cudaStreamSynchronize(stream), "compositor stream synchronization");
 
 	const auto finishedAt = std::chrono::steady_clock::now();
@@ -623,14 +721,11 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 2) fail("Unsupported native GPU export plan version");
+	if (plan.version != 3) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
 	plan.wallpaperNv12Path = document.at("wallpaperNv12Path").get<std::string>();
-	plan.overlayRgbaPath = document.value("overlayRgbaPath", "");
-	plan.overlayStartMs = document.value("overlayStartMs", -1.0);
-	plan.overlayEndMs = document.value("overlayEndMs", -1.0);
 	const auto &screenRect = document.at("screenRect");
 	plan.screenX = screenRect.at("x").get<float>();
 	plan.screenY = screenRect.at("y").get<float>();
@@ -674,6 +769,31 @@ ExportPlan loadPlan(const std::string &planPath) {
 			motionBlurY,
 		});
 	}
+	for (const auto &item : document.at("overlays")) {
+		PlannedOverlay overlay;
+		overlay.rgbaPath = item.at("rgbaPath").get<std::string>();
+		overlay.startMs = item.at("startMs").get<double>();
+		overlay.endMs = item.at("endMs").get<double>();
+		overlay.x = item.at("x").get<int>();
+		overlay.y = item.at("y").get<int>();
+		overlay.width = item.at("width").get<int>();
+		overlay.height = item.at("height").get<int>();
+		overlay.zIndex = item.at("zIndex").get<int>();
+		if (overlay.rgbaPath.empty() || !std::isfinite(overlay.startMs) ||
+			!std::isfinite(overlay.endMs) || overlay.startMs < 0.0 ||
+			overlay.endMs <= overlay.startMs || overlay.x < 0 || overlay.y < 0 ||
+			overlay.width < 1 || overlay.height < 1 || overlay.x + overlay.width > plan.width ||
+			overlay.y + overlay.height > plan.height) {
+			fail("Native GPU export overlay is invalid");
+		}
+		plan.overlays.push_back(std::move(overlay));
+	}
+	if (!std::is_sorted(
+			plan.overlays.begin(),
+			plan.overlays.end(),
+			[](const PlannedOverlay &a, const PlannedOverlay &b) { return a.zIndex < b.zIndex; })) {
+		fail("Native GPU export overlays are not ordered by z-index");
+	}
 	if (plan.wallpaperNv12Path.empty()) fail("Native GPU export wallpaper path is missing");
 	if (plan.frames.empty()) fail("Native GPU export plan contains no frames");
 	for (std::size_t index = 1; index < plan.frames.size(); index++) {
@@ -713,13 +833,22 @@ GpuAssets uploadGpuAssets(ExportState &state, const ExportPlan &plan) {
 	requireRuntime(
 		cudaMemcpy(assets.wallpaper, wallpaper.data(), wallpaperBytes, cudaMemcpyHostToDevice),
 		"upload wallpaper");
-	if (!plan.overlayRgbaPath.empty()) {
-		const std::size_t bytes = outputPixels * 4;
-		const auto data = readExactFile(plan.overlayRgbaPath, bytes);
-		requireRuntime(cudaMalloc(&assets.overlay, bytes), "cudaMalloc overlay");
+	assets.overlays.reserve(plan.overlays.size());
+	for (const auto &overlay : plan.overlays) {
+		const std::size_t bytes = static_cast<std::size_t>(overlay.width) * overlay.height * 4;
+		const auto data = readExactFile(overlay.rgbaPath, bytes);
+		GpuOverlay gpuOverlay;
+		gpuOverlay.startMs = overlay.startMs;
+		gpuOverlay.endMs = overlay.endMs;
+		gpuOverlay.x = overlay.x;
+		gpuOverlay.y = overlay.y;
+		gpuOverlay.width = overlay.width;
+		gpuOverlay.height = overlay.height;
+		requireRuntime(cudaMalloc(&gpuOverlay.pixels, bytes), "cudaMalloc overlay");
 		requireRuntime(
-			cudaMemcpy(assets.overlay, data.data(), bytes, cudaMemcpyHostToDevice),
+			cudaMemcpy(gpuOverlay.pixels, data.data(), bytes, cudaMemcpyHostToDevice),
 			"upload overlay");
+		assets.overlays.push_back(gpuOverlay);
 	}
 	CUcontext poppedContext = nullptr;
 	requireCuda(cuCtxPopCurrent(&poppedContext), "cuCtxPopCurrent after asset upload");
@@ -727,14 +856,17 @@ GpuAssets uploadGpuAssets(ExportState &state, const ExportPlan &plan) {
 }
 
 void releaseGpuAssets(ExportState &state, GpuAssets *assets) {
-	if (!assets->wallpaper && !assets->overlay) return;
+	if (!assets->wallpaper && assets->overlays.empty()) return;
 	auto *deviceContext = reinterpret_cast<AVHWDeviceContext *>(state.deviceRef->data);
 	auto *cudaContext = reinterpret_cast<AVCUDADeviceContext *>(deviceContext->hwctx);
 	requireCuda(cuCtxPushCurrent(cudaContext->cuda_ctx), "cuCtxPushCurrent for asset release");
 	if (assets->wallpaper) requireRuntime(cudaFree(assets->wallpaper), "cudaFree wallpaper");
-	if (assets->overlay) requireRuntime(cudaFree(assets->overlay), "cudaFree overlay");
+	for (auto &overlay : assets->overlays) {
+		if (overlay.pixels) requireRuntime(cudaFree(overlay.pixels), "cudaFree overlay");
+		overlay.pixels = nullptr;
+	}
 	assets->wallpaper = nullptr;
-	assets->overlay = nullptr;
+	assets->overlays.clear();
 	CUcontext poppedContext = nullptr;
 	requireCuda(cuCtxPopCurrent(&poppedContext), "cuCtxPopCurrent after asset release");
 }
@@ -766,9 +898,6 @@ void renderOutputFrame(
 
 	const PlannedFrame &plannedFrame = plan.frames.at(*frameCount);
 	const SceneTransform transform = plannedSceneTransform(plan, plannedFrame);
-	const bool overlayActive =
-		assets.overlay && plannedFrame.sourceTimestampMs >= plan.overlayStartMs &&
-		plannedFrame.sourceTimestampMs < plan.overlayEndMs;
 	*compositorMs += compositeFrame(
 		state,
 		sourceFrame,
@@ -777,7 +906,7 @@ void renderOutputFrame(
 		plannedFrame.motionBlurX,
 		plannedFrame.motionBlurY,
 		assets,
-		overlayActive);
+		plannedFrame.sourceTimestampMs);
 	encodeFrame(state, outputFrame.get(), encodedPacket);
 	(*frameCount)++;
 	if (*frameCount % 120 == 0 || *frameCount == state.totalFrames) {

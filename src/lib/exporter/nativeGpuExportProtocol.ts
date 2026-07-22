@@ -1,6 +1,6 @@
 import type { SpeedRegion, TrimRegion } from "@/components/video-editor/types";
 
-export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 2 as const;
+export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 3 as const;
 
 export const NATIVE_GPU_EXPORT_CHANNELS = {
 	start: "start-native-gpu-export",
@@ -18,6 +18,16 @@ export interface NativeGpuExportFrame {
 	motionBlurY: number;
 }
 
+export interface NativeGpuExportOverlay {
+	startMs: number;
+	endMs: number;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	zIndex: number;
+}
+
 export interface NativeGpuExportPlan {
 	version: typeof NATIVE_GPU_EXPORT_PROTOCOL_VERSION;
 	inputPath: string;
@@ -30,7 +40,7 @@ export interface NativeGpuExportPlan {
 	screenRect: { x: number; y: number; width: number; height: number };
 	cropRegion: { x: number; y: number; width: number; height: number };
 	frames: NativeGpuExportFrame[];
-	overlay?: { startMs: number; endMs: number };
+	overlays: NativeGpuExportOverlay[];
 }
 
 export interface NativeGpuExportRequest {
@@ -41,7 +51,7 @@ export interface NativeGpuExportRequest {
 	trimRegions?: TrimRegion[];
 	speedRegions?: SpeedRegion[];
 	wallpaperPng: ArrayBuffer;
-	overlayPng?: ArrayBuffer;
+	overlayPngs: ArrayBuffer[];
 }
 
 export interface NativeGpuExportProgress {

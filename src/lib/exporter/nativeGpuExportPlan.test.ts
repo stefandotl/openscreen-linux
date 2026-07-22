@@ -27,7 +27,7 @@ function createConfig(overrides: Partial<VideoExporterConfig> = {}): VideoExport
 	};
 }
 
-function staticTextAnnotation(): AnnotationRegion {
+function staticTextAnnotation(overrides: Partial<AnnotationRegion> = {}): AnnotationRegion {
 	return {
 		id: "text",
 		startMs: 100,
@@ -48,6 +48,7 @@ function staticTextAnnotation(): AnnotationRegion {
 			textAnimation: "none",
 		},
 		zIndex: 1,
+		...overrides,
 	};
 }
 
@@ -75,10 +76,37 @@ describe("native GPU export plan", () => {
 		expect(first.frames).toEqual(second.frames);
 		expect(first.screenRect.width).toBeGreaterThan(1000);
 		expect(first.screenRect.height).toBeGreaterThan(560);
-		expect(first.overlay).toEqual({ startMs: 100, endMs: 800 });
+		expect(first.overlays).toEqual([
+			{
+				startMs: 100,
+				endMs: 800,
+				x: 216,
+				y: 768,
+				width: 540,
+				height: 192,
+				zIndex: 1,
+			},
+		]);
 		expect(first.frames.every((frame) => frame.motionBlurX === 0 && frame.motionBlurY === 0)).toBe(
 			true,
 		);
+	});
+
+	it("accepts and orders sequential and overlapping annotations", () => {
+		const annotations = [
+			staticTextAnnotation({ id: "caption-1", startMs: 0, endMs: 300, zIndex: 5 }),
+			staticTextAnnotation({ id: "caption-2", startMs: 300, endMs: 600, zIndex: 5 }),
+			staticTextAnnotation({ id: "caption-3", startMs: 600, endMs: 900, zIndex: 5 }),
+			staticTextAnnotation({ id: "overlap-top", startMs: 350, endMs: 550, zIndex: 20 }),
+			staticTextAnnotation({ id: "overlap-bottom", startMs: 350, endMs: 550, zIndex: 2 }),
+		];
+		const config = createConfig({ annotationRegions: annotations });
+
+		expect(getNativeGpuExportBlockers(config, videoInfo)).toEqual([]);
+		const plan = createNativeGpuExportPlan(config, videoInfo);
+		expect(plan.overlays).toHaveLength(5);
+		expect(plan.overlays.map((overlay) => overlay.zIndex)).toEqual([2, 5, 5, 5, 20]);
+		expect(plan.overlays.every((overlay) => overlay.width > 0 && overlay.height > 0)).toBe(true);
 	});
 
 	it("plans directional motion blur only while the camera is moving", () => {

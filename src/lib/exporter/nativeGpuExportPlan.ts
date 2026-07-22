@@ -65,6 +65,32 @@ function activeAnnotations(config: VideoExporterConfig) {
 	);
 }
 
+function sortedActiveAnnotations(config: VideoExporterConfig) {
+	return activeAnnotations(config).sort((a, b) => a.zIndex - b.zIndex);
+}
+
+function annotationPixelBounds(
+	annotation: ReturnType<typeof activeAnnotations>[number],
+	config: VideoExporterConfig,
+) {
+	const left = Math.max(0, Math.floor((annotation.position.x / 100) * config.width));
+	const top = Math.max(0, Math.floor((annotation.position.y / 100) * config.height));
+	const right = Math.min(
+		config.width,
+		Math.ceil(((annotation.position.x + annotation.size.width) / 100) * config.width),
+	);
+	const bottom = Math.min(
+		config.height,
+		Math.ceil(((annotation.position.y + annotation.size.height) / 100) * config.height),
+	);
+	return {
+		x: left,
+		y: top,
+		width: Math.max(0, right - left),
+		height: Math.max(0, bottom - top),
+	};
+}
+
 export function getNativeGpuExportBlockers(
 	config: VideoExporterConfig,
 	videoInfo: NativeGpuExportVideoInfo,
@@ -132,12 +158,15 @@ export function getNativeGpuExportBlockers(
 	}
 
 	const annotations = activeAnnotations(config);
-	if (annotations.length > 1) blockers.push("more than one annotation is not implemented");
 	for (const annotation of annotations) {
 		if (annotation.type !== "text")
 			blockers.push(`annotation type ${annotation.type} is not implemented`);
 		if (annotation.style.textAnimation && annotation.style.textAnimation !== "none") {
 			blockers.push(`text animation ${annotation.style.textAnimation} is not implemented`);
+		}
+		const bounds = annotationPixelBounds(annotation, config);
+		if (bounds.width < 1 || bounds.height < 1) {
+			blockers.push(`annotation ${annotation.id} has no visible export area`);
 		}
 	}
 	return blockers;
@@ -324,7 +353,12 @@ export function createNativeGpuExportPlan(
 	if (sourceTimestampsMs.length === 0) {
 		throw new Error("Native GPU export timeline contains no frames");
 	}
-	const annotation = activeAnnotations(config)[0];
+	const overlays = sortedActiveAnnotations(config).map((annotation) => ({
+		startMs: annotation.startMs,
+		endMs: annotation.endMs,
+		...annotationPixelBounds(annotation, config),
+		zIndex: annotation.zIndex,
+	}));
 	return {
 		version: NATIVE_GPU_EXPORT_PROTOCOL_VERSION,
 		inputPath: config.videoUrl,
@@ -337,7 +371,7 @@ export function createNativeGpuExportPlan(
 		screenRect: layout.screenRect,
 		cropRegion: config.cropRegion,
 		frames: createFrameTransforms(config, layout.screenRect, sourceTimestampsMs),
-		...(annotation ? { overlay: { startMs: annotation.startMs, endMs: annotation.endMs } } : {}),
+		overlays,
 	};
 }
 
@@ -355,7 +389,7 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<ArrayBuffer> {
 
 export async function createNativeGpuExportAssets(config: VideoExporterConfig): Promise<{
 	wallpaperPng: ArrayBuffer;
-	overlayPng?: ArrayBuffer;
+	overlayPngs: ArrayBuffer[];
 }> {
 	const rawWallpaperCanvas = await renderWallpaperCanvas(
 		config.wallpaper,
@@ -366,31 +400,38 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 		? blurWallpaperCanvas(rawWallpaperCanvas)
 		: rawWallpaperCanvas;
 	const wallpaperPng = await canvasToPng(wallpaperCanvas);
-	const annotation = activeAnnotations(config)[0];
-	if (!annotation) return { wallpaperPng };
-
-	const overlayCanvas = document.createElement("canvas");
-	overlayCanvas.width = config.width;
-	overlayCanvas.height = config.height;
-	const context = overlayCanvas.getContext("2d");
-	if (!context) throw new Error("Failed to get 2D context for native GPU overlay");
+	const annotations = sortedActiveAnnotations(config);
 	const previewWidth = config.previewWidth ?? config.width;
 	const previewHeight = config.previewHeight ?? config.height;
 	const scaleFactor = (config.width / previewWidth + config.height / previewHeight) / 2;
-	if (document.fonts) {
-		const fontStyle = annotation.style.fontStyle === "italic" ? "italic" : "normal";
-		const fontWeight = annotation.style.fontWeight === "bold" ? "bold" : "normal";
-		await document.fonts.load(
-			`${fontStyle} ${fontWeight} ${annotation.style.fontSize * scaleFactor}px ${annotation.style.fontFamily}`,
+	const overlayPngs: ArrayBuffer[] = [];
+	for (const annotation of annotations) {
+		const bounds = annotationPixelBounds(annotation, config);
+		if (bounds.width < 1 || bounds.height < 1) {
+			throw new Error(`Annotation ${annotation.id} has no visible export area`);
+		}
+		if (document.fonts) {
+			const fontStyle = annotation.style.fontStyle === "italic" ? "italic" : "normal";
+			const fontWeight = annotation.style.fontWeight === "bold" ? "bold" : "normal";
+			await document.fonts.load(
+				`${fontStyle} ${fontWeight} ${annotation.style.fontSize * scaleFactor}px ${annotation.style.fontFamily}`,
+			);
+		}
+		const overlayCanvas = document.createElement("canvas");
+		overlayCanvas.width = bounds.width;
+		overlayCanvas.height = bounds.height;
+		const context = overlayCanvas.getContext("2d");
+		if (!context) throw new Error("Failed to get 2D context for native GPU overlay");
+		context.translate(-bounds.x, -bounds.y);
+		await renderAnnotations(
+			context,
+			[annotation],
+			config.width,
+			config.height,
+			(annotation.startMs + annotation.endMs) / 2,
+			scaleFactor,
 		);
+		overlayPngs.push(await canvasToPng(overlayCanvas));
 	}
-	await renderAnnotations(
-		context,
-		[annotation],
-		config.width,
-		config.height,
-		(annotation.startMs + annotation.endMs) / 2,
-		scaleFactor,
-	);
-	return { wallpaperPng, overlayPng: await canvasToPng(overlayCanvas) };
+	return { wallpaperPng, overlayPngs };
 }

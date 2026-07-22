@@ -15,6 +15,8 @@ import { type AudioTimelineFilter, buildNativeGpuAudioMuxArgs } from "./nativeGp
 
 const HELPER_NAME = "openscreen-linux-export-helper";
 const MAX_STATIC_ASSET_BYTES = 32 * 1024 * 1024;
+const MAX_TOTAL_OVERLAY_ASSET_BYTES = 256 * 1024 * 1024;
+const MAX_OVERLAYS = 10_000;
 const MAX_PLAN_FRAMES = 20_736_000;
 const MAX_OUTPUT_DIMENSION = 4096;
 
@@ -208,20 +210,44 @@ function validateRequest(payload: NativeGpuExportRequest) {
 	) {
 		throw new Error("Native GPU export wallpaper PNG has an invalid size");
 	}
-	if (plan.overlay) {
+	if (
+		!Array.isArray(plan.overlays) ||
+		plan.overlays.length > MAX_OVERLAYS ||
+		!Array.isArray(payload.overlayPngs) ||
+		payload.overlayPngs.length !== plan.overlays.length
+	) {
+		throw new Error("Native GPU export overlay collection is invalid");
+	}
+	let totalOverlayBytes = 0;
+	for (let index = 0; index < plan.overlays.length; index++) {
+		const overlay = plan.overlays[index];
+		const pixels = payload.overlayPngs[index];
 		if (
-			!finiteNumber(plan.overlay.startMs) ||
-			!finiteNumber(plan.overlay.endMs) ||
-			plan.overlay.startMs < 0 ||
-			plan.overlay.endMs <= plan.overlay.startMs ||
-			!(payload.overlayPng instanceof ArrayBuffer) ||
-			payload.overlayPng.byteLength < 1 ||
-			payload.overlayPng.byteLength > MAX_STATIC_ASSET_BYTES
+			!finiteNumber(overlay.startMs) ||
+			!finiteNumber(overlay.endMs) ||
+			overlay.startMs < 0 ||
+			overlay.endMs <= overlay.startMs ||
+			!Number.isInteger(overlay.x) ||
+			!Number.isInteger(overlay.y) ||
+			!Number.isInteger(overlay.width) ||
+			!Number.isInteger(overlay.height) ||
+			!Number.isInteger(overlay.zIndex) ||
+			overlay.x < 0 ||
+			overlay.y < 0 ||
+			overlay.width < 1 ||
+			overlay.height < 1 ||
+			overlay.x + overlay.width > plan.width ||
+			overlay.y + overlay.height > plan.height ||
+			!(pixels instanceof ArrayBuffer) ||
+			pixels.byteLength < 1 ||
+			pixels.byteLength > MAX_STATIC_ASSET_BYTES
 		) {
-			throw new Error("Native GPU export overlay is invalid");
+			throw new Error(`Native GPU export overlay ${index} is invalid`);
 		}
-	} else if (payload.overlayPng) {
-		throw new Error("Native GPU export received overlay pixels without an overlay range");
+		totalOverlayBytes += pixels.byteLength;
+		if (totalOverlayBytes > MAX_TOTAL_OVERLAY_ASSET_BYTES) {
+			throw new Error("Native GPU export overlay assets exceed the size limit");
+		}
 	}
 	if (!finiteNumber(payload.sourceDurationSec) || payload.sourceDurationSec <= 0) {
 		throw new Error("Native GPU export source duration is invalid");
@@ -308,11 +334,12 @@ async function prepareStaticAssets(
 		"Wallpaper conversion",
 	);
 
-	let overlayRgbaPath: string | undefined;
-	if (payload.overlayPng) {
-		const overlayPngPath = path.join(tempDir, "overlay.png");
-		overlayRgbaPath = path.join(tempDir, "overlay.rgba");
-		await fs.writeFile(overlayPngPath, Buffer.from(payload.overlayPng));
+	const overlays = [];
+	for (let index = 0; index < payload.plan.overlays.length; index++) {
+		const overlay = payload.plan.overlays[index];
+		const overlayPngPath = path.join(tempDir, `overlay-${index}.png`);
+		const overlayRgbaPath = path.join(tempDir, `overlay-${index}.rgba`);
+		await fs.writeFile(overlayPngPath, Buffer.from(payload.overlayPngs[index]));
 		await runCapturedProcess(
 			ffmpeg,
 			[
@@ -330,10 +357,11 @@ async function prepareStaticAssets(
 				"rawvideo",
 				overlayRgbaPath,
 			],
-			"Overlay conversion",
+			`Overlay ${index} conversion`,
 		);
+		overlays.push({ ...overlay, rgbaPath: overlayRgbaPath });
 	}
-	return { wallpaperNv12Path, overlayRgbaPath };
+	return { wallpaperNv12Path, overlays };
 }
 
 async function runMux(session: NativeGpuExportSession, command: string, args: string[]) {
@@ -409,13 +437,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 						...payload.plan,
 						inputPath,
 						wallpaperNv12Path: assets.wallpaperNv12Path,
-						...(assets.overlayRgbaPath
-							? {
-									overlayRgbaPath: assets.overlayRgbaPath,
-									overlayStartMs: payload.plan.overlay!.startMs,
-									overlayEndMs: payload.plan.overlay!.endMs,
-								}
-							: {}),
+						overlays: assets.overlays,
 					}),
 				);
 				const child = spawn(helperPath, ["--plan", planPath, videoOnlyPath], {
