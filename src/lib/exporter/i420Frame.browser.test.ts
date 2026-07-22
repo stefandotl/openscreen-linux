@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { GpuI420FrameConverter } from "./i420Frame";
+import { createPackedI420FrameBuffer, GpuI420FrameConverter } from "./i420Frame";
 
 const converters: GpuI420FrameConverter[] = [];
 
@@ -23,7 +23,11 @@ describe("GpuI420FrameConverter (real browser)", () => {
 
 		const converter = new GpuI420FrameConverter(4, 4);
 		converters.push(converter);
-		const bytes = new Uint8Array(converter.convert(canvas).data);
+		const target = createPackedI420FrameBuffer(4, 4);
+		const converted = converter.convert(canvas, target);
+		const bytes = converted.view;
+
+		expect(converted).toBe(target);
 
 		expect([...bytes.subarray(0, 8)]).toEqual(new Array(8).fill(63));
 		expect([...bytes.subarray(8, 16)]).toEqual(new Array(8).fill(32));

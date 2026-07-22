@@ -1,5 +1,6 @@
 export interface PackedI420FrameBuffer {
 	data: ArrayBuffer;
+	view: Uint8Array;
 }
 
 const VERTEX_SHADER_SOURCE = `#version 300 es
@@ -89,8 +90,10 @@ export function createPackedI420FrameBuffer(width: number, height: number): Pack
 	const yBytes = width * height;
 	const chromaStride = width / 2;
 	const chromaBytes = chromaStride * (height / 2);
+	const data = new ArrayBuffer(yBytes + chromaBytes * 2);
 	return {
-		data: new ArrayBuffer(yBytes + chromaBytes * 2),
+		data,
+		view: new Uint8Array(data),
 	};
 }
 
@@ -165,7 +168,7 @@ export class GpuI420FrameConverter {
 	private readonly framebuffer: WebGLFramebuffer;
 	private readonly outputWidth: number;
 	private readonly outputHeight: number;
-	private readonly readback: Uint8Array;
+	private readonly paddedReadback: Uint8Array | null;
 	private destroyed = false;
 
 	constructor(width: number, height: number) {
@@ -252,13 +255,14 @@ export class GpuI420FrameConverter {
 		gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL, gl.NONE);
 
 		const readbackBytes = this.outputWidth * this.outputHeight * 4;
-		this.readback =
-			readbackBytes === this.frame.data.byteLength
-				? new Uint8Array(this.frame.data)
-				: new Uint8Array(readbackBytes);
+		this.paddedReadback =
+			readbackBytes === this.frame.data.byteLength ? null : new Uint8Array(readbackBytes);
 	}
 
-	convert(sourceCanvas: HTMLCanvasElement): PackedI420FrameBuffer {
+	convert(
+		sourceCanvas: HTMLCanvasElement,
+		target: PackedI420FrameBuffer = this.frame,
+	): PackedI420FrameBuffer {
 		if (this.destroyed) throw new Error("GPU I420 converter was already destroyed");
 		if (sourceCanvas.width !== this.width || sourceCanvas.height !== this.height) {
 			throw new Error(
@@ -268,8 +272,17 @@ export class GpuI420FrameConverter {
 		if (this.gl.isContextLost()) {
 			throw new Error("Required WebGL2 context was lost during GPU I420 conversion");
 		}
+		if (
+			target.data.byteLength !== this.frame.data.byteLength ||
+			target.view.buffer !== target.data
+		) {
+			throw new Error(
+				`Invalid GPU I420 target buffer: ${target.data.byteLength} bytes (expected ${this.frame.data.byteLength})`,
+			);
+		}
 
 		const gl = this.gl;
+		const readback = this.paddedReadback ?? target.view;
 		gl.activeTexture(gl.TEXTURE0);
 		gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture);
 		try {
@@ -288,24 +301,16 @@ export class GpuI420FrameConverter {
 		gl.useProgram(this.program);
 		gl.bindVertexArray(this.vertexArray);
 		gl.drawArrays(gl.TRIANGLES, 0, 3);
-		gl.readPixels(
-			0,
-			0,
-			this.outputWidth,
-			this.outputHeight,
-			gl.RGBA,
-			gl.UNSIGNED_BYTE,
-			this.readback,
-		);
+		gl.readPixels(0, 0, this.outputWidth, this.outputHeight, gl.RGBA, gl.UNSIGNED_BYTE, readback);
 
 		const glError = gl.getError();
 		if (glError !== gl.NO_ERROR) {
 			throw new Error(`GPU I420 conversion failed with WebGL2 error 0x${glError.toString(16)}`);
 		}
-		if (this.readback.buffer !== this.frame.data) {
-			new Uint8Array(this.frame.data).set(this.readback.subarray(0, this.frame.data.byteLength));
+		if (this.paddedReadback) {
+			target.view.set(this.paddedReadback.subarray(0, target.data.byteLength));
 		}
-		return this.frame;
+		return target;
 	}
 
 	destroy(): void {

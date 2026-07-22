@@ -12,8 +12,9 @@ import type { CursorRecordingData } from "@/native/contracts";
 import { getPlatform } from "@/utils/platformUtils";
 import { AudioProcessor } from "./audioEncoder";
 import { FrameRenderer } from "./frameRenderer";
-import { GpuI420FrameConverter } from "./i420Frame";
+import { createPackedI420FrameBuffer, GpuI420FrameConverter } from "./i420Frame";
 import { VideoMuxer } from "./muxer";
+import { NativeNvencFramePipeline } from "./nativeNvencFramePipeline";
 import {
 	closeNativeNvencFramePort,
 	waitForNativeNvencFramePort,
@@ -175,12 +176,19 @@ type NativeNvencPerfStats = {
 	webcamWaitMs: number;
 	renderMs: number;
 	readbackMs: number;
-	ffmpegWriteMs: number;
+	framePostMs: number;
+	pipelineWaitMs: number;
+	writeAckMs: number;
+	writeAcknowledgements: number;
+	inFlight: number;
+	maxInFlight: number;
 	callbackMs: number;
 	maxDecodeWaitMs: number;
 	maxRenderMs: number;
 	maxReadbackMs: number;
-	maxFfmpegWriteMs: number;
+	maxFramePostMs: number;
+	maxPipelineWaitMs: number;
+	maxWriteAckMs: number;
 };
 
 function createNativeNvencPerfStats(): NativeNvencPerfStats {
@@ -194,12 +202,19 @@ function createNativeNvencPerfStats(): NativeNvencPerfStats {
 		webcamWaitMs: 0,
 		renderMs: 0,
 		readbackMs: 0,
-		ffmpegWriteMs: 0,
+		framePostMs: 0,
+		pipelineWaitMs: 0,
+		writeAckMs: 0,
+		writeAcknowledgements: 0,
+		inFlight: 0,
+		maxInFlight: 0,
 		callbackMs: 0,
 		maxDecodeWaitMs: 0,
 		maxRenderMs: 0,
 		maxReadbackMs: 0,
-		maxFfmpegWriteMs: 0,
+		maxFramePostMs: 0,
+		maxPipelineWaitMs: 0,
+		maxWriteAckMs: 0,
 	};
 }
 
@@ -210,7 +225,8 @@ function recordNativeNvencPerfSample(
 		webcamWaitMs: number;
 		renderMs: number;
 		readbackMs: number;
-		ffmpegWriteMs: number;
+		framePostMs: number;
+		pipelineWaitMs: number;
 		callbackMs: number;
 		frameEndMs: number;
 	},
@@ -220,13 +236,24 @@ function recordNativeNvencPerfSample(
 	stats.webcamWaitMs += sample.webcamWaitMs;
 	stats.renderMs += sample.renderMs;
 	stats.readbackMs += sample.readbackMs;
-	stats.ffmpegWriteMs += sample.ffmpegWriteMs;
+	stats.framePostMs += sample.framePostMs;
+	stats.pipelineWaitMs += sample.pipelineWaitMs;
+	stats.inFlight++;
+	stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
 	stats.callbackMs += sample.callbackMs;
 	stats.maxDecodeWaitMs = Math.max(stats.maxDecodeWaitMs, sample.decodeWaitMs);
 	stats.maxRenderMs = Math.max(stats.maxRenderMs, sample.renderMs);
 	stats.maxReadbackMs = Math.max(stats.maxReadbackMs, sample.readbackMs);
-	stats.maxFfmpegWriteMs = Math.max(stats.maxFfmpegWriteMs, sample.ffmpegWriteMs);
+	stats.maxFramePostMs = Math.max(stats.maxFramePostMs, sample.framePostMs);
+	stats.maxPipelineWaitMs = Math.max(stats.maxPipelineWaitMs, sample.pipelineWaitMs);
 	stats.lastFrameEndAtMs = sample.frameEndMs;
+}
+
+function recordNativeNvencAcknowledgement(stats: NativeNvencPerfStats, acknowledgementMs: number) {
+	stats.writeAcknowledgements++;
+	stats.writeAckMs += acknowledgementMs;
+	stats.maxWriteAckMs = Math.max(stats.maxWriteAckMs, acknowledgementMs);
+	stats.inFlight = Math.max(0, stats.inFlight - 1);
 }
 
 function maybeLogNativeNvencPerf(stats: NativeNvencPerfStats, totalFrames: number, force = false) {
@@ -237,26 +264,35 @@ function maybeLogNativeNvencPerf(stats: NativeNvencPerfStats, totalFrames: numbe
 	if (!shouldLog) return;
 
 	const frames = Math.max(stats.frames, 1);
+	const writeAcknowledgements = Math.max(stats.writeAcknowledgements, 1);
 	const elapsedSec = Math.max((now - stats.startedAtMs) / 1000, 0.001);
 	const avg = (value: number) => Number((value / frames).toFixed(2));
+	const ackAvg = (value: number) =>
+		stats.writeAcknowledgements > 0 ? Number((value / writeAcknowledgements).toFixed(2)) : 0;
 	const max = (value: number) => Number(value.toFixed(2));
 
 	const snapshot = {
 		frames: totalFrames > 0 ? `${stats.frames}/${totalFrames}` : stats.frames,
 		fps: Number((stats.frames / elapsedSec).toFixed(2)),
+		inFlight: stats.inFlight,
 		avgMs: {
 			decodeWait: avg(stats.decodeWaitMs),
 			webcamWait: avg(stats.webcamWaitMs),
 			render: avg(stats.renderMs),
 			readback: avg(stats.readbackMs),
-			ffmpegWrite: avg(stats.ffmpegWriteMs),
+			framePost: avg(stats.framePostMs),
+			pipelineWait: avg(stats.pipelineWaitMs),
+			writeAck: ackAvg(stats.writeAckMs),
 			callback: avg(stats.callbackMs),
 		},
 		maxMs: {
 			decodeWait: max(stats.maxDecodeWaitMs),
 			render: max(stats.maxRenderMs),
 			readback: max(stats.maxReadbackMs),
-			ffmpegWrite: max(stats.maxFfmpegWriteMs),
+			framePost: max(stats.maxFramePostMs),
+			pipelineWait: max(stats.maxPipelineWaitMs),
+			writeAck: max(stats.maxWriteAckMs),
+			inFlight: stats.maxInFlight,
 		},
 	};
 	console.info(`[native-nvenc-perf] ${JSON.stringify(snapshot)}`);
@@ -412,7 +448,10 @@ export class VideoExporter {
 			this.renderer = renderer;
 			await renderer.initialize();
 			i420Converter = new GpuI420FrameConverter(this.config.width, this.config.height);
-			const i420Frame = i420Converter.frame;
+			const i420Frames = [
+				i420Converter.frame,
+				createPackedI420FrameBuffer(this.config.width, this.config.height),
+			];
 
 			const startResult = await window.electronAPI.startNativeNvencExport({
 				width: this.config.width,
@@ -445,6 +484,11 @@ export class VideoExporter {
 			);
 			let frameIndex = 0;
 			const perfStats = createNativeNvencPerfStats();
+			const framePipeline = new NativeNvencFramePipeline(
+				i420Frames,
+				(chunk) => writeNativeNvencFrame(nativeSessionId!, chunk),
+				({ acknowledgementMs }) => recordNativeNvencAcknowledgement(perfStats, acknowledgementMs),
+			);
 			console.info("[native-nvenc-perf] Sampling export pipeline", {
 				totalFrames,
 				width: this.config.width,
@@ -452,7 +496,8 @@ export class VideoExporter {
 				frameRate: this.config.frameRate,
 				inputPixelFormat: "yuv420p",
 				frameSource: "gpu-canvas",
-				frameBytes: i420Frame.data.byteLength,
+				frameBytes: i420Frames[0].data.byteLength,
+				pipelineDepth: framePipeline.depth,
 				hasWebcam: Boolean(this.config.webcamVideoUrl),
 				hasCursorOverlay: (this.config.cursorScale ?? 0) > 0,
 				zoomRegions: this.config.zoomRegions.length,
@@ -509,7 +554,8 @@ export class VideoExporter {
 					let webcamWaitMs = 0;
 					let renderMs = 0;
 					let readbackMs = 0;
-					let ffmpegWriteMs = 0;
+					let framePostMs = 0;
+					let pipelineWaitMs = 0;
 					try {
 						if (this.cancelled) return;
 
@@ -525,18 +571,13 @@ export class VideoExporter {
 						renderMs = performance.now() - renderStartMs;
 
 						const canvas = renderer.getCanvas();
+						const acquisition = await framePipeline.acquire();
+						pipelineWaitMs = acquisition.pipelineWaitMs;
 						const readbackStartMs = performance.now();
-						i420Converter!.convert(canvas);
+						i420Converter!.convert(canvas, acquisition.frame);
 						readbackMs = performance.now() - readbackStartMs;
 
-						const ffmpegWriteStartMs = performance.now();
-						const writeResult = await writeNativeNvencFrame(nativeSessionId!, i420Frame.data);
-						ffmpegWriteMs = performance.now() - ffmpegWriteStartMs;
-						if (!writeResult.success) {
-							throw new Error(
-								writeResult.message || writeResult.error || "Native NVENC write failed",
-							);
-						}
+						framePostMs = framePipeline.submit(acquisition.frame).framePostMs;
 
 						const frameEndMs = performance.now();
 						recordNativeNvencPerfSample(perfStats, {
@@ -544,7 +585,8 @@ export class VideoExporter {
 							webcamWaitMs,
 							renderMs,
 							readbackMs,
-							ffmpegWriteMs,
+							framePostMs,
+							pipelineWaitMs,
 							callbackMs: frameEndMs - frameStartMs,
 							frameEndMs,
 						});
@@ -571,6 +613,7 @@ export class VideoExporter {
 				nativeSessionId = null;
 				return { success: false, error: "Export cancelled" };
 			}
+			await framePipeline.flush();
 
 			stopWebcamDecode = true;
 			webcamFrameQueue?.destroy();
