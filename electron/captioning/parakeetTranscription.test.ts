@@ -31,6 +31,32 @@ describe("parakeetResultToWordSegments", () => {
 		]);
 	});
 
+	it("separates a number token that Parakeet attaches to the preceding word", () => {
+		expect(
+			parakeetResultToWordSegments({
+				text: "Version 2 starts",
+				tokens: [" Version", "2", " starts"],
+				timestamps: [0, 0.4, 0.7],
+				durations: [0.32, 0.2, 0.3],
+			}),
+		).toEqual([
+			{ startSec: 0, endSec: 0.32, text: "Version" },
+			{ startSec: 0.4, endSec: 0.6, text: "2" },
+			{ startSec: 0.7, endSec: 1, text: "starts" },
+		]);
+	});
+
+	it("keeps numeric BPE pieces and decimal punctuation in one number", () => {
+		expect(
+			parakeetResultToWordSegments({
+				text: "3.14",
+				tokens: [" 3", ".", "1", "4"],
+				timestamps: [0, 0.1, 0.2, 0.3],
+				durations: [0.08, 0.08, 0.08, 0.08],
+			}),
+		).toEqual([{ startSec: 0, endSec: 0.38, text: "3.14" }]);
+	});
+
 	it("fails loudly when recognized text has no token timing", () => {
 		expect(() => parakeetResultToWordSegments({ text: "untimed" })).toThrow(
 			"without token timestamps",

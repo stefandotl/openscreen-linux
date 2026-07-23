@@ -32,10 +32,12 @@ vi.mock("@/contexts/I18nContext", () => ({
 
 describe("SourceSelector", () => {
 	beforeEach(() => {
+		localStorage.clear();
 		window.electronAPI = {
 			...window.electronAPI,
 			getSources: vi.fn().mockResolvedValue([]),
 			selectSource: vi.fn(),
+			getSelectedSource: vi.fn().mockResolvedValue(null),
 		} as typeof window.electronAPI;
 	});
 
@@ -63,6 +65,7 @@ describe("SourceSelector", () => {
 			...window.electronAPI,
 			getSources,
 			selectSource: vi.fn(),
+			getSelectedSource: vi.fn().mockResolvedValue(null),
 		} as typeof window.electronAPI;
 
 		render(<SourceSelector />);
@@ -74,5 +77,32 @@ describe("SourceSelector", () => {
 			expect(screen.getByText("Display 1")).toBeInTheDocument();
 		});
 		expect(getSources).toHaveBeenCalledTimes(2);
+	});
+
+	it("preselects the active source and persists a confirmed choice", async () => {
+		const source = {
+			id: "screen:2:0",
+			name: "Display 2",
+			thumbnail: "data:image/png;base64,abc",
+			display_id: "2",
+			appIcon: null,
+		};
+		window.electronAPI = {
+			...window.electronAPI,
+			getSources: vi.fn().mockResolvedValue([source]),
+			getSelectedSource: vi.fn().mockResolvedValue(source),
+			selectSource: vi.fn().mockResolvedValue(source),
+		} as typeof window.electronAPI;
+
+		render(<SourceSelector />);
+
+		await screen.findByText("Display 2");
+		const shareButton = screen.getByRole("button", { name: "Share" });
+		expect(shareButton).toBeEnabled();
+		fireEvent.click(shareButton);
+
+		await waitFor(() => {
+			expect(window.electronAPI.selectSource).toHaveBeenCalledWith(source);
+		});
 	});
 });

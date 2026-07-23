@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	DEFAULT_PREFS,
+	DEFAULT_RECORDING_PREFS,
 	getProjectFolder,
 	loadUserPreferences,
 	parentDirectoryOf,
+	saveRecordingPreferences,
 	saveUserPreferences,
 } from "./userPreferences";
 
@@ -102,5 +104,111 @@ describe("user preferences", () => {
 		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ trayLayout: "diagonal" }));
 
 		expect(loadUserPreferences().trayLayout).toBe("horizontal");
+	});
+
+	it("persists the last annotation style for new videos", () => {
+		saveUserPreferences({
+			lastAnnotationStyle: {
+				color: "#abcdef",
+				backgroundColor: "transparent",
+				fontSize: 48,
+				fontFamily: "Roboto",
+				fontWeight: "normal",
+				fontStyle: "italic",
+				textDecoration: "underline",
+				textAlign: "right",
+				textAnimation: "rise",
+				wordHighlight: true,
+				wordHighlightMode: "text",
+				wordHighlightColor: "#123456",
+			},
+		});
+
+		expect(loadUserPreferences().lastAnnotationStyle).toEqual({
+			color: "#abcdef",
+			backgroundColor: "transparent",
+			fontSize: 48,
+			fontFamily: "Roboto",
+			fontWeight: "normal",
+			fontStyle: "italic",
+			textDecoration: "underline",
+			textAlign: "right",
+			textAnimation: "rise",
+			wordHighlight: true,
+			wordHighlightMode: "text",
+			wordHighlightColor: "#123456",
+		});
+	});
+
+	it("normalizes invalid fields in the stored annotation style", () => {
+		localStorage.setItem(
+			"openscreen_user_preferences",
+			JSON.stringify({
+				lastAnnotationStyle: {
+					fontFamily: "",
+					fontSize: -2,
+					fontWeight: "heavy",
+					textAlign: "around",
+				},
+			}),
+		);
+
+		expect(loadUserPreferences().lastAnnotationStyle).toMatchObject({
+			fontFamily: "Inter",
+			fontSize: 32,
+			fontWeight: "bold",
+			textAlign: "center",
+		});
+	});
+
+	it("persists recording toggles, devices, cursor mode, and capture source", () => {
+		saveRecordingPreferences({
+			microphoneEnabled: true,
+			microphoneDeviceId: "mic-1",
+			microphoneDeviceName: "Studio Mic",
+			systemAudioEnabled: true,
+			webcamEnabled: true,
+			webcamDeviceId: "camera-1",
+			webcamDeviceName: "Desk Camera",
+			cursorCaptureMode: "system",
+			captureSource: {
+				id: "screen:7:0",
+				name: "Display 2",
+				displayId: "7",
+				kind: "screen",
+			},
+		});
+
+		expect(loadUserPreferences().recording).toEqual({
+			microphoneEnabled: true,
+			microphoneDeviceId: "mic-1",
+			microphoneDeviceName: "Studio Mic",
+			systemAudioEnabled: true,
+			webcamEnabled: true,
+			webcamDeviceId: "camera-1",
+			webcamDeviceName: "Desk Camera",
+			cursorCaptureMode: "system",
+			captureSource: {
+				id: "screen:7:0",
+				name: "Display 2",
+				displayId: "7",
+				kind: "screen",
+			},
+		});
+	});
+
+	it("falls back safely for malformed recording preferences", () => {
+		localStorage.setItem(
+			"openscreen_user_preferences",
+			JSON.stringify({
+				recording: {
+					microphoneEnabled: "yes",
+					cursorCaptureMode: "hidden",
+					captureSource: { id: 7, name: "" },
+				},
+			}),
+		);
+
+		expect(loadUserPreferences().recording).toEqual(DEFAULT_RECORDING_PREFS);
 	});
 });

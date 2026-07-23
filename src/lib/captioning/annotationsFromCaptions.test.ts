@@ -117,6 +117,46 @@ describe("captionSegmentsToAnnotationRegions", () => {
 		expect(regions[0]?.captionWords?.[0]?.startOffsetMs).toBe(0);
 		expect(regions[0]?.captionWords?.at(-1)?.endOffsetMs).toBe(1000);
 	});
+
+	it("applies a persisted text style to newly generated captions", () => {
+		const { regions } = captionSegmentsToAnnotationRegions(
+			[{ startSec: 0, endSec: 0.5, text: "styled caption" }],
+			1,
+			1,
+			{
+				minWordsPerCaption: 2,
+				maxWordsPerCaption: 2,
+				timestampGranularity: "phrase",
+				style: {
+					color: "#ffee00",
+					backgroundColor: "#111111",
+					fontSize: 40,
+					fontFamily: "Roboto",
+					fontWeight: "bold",
+					fontStyle: "italic",
+					textDecoration: "underline",
+					textAlign: "left",
+					textAnimation: "pop",
+					wordHighlight: false,
+					wordHighlightMode: "text",
+					wordHighlightColor: "#ff00ff",
+				},
+			},
+		);
+
+		expect(regions[0]?.style).toMatchObject({
+			color: "#ffee00",
+			backgroundColor: "#111111",
+			fontSize: 40,
+			fontFamily: "Roboto",
+			fontWeight: "bold",
+			fontStyle: "italic",
+			textDecoration: "underline",
+			textAlign: "left",
+			textAnimation: "pop",
+			wordHighlight: false,
+		});
+	});
 });
 
 describe("reconcileAutoCaptionTimelineGaps", () => {

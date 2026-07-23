@@ -2,8 +2,24 @@ import {
 	DEFAULT_EDITOR_LAYOUT_SETTINGS,
 	DEFAULT_EXPORT_SETTINGS,
 } from "@/components/video-editor/editorDefaults";
+import {
+	type AnnotationTextStyle,
+	DEFAULT_ANNOTATION_STYLE,
+} from "@/components/video-editor/types";
+import { normalizeTextAnimation } from "@/lib/annotationTextAnimation";
 import type { ExportFormat, ExportQuality } from "@/lib/exporter";
+import {
+	DEFAULT_RECORDING_PREFS,
+	normalizeRecordingPreferences,
+	type RecordingPreferences,
+} from "@/lib/recordingPreferences";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
+
+export {
+	DEFAULT_RECORDING_PREFS,
+	type PreferredCaptureSource,
+	type RecordingPreferences,
+} from "@/lib/recordingPreferences";
 
 const PREFS_KEY = "openscreen_user_preferences";
 
@@ -33,6 +49,10 @@ export interface UserPreferences {
 	projectFolder: string | null;
 	/** Recording HUD control layout */
 	trayLayout: "horizontal" | "vertical";
+	/** Most recently edited text/caption style, used as the default for new videos */
+	lastAnnotationStyle: AnnotationTextStyle | null;
+	/** Last recording-bar configuration, restored when the HUD starts */
+	recording: RecordingPreferences;
 }
 
 export const DEFAULT_PREFS: UserPreferences = {
@@ -43,6 +63,8 @@ export const DEFAULT_PREFS: UserPreferences = {
 	exportFolder: null,
 	projectFolder: null,
 	trayLayout: "horizontal",
+	lastAnnotationStyle: null,
+	recording: DEFAULT_RECORDING_PREFS,
 };
 
 /** Parses stored preferences without throwing on malformed JSON. */
@@ -53,6 +75,51 @@ function safeJsonParse(text: string | null): Record<string, unknown> | null {
 	} catch {
 		return null;
 	}
+}
+
+function normalizeStoredAnnotationStyle(value: unknown): AnnotationTextStyle | null {
+	if (!value || typeof value !== "object") return null;
+	const style = value as Partial<Record<keyof AnnotationTextStyle, unknown>>;
+
+	return {
+		color: typeof style.color === "string" ? style.color : DEFAULT_ANNOTATION_STYLE.color,
+		backgroundColor:
+			typeof style.backgroundColor === "string"
+				? style.backgroundColor
+				: DEFAULT_ANNOTATION_STYLE.backgroundColor,
+		fontSize:
+			typeof style.fontSize === "number" &&
+			Number.isFinite(style.fontSize) &&
+			style.fontSize >= 1 &&
+			style.fontSize <= 512
+				? style.fontSize
+				: DEFAULT_ANNOTATION_STYLE.fontSize,
+		fontFamily:
+			typeof style.fontFamily === "string" && style.fontFamily.trim()
+				? style.fontFamily
+				: DEFAULT_ANNOTATION_STYLE.fontFamily,
+		fontWeight: style.fontWeight === "normal" ? "normal" : DEFAULT_ANNOTATION_STYLE.fontWeight,
+		fontStyle: style.fontStyle === "italic" ? "italic" : DEFAULT_ANNOTATION_STYLE.fontStyle,
+		textDecoration:
+			style.textDecoration === "underline" ? "underline" : DEFAULT_ANNOTATION_STYLE.textDecoration,
+		textAlign:
+			style.textAlign === "left" || style.textAlign === "right"
+				? style.textAlign
+				: DEFAULT_ANNOTATION_STYLE.textAlign,
+		textAnimation: normalizeTextAnimation(
+			typeof style.textAnimation === "string" ? style.textAnimation : undefined,
+		),
+		wordHighlight:
+			typeof style.wordHighlight === "boolean"
+				? style.wordHighlight
+				: DEFAULT_ANNOTATION_STYLE.wordHighlight,
+		wordHighlightMode:
+			style.wordHighlightMode === "text" ? "text" : DEFAULT_ANNOTATION_STYLE.wordHighlightMode,
+		wordHighlightColor:
+			typeof style.wordHighlightColor === "string"
+				? style.wordHighlightColor
+				: DEFAULT_ANNOTATION_STYLE.wordHighlightColor,
+	};
 }
 
 /** Load preferences from localStorage, falling back to defaults for missing or invalid fields. */
@@ -99,6 +166,8 @@ export function loadUserPreferences(): UserPreferences {
 			raw.trayLayout === "horizontal" || raw.trayLayout === "vertical"
 				? raw.trayLayout
 				: DEFAULT_PREFS.trayLayout,
+		lastAnnotationStyle: normalizeStoredAnnotationStyle(raw.lastAnnotationStyle),
+		recording: normalizeRecordingPreferences(raw.recording),
 	};
 }
 
@@ -142,4 +211,10 @@ export function saveUserPreferences(partial: Partial<UserPreferences>): void {
 	} catch {
 		// localStorage may be unavailable (e.g. private browsing, quota exceeded)
 	}
+}
+
+/** Persist only recording-bar fields while retaining the rest of the last configuration. */
+export function saveRecordingPreferences(partial: Partial<RecordingPreferences>): void {
+	const current = loadUserPreferences().recording;
+	saveUserPreferences({ recording: { ...current, ...partial } });
 }

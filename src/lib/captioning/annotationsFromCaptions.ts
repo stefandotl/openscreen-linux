@@ -281,6 +281,8 @@ export interface CaptionSegmentLayoutOptions {
 	 * `phrase`: merged phrase spans; use proportional line splitting inside each span.
 	 */
 	timestampGranularity?: "word" | "phrase";
+	/** Persisted text style to use instead of the built-in first-run caption style. */
+	style?: AnnotationTextStyle;
 }
 
 function computeCaptionLineIndexRanges(
@@ -596,7 +598,7 @@ export function captionSegmentsToAnnotationRegions(
 			})),
 			position: { ...CAPTION_POSITION },
 			size: { ...CAPTION_SIZE },
-			style: { ...CAPTION_STYLE },
+			style: { ...CAPTION_STYLE, ...layout?.style },
 			zIndex: z++,
 		});
 	}

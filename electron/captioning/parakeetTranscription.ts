@@ -142,6 +142,13 @@ function isPunctuation(text: string): boolean {
 	return /^[\p{P}\p{S}]+$/u.test(text);
 }
 
+function crossesLetterNumberBoundary(current: string, next: string): boolean {
+	const currentCharacter = current.match(/[\p{L}\p{N}](?=[\p{P}\p{S}]*$)/u)?.[0];
+	const nextCharacter = next.match(/^[\p{L}\p{N}]/u)?.[0];
+	if (!currentCharacter || !nextCharacter) return false;
+	return /\p{L}/u.test(currentCharacter) && /\p{N}/u.test(nextCharacter);
+}
+
 /** Converts Parakeet's timestamped BPE pieces into the word segments used by the editor. */
 export function parakeetResultToWordSegments(result: SherpaRecognitionResult): CaptionSegment[] {
 	const tokens = result.tokens ?? [];
@@ -179,7 +186,13 @@ export function parakeetResultToWordSegments(result: SherpaRecognitionResult): C
 		if (!cleanToken) continue;
 		const timing = tokenTime(result, index);
 
-		if (text && startsWord && !isPunctuation(cleanToken)) flush();
+		if (
+			text &&
+			!isPunctuation(cleanToken) &&
+			(startsWord || crossesLetterNumberBoundary(text, cleanToken))
+		) {
+			flush();
+		}
 		if (!text) startSec = timing.start;
 		text += cleanToken;
 		endSec = Math.max(endSec, timing.end);

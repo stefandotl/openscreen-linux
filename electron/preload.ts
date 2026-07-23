@@ -12,6 +12,7 @@ import {
 } from "../src/lib/exporter/nativeGpuExportProtocol";
 import type { NativeMacRecordingRequest } from "../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../src/lib/nativeWindowsRecording";
+import type { RecordingPreferences } from "../src/lib/recordingPreferences";
 import type { RecordingSession, StoreRecordedSessionInput } from "../src/lib/recordingSession";
 import type { ShortcutBinding } from "../src/lib/shortcuts";
 import type { SilenceDetectionResult, SilenceDetectionSettings } from "../src/lib/silenceDetection";
@@ -67,6 +68,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	getSelectedSource: () => {
 		return ipcRenderer.invoke("get-selected-source");
+	},
+	initializeRecordingPreferences: (fallback: RecordingPreferences) => {
+		return ipcRenderer.invoke("initialize-recording-preferences", fallback);
+	},
+	updateRecordingPreferences: (partial: Partial<RecordingPreferences>) => {
+		return ipcRenderer.invoke("update-recording-preferences", partial);
 	},
 	requestCameraAccess: () => {
 		return ipcRenderer.invoke("request-camera-access");

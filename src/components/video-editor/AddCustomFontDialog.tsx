@@ -18,6 +18,7 @@ import {
 	type CustomFont,
 	generateFontId,
 	isValidGoogleFontsUrl,
+	normalizeGoogleFontsImportUrl,
 	parseFontFamilyFromImport,
 } from "@/lib/customFonts";
 
@@ -63,8 +64,9 @@ export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
 		setLoading(true);
 
 		try {
+			const normalizedImportUrl = normalizeGoogleFontsImportUrl(importUrl);
 			const fontFamily = parseFontFamilyFromImport(importUrl);
-			if (!fontFamily) {
+			if (!normalizedImportUrl || !fontFamily) {
 				toast.error(t("customFont.errorExtractFailed"));
 				setLoading(false);
 				return;
@@ -74,7 +76,7 @@ export function AddCustomFontDialog({ onFontAdded }: AddCustomFontDialogProps) {
 				id: generateFontId(fontName),
 				name: fontName.trim(),
 				fontFamily: fontFamily,
-				importUrl: importUrl.trim(),
+				importUrl: normalizedImportUrl,
 			};
 
 			// Loads and verifies the font; throws on failure

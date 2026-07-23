@@ -21,6 +21,10 @@ import {
 	type CaptionTranscriptionRequest,
 	type CaptionTranscriptionStatus,
 } from "../../src/lib/captioning/captionTranscriptionProtocol";
+import {
+	resolvePreferredCaptureSource,
+	toPreferredCaptureSource,
+} from "../../src/lib/captureSourcePreferences";
 import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
 import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
 import {
@@ -55,6 +59,7 @@ import { createCursorRecordingSession } from "../native-bridge/cursor/recording/
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
+import { RecordingPreferencesStore } from "../recordingPreferencesStore";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -75,6 +80,9 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 	".ts",
 ]);
 const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
+const recordingPreferencesStore = new RecordingPreferencesStore(
+	path.join(app.getPath("userData"), "recording-preferences.json"),
+);
 const nativeMacCaptureEvents = new EventEmitter();
 
 // Paths the user approved via file picker or project load (i.e. outside the default dirs).
@@ -568,6 +576,35 @@ let currentRecordingSession: RecordingSession | null = null;
 // Cached source from the user's pick. Used by setDisplayMediaRequestHandler in main.ts for cursor-free capture.
 export function getSelectedDesktopSource(): DesktopCapturerSource | null {
 	return selectedDesktopSource;
+}
+
+export async function restorePersistedSelectedSource(): Promise<boolean> {
+	const { preferences, exists } = await recordingPreferencesStore.load();
+	if (!exists || !preferences.captureSource) return false;
+
+	const sources = await desktopCapturer.getSources({
+		types: ["screen", "window"],
+		thumbnailSize: { width: 0, height: 0 },
+		fetchWindowIcons: false,
+	});
+	lastEnumeratedSources = new Map(sources.map((source) => [source.id, source]));
+	const restoredSource = resolvePreferredCaptureSource(preferences.captureSource, sources);
+	if (!restoredSource) {
+		selectedSource = null;
+		selectedDesktopSource = null;
+		return false;
+	}
+
+	selectedDesktopSource = restoredSource;
+	selectedSource = {
+		id: restoredSource.id,
+		name: restoredSource.name,
+		display_id: restoredSource.display_id,
+	};
+	await recordingPreferencesStore.update({
+		captureSource: toPreferredCaptureSource(restoredSource),
+	});
+	return true;
 }
 let currentVideoPath: string | null = null;
 
@@ -1492,6 +1529,14 @@ export function registerIpcHandlers(
 		buildAudioTimelineFilter,
 	});
 
+	ipcMain.handle("initialize-recording-preferences", async (_, fallback: unknown) => {
+		return recordingPreferencesStore.initialize(fallback);
+	});
+
+	ipcMain.handle("update-recording-preferences", async (_, partial: unknown) => {
+		return recordingPreferencesStore.update(partial);
+	});
+
 	ipcMain.handle(
 		CAPTION_TRANSCRIPTION_CHANNELS.transcribe,
 		async (event, request: CaptionTranscriptionRequest) => {
@@ -1601,6 +1646,19 @@ export function registerIpcHandlers(
 			} catch {
 				selectedDesktopSource = null;
 			}
+		}
+		if (
+			typeof source.id === "string" &&
+			typeof source.name === "string" &&
+			typeof source.display_id === "string"
+		) {
+			await recordingPreferencesStore.update({
+				captureSource: toPreferredCaptureSource({
+					id: source.id,
+					name: source.name,
+					display_id: source.display_id,
+				}),
+			});
 		}
 		const sourceSelectorWin = getSourceSelectorWindow();
 		if (sourceSelectorWin) {

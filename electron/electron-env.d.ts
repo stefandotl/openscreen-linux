@@ -43,6 +43,15 @@ interface Window {
 		}>;
 		selectSource: (source: ProcessedDesktopSource) => Promise<ProcessedDesktopSource | null>;
 		getSelectedSource: () => Promise<ProcessedDesktopSource | null>;
+		initializeRecordingPreferences: (
+			fallback: import("../src/lib/recordingPreferences").RecordingPreferences,
+		) => Promise<{
+			preferences: import("../src/lib/recordingPreferences").RecordingPreferences;
+			exists: boolean;
+		}>;
+		updateRecordingPreferences: (
+			partial: Partial<import("../src/lib/recordingPreferences").RecordingPreferences>,
+		) => Promise<import("../src/lib/recordingPreferences").RecordingPreferences>;
 		requestCameraAccess: () => Promise<{
 			success: boolean;
 			granted: boolean;

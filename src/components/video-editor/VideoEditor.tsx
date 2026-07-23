@@ -103,6 +103,7 @@ import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
 import {
 	type AnnotationRegion,
+	type AnnotationTextStyle,
 	type BlurData,
 	clampFocusToDepth,
 	DEFAULT_ANNOTATION_POSITION,
@@ -351,6 +352,9 @@ export default function VideoEditor() {
 		DEFAULT_SILENCE_DETECTION_SETTINGS.paddingMs,
 	);
 	const [captionWordsMax, setCaptionWordsMax] = useState(7);
+	const [activeAnnotationStyle, setActiveAnnotationStyle] = useState<AnnotationTextStyle | null>(
+		() => loadUserPreferences().lastAnnotationStyle,
+	);
 	const exporterRef = useRef<VideoExporter | null>(null);
 
 	const annotationOnlyRegions = useMemo(
@@ -398,6 +402,14 @@ export default function VideoEditor() {
 			const webcamSourcePath = projectMedia.webcamVideoPath ?? null;
 			const projectCursorCaptureMode = projectMedia.cursorCaptureMode ?? null;
 			const normalizedEditor = normalizeProjectEditor(project.editor);
+			const savedProjectTextStyle = [...normalizedEditor.annotationRegions]
+				.filter((region) => region.type === "text")
+				.sort((a, b) => {
+					const sourcePriority =
+						Number(b.annotationSource === "auto-caption") -
+						Number(a.annotationSource === "auto-caption");
+					return sourcePriority || b.zIndex - a.zIndex;
+				})[0]?.style;
 			const inferredDurationMs = Math.max(
 				0,
 				...normalizedEditor.zoomRegions.map((region) => region.endMs),
@@ -456,6 +468,14 @@ export default function VideoEditor() {
 			setGifLoop(normalizedEditor.gifLoop);
 			setGifSizePreset(normalizedEditor.gifSizePreset);
 			setCursorTheme(normalizedEditor.cursorTheme);
+			setActiveAnnotationStyle(
+				savedProjectTextStyle
+					? { ...savedProjectTextStyle }
+					: loadUserPreferences().lastAnnotationStyle,
+			);
+			if (savedProjectTextStyle) {
+				saveUserPreferences({ lastAnnotationStyle: savedProjectTextStyle });
+			}
 
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
@@ -873,6 +893,7 @@ export default function VideoEditor() {
 		setLastSavedSnapshot(null);
 		// Reset undoable editor state + undo/redo history to a clean slate.
 		resetState();
+		setActiveAnnotationStyle(loadUserPreferences().lastAnnotationStyle);
 		// Reset non-undoable selection state.
 		setSelectedZoomId(null);
 		setSelectedTrimId(null);
@@ -1393,7 +1414,7 @@ export default function VideoEditor() {
 				content: "Enter text...",
 				position: { ...DEFAULT_ANNOTATION_POSITION },
 				size: { ...DEFAULT_ANNOTATION_SIZE },
-				style: { ...DEFAULT_ANNOTATION_STYLE },
+				style: { ...(activeAnnotationStyle ?? DEFAULT_ANNOTATION_STYLE) },
 				zIndex,
 			};
 			pushState((prev) => ({
@@ -1405,7 +1426,7 @@ export default function VideoEditor() {
 			setSelectedSpeedId(null);
 			setSelectedBlurId(null);
 		},
-		[pushState],
+		[activeAnnotationStyle, pushState],
 	);
 
 	const handleBlurAdded = useCallback(
@@ -1561,6 +1582,12 @@ export default function VideoEditor() {
 
 	const handleAnnotationStyleChange = useCallback(
 		(id: string, style: Partial<AnnotationRegion["style"]>) => {
+			const touched = annotationRegions.find((region) => region.id === id);
+			if (touched?.type === "text") {
+				const nextStyle = { ...touched.style, ...style };
+				setActiveAnnotationStyle(nextStyle);
+				saveUserPreferences({ lastAnnotationStyle: nextStyle });
+			}
 			pushState((prev) => {
 				const touched = prev.annotationRegions.find((r) => r.id === id);
 				const syncAutoCaptions = touched?.annotationSource === "auto-caption";
@@ -1574,7 +1601,7 @@ export default function VideoEditor() {
 				};
 			});
 		},
-		[pushState],
+		[annotationRegions, pushState],
 	);
 
 	const handleAnnotationFigureDataChange = useCallback(
@@ -2431,6 +2458,7 @@ export default function VideoEditor() {
 						minWordsPerCaption: minW,
 						maxWordsPerCaption: maxW,
 						timestampGranularity: granularity,
+						...(activeAnnotationStyle ? { style: activeAnnotationStyle } : {}),
 					},
 				);
 
@@ -2443,6 +2471,7 @@ export default function VideoEditor() {
 							minWordsPerCaption: 1,
 							maxWordsPerCaption: Number.MAX_SAFE_INTEGER,
 							timestampGranularity: granularity,
+							...(activeAnnotationStyle ? { style: activeAnnotationStyle } : {}),
 						},
 					));
 				}
@@ -2480,7 +2509,7 @@ export default function VideoEditor() {
 				setIsAutoCaptioning(false);
 			}
 		},
-		[videoPath, trimRegions, duration, pushState, t],
+		[videoPath, trimRegions, duration, activeAnnotationStyle, pushState, t],
 	);
 
 	const handleSaveDiagnostic = useCallback(async () => {

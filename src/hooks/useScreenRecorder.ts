@@ -13,6 +13,7 @@ import {
 } from "@/lib/nativeWindowsRecording";
 import type { CursorCaptureMode, RecordedVideoAssetInput } from "@/lib/recordingSession";
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
+import { loadUserPreferences } from "@/lib/userPreferences";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
 
 const TARGET_FRAME_RATE = 60;
@@ -89,17 +90,35 @@ type NativeMacRecordingHandle = {
 
 export function useScreenRecorder(): UseScreenRecorderReturn {
 	const t = useScopedT("editor");
+	const [initialRecordingPreferences] = useState(() => loadUserPreferences().recording);
 	const [recording, setRecording] = useState(false);
 	const [paused, setPaused] = useState(false);
 	const [elapsedSeconds, setElapsedSeconds] = useState(0);
-	const [microphoneEnabled, setMicrophoneEnabled] = useState(false);
-	const [microphoneDeviceId, setMicrophoneDeviceId] = useState<string | undefined>(undefined);
-	const [microphoneDeviceName, setMicrophoneDeviceName] = useState<string | undefined>(undefined);
-	const [webcamDeviceId, setWebcamDeviceId] = useState<string | undefined>(undefined);
-	const [webcamDeviceName, setWebcamDeviceName] = useState<string | undefined>(undefined);
-	const [systemAudioEnabled, setSystemAudioEnabled] = useState(false);
-	const [webcamEnabled, setWebcamEnabledState] = useState(false);
-	const [cursorCaptureMode, setCursorCaptureMode] = useState<CursorCaptureMode>("editable-overlay");
+	const [microphoneEnabled, setMicrophoneEnabled] = useState(
+		initialRecordingPreferences.microphoneEnabled,
+	);
+	const [microphoneDeviceId, setMicrophoneDeviceId] = useState<string | undefined>(
+		initialRecordingPreferences.microphoneDeviceId ?? undefined,
+	);
+	const [microphoneDeviceName, setMicrophoneDeviceName] = useState<string | undefined>(
+		initialRecordingPreferences.microphoneDeviceName ?? undefined,
+	);
+	const [webcamDeviceId, setWebcamDeviceId] = useState<string | undefined>(
+		initialRecordingPreferences.webcamDeviceId ?? undefined,
+	);
+	const [webcamDeviceName, setWebcamDeviceName] = useState<string | undefined>(
+		initialRecordingPreferences.webcamDeviceName ?? undefined,
+	);
+	const [systemAudioEnabled, setSystemAudioEnabled] = useState(
+		initialRecordingPreferences.systemAudioEnabled,
+	);
+	const [webcamEnabled, setWebcamEnabledState] = useState(
+		initialRecordingPreferences.webcamEnabled,
+	);
+	const [cursorCaptureMode, setCursorCaptureMode] = useState<CursorCaptureMode>(
+		initialRecordingPreferences.cursorCaptureMode,
+	);
+	const [recordingPreferencesHydrated, setRecordingPreferencesHydrated] = useState(false);
 	const screenRecorder = useRef<RecorderHandle | null>(null);
 	const webcamRecorder = useRef<RecorderHandle | null>(null);
 	const nativeWindowsRecording = useRef<NativeWindowsRecordingHandle | null>(null);
@@ -127,6 +146,58 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				(nativeMacRecording.current && !nativeMacRecording.current.finalizing) ||
 				(screenRecorder.current && screenRecorder.current.recorder.state !== "inactive"),
 		);
+
+	useEffect(() => {
+		let cancelled = false;
+		window.electronAPI
+			.initializeRecordingPreferences(initialRecordingPreferences)
+			.then(({ preferences }) => {
+				if (cancelled) return;
+				setMicrophoneEnabled(preferences.microphoneEnabled);
+				setMicrophoneDeviceId(preferences.microphoneDeviceId ?? undefined);
+				setMicrophoneDeviceName(preferences.microphoneDeviceName ?? undefined);
+				setSystemAudioEnabled(preferences.systemAudioEnabled);
+				setWebcamDeviceId(preferences.webcamDeviceId ?? undefined);
+				setWebcamDeviceName(preferences.webcamDeviceName ?? undefined);
+				setWebcamEnabledState(preferences.webcamEnabled);
+				setCursorCaptureMode(preferences.cursorCaptureMode);
+				setRecordingPreferencesHydrated(true);
+			})
+			.catch((error) => {
+				console.error("Failed to initialize recording preferences:", error);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [initialRecordingPreferences]);
+
+	useEffect(() => {
+		if (!recordingPreferencesHydrated) return;
+		void window.electronAPI
+			.updateRecordingPreferences({
+				microphoneEnabled,
+				microphoneDeviceId: microphoneDeviceId ?? null,
+				microphoneDeviceName: microphoneDeviceName ?? null,
+				systemAudioEnabled,
+				webcamEnabled,
+				webcamDeviceId: webcamDeviceId ?? null,
+				webcamDeviceName: webcamDeviceName ?? null,
+				cursorCaptureMode,
+			})
+			.catch((error) => {
+				console.error("Failed to persist recording preferences:", error);
+			});
+	}, [
+		cursorCaptureMode,
+		microphoneDeviceId,
+		microphoneDeviceName,
+		microphoneEnabled,
+		recordingPreferencesHydrated,
+		systemAudioEnabled,
+		webcamDeviceId,
+		webcamDeviceName,
+		webcamEnabled,
+	]);
 
 	const getRecordingDurationMs = useCallback(() => {
 		const segmentDuration =

@@ -21,6 +21,7 @@ import {
 import { RxDragHandleDots2 } from "react-icons/rx";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
+import { resolvePreferredCaptureSource } from "@/lib/captureSourcePreferences";
 import { loadUserPreferences, saveUserPreferences } from "@/lib/userPreferences";
 import { nativeBridgeClient } from "@/native";
 import { useAudioLevelMeter } from "../../hooks/useAudioLevelMeter";
@@ -116,6 +117,7 @@ export function LaunchWindow() {
 		setMicrophoneEnabled,
 		microphoneDeviceId,
 		setMicrophoneDeviceId,
+		microphoneDeviceName,
 		setMicrophoneDeviceName,
 		systemAudioEnabled,
 		setSystemAudioEnabled,
@@ -123,6 +125,7 @@ export function LaunchWindow() {
 		setWebcamEnabled,
 		webcamDeviceId,
 		setWebcamDeviceId,
+		webcamDeviceName,
 		setWebcamDeviceName,
 		cursorCaptureMode,
 		setCursorCaptureMode,
@@ -192,18 +195,48 @@ export function LaunchWindow() {
 	});
 
 	useEffect(() => {
-		if (selectedMicId && selectedMicId !== "default") {
-			setMicrophoneDeviceId(selectedMicId);
-			setMicrophoneDeviceName(micDevices.find((d) => d.deviceId === selectedMicId)?.label);
+		const preferredDevice =
+			micDevices.find((device) => device.deviceId === microphoneDeviceId) ??
+			micDevices.find((device) => device.label === microphoneDeviceName) ??
+			micDevices.find((device) => device.deviceId === selectedMicId);
+		if (!preferredDevice) return;
+
+		if (selectedMicId !== preferredDevice.deviceId) {
+			setSelectedMicId(preferredDevice.deviceId);
 		}
-	}, [selectedMicId, micDevices, setMicrophoneDeviceId, setMicrophoneDeviceName]);
+		setMicrophoneDeviceId(preferredDevice.deviceId);
+		setMicrophoneDeviceName(preferredDevice.label);
+	}, [
+		micDevices,
+		microphoneDeviceId,
+		microphoneDeviceName,
+		selectedMicId,
+		setMicrophoneDeviceId,
+		setMicrophoneDeviceName,
+		setSelectedMicId,
+	]);
 
 	useEffect(() => {
-		if (selectedCameraId) {
-			setWebcamDeviceId(selectedCameraId);
-			setWebcamDeviceName(cameraDevices.find((d) => d.deviceId === selectedCameraId)?.label);
+		const preferredDevice =
+			cameraDevices.find((device) => device.deviceId === webcamDeviceId) ??
+			cameraDevices.find((device) => device.label === webcamDeviceName) ??
+			cameraDevices.find((device) => device.deviceId === selectedCameraId);
+		if (!preferredDevice) return;
+
+		if (selectedCameraId !== preferredDevice.deviceId) {
+			setSelectedCameraId(preferredDevice.deviceId);
 		}
-	}, [selectedCameraId, cameraDevices, setWebcamDeviceId, setWebcamDeviceName]);
+		setWebcamDeviceId(preferredDevice.deviceId);
+		setWebcamDeviceName(preferredDevice.label);
+	}, [
+		cameraDevices,
+		selectedCameraId,
+		setSelectedCameraId,
+		setWebcamDeviceId,
+		setWebcamDeviceName,
+		webcamDeviceId,
+		webcamDeviceName,
+	]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -453,9 +486,35 @@ export function LaunchWindow() {
 	const [, setRecordPointerDownCount] = useState(0);
 
 	useEffect(() => {
+		let cancelled = false;
+		let checking = false;
+		let attemptedRestore = false;
+
 		const checkSelectedSource = async () => {
-			if (window.electronAPI) {
-				const source = await window.electronAPI.getSelectedSource();
+			if (!window.electronAPI || checking) return;
+			checking = true;
+			try {
+				let source = await window.electronAPI.getSelectedSource();
+				if (!source && !attemptedRestore) {
+					attemptedRestore = true;
+					const { preferences } = await window.electronAPI.initializeRecordingPreferences(
+						loadUserPreferences().recording,
+					);
+					const preferredSource = preferences.captureSource;
+					if (preferredSource) {
+						const sources = await window.electronAPI.getSources({
+							types: ["screen", "window"],
+							thumbnailSize: { width: 0, height: 0 },
+							fetchWindowIcons: false,
+						});
+						const restoredSource = resolvePreferredCaptureSource(preferredSource, sources);
+						if (restoredSource) {
+							source = await window.electronAPI.selectSource(restoredSource);
+						}
+					}
+				}
+
+				if (cancelled) return;
 				if (source) {
 					setSelectedSource(source.name);
 					setHasSelectedSource(true);
@@ -463,13 +522,24 @@ export function LaunchWindow() {
 					setSelectedSource("Screen");
 					setHasSelectedSource(false);
 				}
+			} catch (error) {
+				if (!cancelled) {
+					console.warn("Failed to restore the previous capture source:", error);
+					setSelectedSource("Screen");
+					setHasSelectedSource(false);
+				}
+			} finally {
+				checking = false;
 			}
 		};
 
-		checkSelectedSource();
+		void checkSelectedSource();
 
-		const interval = setInterval(checkSelectedSource, 500);
-		return () => clearInterval(interval);
+		const interval = setInterval(() => void checkSelectedSource(), 500);
+		return () => {
+			cancelled = true;
+			clearInterval(interval);
+		};
 	}, []);
 
 	const openSourceSelector = async () => {

@@ -25,26 +25,29 @@ export function SourceSelector() {
 		setLoading(true);
 		setLoadFailed(false);
 		try {
-			const rawSources = await window.electronAPI.getSources({
-				types: ["screen", "window"],
-				thumbnailSize: { width: 320, height: 180 },
-				fetchWindowIcons: true,
+			const [rawSources, activeSource] = await Promise.all([
+				window.electronAPI.getSources({
+					types: ["screen", "window"],
+					thumbnailSize: { width: 320, height: 180 },
+					fetchWindowIcons: true,
+				}),
+				window.electronAPI.getSelectedSource(),
+			]);
+			const nextSources = rawSources.map((source) => ({
+				id: source.id,
+				name:
+					source.id.startsWith("window:") && source.name.includes(" — ")
+						? source.name.split(" — ")[1] || source.name
+						: source.name,
+				thumbnail: source.thumbnail,
+				display_id: source.display_id,
+				appIcon: source.appIcon,
+			}));
+			setSources(nextSources);
+			setSelectedSource((current) => {
+				const selectedId = current?.id ?? activeSource?.id;
+				return nextSources.find((source) => source.id === selectedId) ?? null;
 			});
-			setSources(
-				rawSources.map((source) => ({
-					id: source.id,
-					name:
-						source.id.startsWith("window:") && source.name.includes(" — ")
-							? source.name.split(" — ")[1] || source.name
-							: source.name,
-					thumbnail: source.thumbnail,
-					display_id: source.display_id,
-					appIcon: source.appIcon,
-				})),
-			);
-			setSelectedSource((current) =>
-				current && rawSources.some((source) => source.id === current.id) ? current : null,
-			);
 		} catch (error) {
 			console.error("Error loading sources:", error);
 			setSources([]);
@@ -65,7 +68,8 @@ export function SourceSelector() {
 
 	const handleSourceSelect = (source: DesktopSource) => setSelectedSource(source);
 	const handleShare = async () => {
-		if (selectedSource) await window.electronAPI.selectSource(selectedSource);
+		if (!selectedSource) return;
+		await window.electronAPI.selectSource(selectedSource);
 	};
 
 	if (loading) {

@@ -18,7 +18,11 @@ import {
 	unregisterAllGlobalShortcuts,
 } from "./globalShortcut";
 import { mainT, setMainLocale } from "./i18n";
-import { getSelectedDesktopSource, registerIpcHandlers } from "./ipc/handlers";
+import {
+	getSelectedDesktopSource,
+	registerIpcHandlers,
+	restorePersistedSelectedSource,
+} from "./ipc/handlers";
 import {
 	createCountdownOverlayWindow,
 	createEditorWindow,
@@ -558,6 +562,10 @@ app.whenReady().then(async () => {
 		},
 		switchToHudWrapper,
 	);
+
+	await restorePersistedSelectedSource().catch((error) => {
+		console.error("Failed to restore the previous capture source:", error);
+	});
 
 	await loadAndRegisterGlobalShortcut(showMainWindow);
 
