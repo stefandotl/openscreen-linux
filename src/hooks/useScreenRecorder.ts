@@ -14,6 +14,7 @@ import {
 import type { CursorCaptureMode, RecordedVideoAssetInput } from "@/lib/recordingSession";
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { loadUserPreferences } from "@/lib/userPreferences";
+import { selectPreferredCameraDevice } from "./cameraDeviceSelection";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
 import { isUnexpectedWebcamTrackEnd } from "./webcamTrackLifecycle";
 
@@ -306,16 +307,38 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 		const acquire = async () => {
 			try {
+				const availableCameras = (await navigator.mediaDevices.enumerateDevices()).filter(
+					(device) => device.kind === "videoinput",
+				);
+				const preferredCamera = selectPreferredCameraDevice(
+					availableCameras,
+					webcamDeviceId,
+					webcamDeviceName,
+				);
+				if (!preferredCamera) {
+					throw new DOMException("No camera devices are available.", "NotFoundError");
+				}
+
+				// Chromium device IDs are origin-specific. Development uses localhost while
+				// packaged builds use file://, so recover a stale persisted ID by device name
+				// before requesting an exact stream.
+				if (preferredCamera.deviceId !== webcamDeviceId) {
+					setWebcamDeviceId(preferredCamera.deviceId);
+					if (preferredCamera.label) {
+						setWebcamDeviceName(preferredCamera.label);
+					}
+					return;
+				}
+				if (preferredCamera.label && preferredCamera.label !== webcamDeviceName) {
+					setWebcamDeviceName(preferredCamera.label);
+				}
+
 				const stream = await navigator.mediaDevices.getUserMedia({
 					audio: false,
-					video: webcamDeviceId
-						? {
-								deviceId: { exact: webcamDeviceId },
-								frameRate: { ideal: WEBCAM_TARGET_FRAME_RATE, max: WEBCAM_TARGET_FRAME_RATE },
-							}
-						: {
-								frameRate: { ideal: WEBCAM_TARGET_FRAME_RATE, max: WEBCAM_TARGET_FRAME_RATE },
-							},
+					video: {
+						deviceId: { exact: preferredCamera.deviceId },
+						frameRate: { ideal: WEBCAM_TARGET_FRAME_RATE, max: WEBCAM_TARGET_FRAME_RATE },
+					},
 				});
 
 				if (cancelled || thisAcquireId !== webcamAcquireId.current) {
@@ -384,7 +407,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				webcamStream.current = null;
 			}
 		};
-	}, [webcamEnabled, webcamDeviceId, t]);
+	}, [webcamEnabled, webcamDeviceId, webcamDeviceName, t]);
 
 	const finalizeRecording = useCallback(
 		(
