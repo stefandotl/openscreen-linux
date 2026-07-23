@@ -15,6 +15,7 @@ import type { CursorCaptureMode, RecordedVideoAssetInput } from "@/lib/recording
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { loadUserPreferences } from "@/lib/userPreferences";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
+import { isUnexpectedWebcamTrackEnd } from "./webcamTrackLifecycle";
 
 const TARGET_FRAME_RATE = 60;
 const MIN_FRAME_RATE = 30;
@@ -328,11 +329,26 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				acquiredStream = stream;
 				stream.getVideoTracks().forEach((track) => {
 					track.onended = () => {
-						webcamStream.current = null;
-						if (!restarting.current) {
-							setWebcamEnabledState(false);
-							toast.error(t("recording.cameraDisconnected"));
+						if (
+							!isUnexpectedWebcamTrackEnd({
+								effectCancelled: cancelled,
+								acquisitionId: thisAcquireId,
+								currentAcquisitionId: webcamAcquireId.current,
+								streamIsCurrent: webcamStream.current === stream,
+								recordingIsFinalizing:
+									finalizingRecordingId.current !== null ||
+									nativeWindowsRecording.current?.finalizing === true ||
+									nativeMacRecording.current?.finalizing === true,
+								recordingIsRestarting: restarting.current,
+							})
+						) {
+							return;
 						}
+
+						webcamStream.current = null;
+						webcamReady.current = false;
+						setWebcamEnabledState(false);
+						toast.error(t("recording.cameraDisconnected"));
 					};
 				});
 				webcamStream.current = stream;

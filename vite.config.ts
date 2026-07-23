@@ -7,19 +7,22 @@ import electron from "vite-plugin-electron/simple";
 
 type ProcessWithElectron = NodeJS.Process & { electronApp?: ChildProcess };
 
-// vite-plugin-electron 0.29.1 includes Vite's sibling processes in its Linux tree kill,
-// so restarting Electron also kills Vite's esbuild service. A detached process group keeps
-// Electron and its helpers isolated while preserving main-process hot restarts.
+// vite-plugin-electron 0.29.1 includes Vite's sibling processes in its Linux tree kill.
+// Stop only the Electron main process and let Electron tear down its own children. Keeping
+// Electron attached also prevents it from surviving as an orphan after the Vite process exits.
 if (process.platform === "linux") {
 	electronStartup.exit = async () => {
 		const hostProcess = process as ProcessWithElectron;
 		const child = hostProcess.electronApp;
 		if (!child) return;
 
-		delete hostProcess.electronApp;
 		child.removeAllListeners();
-		const pid = child.pid;
-		if (!pid || child.exitCode !== null) return;
+		if (!child.pid || child.exitCode !== null) {
+			if (hostProcess.electronApp === child) {
+				delete hostProcess.electronApp;
+			}
+			return;
+		}
 
 		await new Promise<void>((resolve) => {
 			let settled = false;
@@ -33,20 +36,18 @@ if (process.platform === "linux") {
 
 			child.once("exit", finish);
 			forceTimer = setTimeout(() => {
-				try {
-					process.kill(-pid, "SIGKILL");
-				} catch {
-					// The process group already exited.
-				}
+				child.kill("SIGKILL");
 				finish();
 			}, 3000);
 
-			try {
-				process.kill(-pid, "SIGTERM");
-			} catch {
+			if (!child.kill("SIGTERM")) {
 				finish();
 			}
 		});
+
+		if (hostProcess.electronApp === child) {
+			delete hostProcess.electronApp;
+		}
 	};
 }
 
@@ -65,7 +66,6 @@ export default defineConfig({
 					delete env.ELECTRON_RUN_AS_NODE;
 					return startup(["."], {
 						env,
-						detached: process.platform === "linux",
 					});
 				},
 				vite: {
