@@ -1,9 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const shouldSync = process.argv.includes("--sync");
 
 function readJson(relativePath) {
 	return JSON.parse(readFileSync(path.join(projectRoot, relativePath), "utf8"));
@@ -15,6 +16,7 @@ function fail(message) {
 }
 
 const packageJson = readJson("package.json");
+const packageLockPath = path.join(projectRoot, "package-lock.json");
 const packageLock = readJson("package-lock.json");
 const version = packageJson.version;
 
@@ -22,12 +24,24 @@ if (typeof version !== "string" || !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(v
 	fail(`package.json contains an invalid version: ${JSON.stringify(version)}`);
 }
 
-const lockVersions = [
-	["package-lock.json version", packageLock.version],
-	['package-lock.json packages[""] version', packageLock.packages?.[""]?.version],
-];
+function getLockVersions() {
+	return [
+		["package-lock.json version", packageLock.version],
+		['package-lock.json packages[""] version', packageLock.packages?.[""]?.version],
+	];
+}
 
-for (const [source, lockVersion] of lockVersions) {
+if (shouldSync && getLockVersions().some(([, lockVersion]) => lockVersion !== version)) {
+	packageLock.version = version;
+	if (!packageLock.packages?.[""]) {
+		fail('package-lock.json does not contain a packages[""] entry');
+	}
+	packageLock.packages[""].version = version;
+	writeFileSync(packageLockPath, `${JSON.stringify(packageLock, null, "\t")}\n`);
+	console.log(`[release-version] synchronized package-lock.json to ${version}`);
+}
+
+for (const [source, lockVersion] of getLockVersions()) {
 	if (lockVersion !== version) {
 		fail(`${source} is ${JSON.stringify(lockVersion)}, but package.json is ${version}`);
 	}

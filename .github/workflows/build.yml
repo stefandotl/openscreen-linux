@@ -26,6 +26,9 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Synchronize release version
+        run: npm run version:sync
+
       - name: Install dependencies
         run: npm ci
 
@@ -66,6 +69,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      - name: Synchronize release version
+        run: npm run version:sync
 
       # ─── Setup Python (needed by some native deps) ────────────
       - name: Setup Python
@@ -263,6 +269,9 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '22'
+
+      - name: Synchronize release version
+        run: npm run version:sync
 
       - name: Install dependencies
         run: npm ci
