@@ -1,4 +1,4 @@
-import { Film, Plus, Trash2 } from "lucide-react";
+import { Film, PanelLeftClose, Plus, Trash2 } from "lucide-react";
 import type { EditorScene } from "./sceneModel";
 
 interface SceneStripProps {
@@ -7,8 +7,10 @@ interface SceneStripProps {
 	onSelect: (sceneId: string) => void;
 	onAdd: () => void;
 	onDelete: (sceneId: string) => void;
+	onCollapse: () => void;
 	addLabel: string;
 	deleteLabel: string;
+	collapseLabel: string;
 }
 
 function sceneLabel(scene: EditorScene) {
@@ -25,11 +27,24 @@ export default function SceneStrip({
 	onSelect,
 	onAdd,
 	onDelete,
+	onCollapse,
 	addLabel,
 	deleteLabel,
+	collapseLabel,
 }: SceneStripProps) {
 	return (
-		<aside className="flex w-[88px] shrink-0 flex-col gap-2 border-r border-white/[0.08] bg-[#0b0b0d] p-2">
+		<aside className="flex h-full w-full flex-col gap-2 bg-[#0b0b0d] p-2">
+			<div className="flex items-center justify-end border-b border-white/[0.08] pb-1">
+				<button
+					type="button"
+					onClick={onCollapse}
+					className="flex h-6 w-6 items-center justify-center rounded-md text-white/45 transition-colors hover:bg-white/[0.08] hover:text-white"
+					aria-label={collapseLabel}
+					title={collapseLabel}
+				>
+					<PanelLeftClose size={14} />
+				</button>
+			</div>
 			<div className="flex flex-col gap-2 overflow-y-auto">
 				{scenes.map((scene, index) => {
 					const isActive = scene.id === activeSceneId;

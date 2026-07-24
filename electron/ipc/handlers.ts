@@ -339,6 +339,21 @@ function runProcess(
 	});
 }
 
+function isExportSegmentPath(filePath: string, outputPath: string) {
+	const outputDirectory = path.dirname(outputPath);
+	const outputBase = path.basename(outputPath);
+	const segmentBase = path.basename(filePath);
+	return (
+		path.dirname(filePath) === outputDirectory &&
+		segmentBase.startsWith(`${outputBase}.segment-`) &&
+		segmentBase.toLowerCase().endsWith(".mp4")
+	);
+}
+
+function escapeConcatFilePath(filePath: string) {
+	return filePath.replace(/'/g, "'\\''");
+}
+
 function parseAfinfoAudioTrackBitrates(output: string): number[] {
 	const bitrates: number[] = [];
 	const trackSections = output.split(/\n----\n/g).slice(1);
@@ -572,6 +587,7 @@ let selectedDesktopSource: DesktopCapturerSource | null = null;
 let lastEnumeratedSources = new Map<string, DesktopCapturerSource>();
 let currentProjectPath: string | null = null;
 let currentRecordingSession: RecordingSession | null = null;
+let pendingRecordingSceneId: string | null = null;
 
 // Cached source from the user's pick. Used by setDisplayMediaRequestHandler in main.ts for cursor-free capture.
 export function getSelectedDesktopSource(): DesktopCapturerSource | null {
@@ -1433,6 +1449,12 @@ function setCurrentRecordingSessionState(session: RecordingSession | null) {
 	currentVideoPath = session?.screenVideoPath ?? null;
 }
 
+function clearCurrentProjectForNewMedia() {
+	if (!pendingRecordingSceneId) {
+		currentProjectPath = null;
+	}
+}
+
 function getSessionManifestPathForVideo(videoPath: string) {
 	const parsedPath = path.parse(videoPath);
 	const baseName = parsedPath.name.endsWith("-webcam")
@@ -1792,7 +1814,8 @@ export function registerIpcHandlers(
 		return { success: true };
 	});
 
-	ipcMain.handle("start-new-recording", () => {
+	ipcMain.handle("start-new-recording", (_, sceneId?: string) => {
+		pendingRecordingSceneId = typeof sceneId === "string" && sceneId.length > 0 ? sceneId : null;
 		_switchToHud?.();
 		return { success: true };
 	});
@@ -2337,7 +2360,7 @@ export function registerIpcHandlers(
 				? { screenVideoPath, webcamVideoPath, createdAt: recordingId, cursorCaptureMode }
 				: { screenVideoPath, createdAt: recordingId, cursorCaptureMode };
 			setCurrentRecordingSessionState(session);
-			currentProjectPath = null;
+			clearCurrentProjectForNewMedia();
 
 			const sessionManifestPath = path.join(
 				RECORDINGS_DIR,
@@ -2423,7 +2446,7 @@ export function registerIpcHandlers(
 				cursorCaptureMode,
 			};
 			setCurrentRecordingSessionState(session);
-			currentProjectPath = null;
+			clearCurrentProjectForNewMedia();
 
 			const sessionManifestPath = path.join(
 				RECORDINGS_DIR,
@@ -2495,7 +2518,7 @@ export function registerIpcHandlers(
 					...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 				};
 				setCurrentRecordingSessionState(session);
-				currentProjectPath = null;
+				clearCurrentProjectForNewMedia();
 
 				const sessionManifestPath = path.join(
 					RECORDINGS_DIR,
@@ -2586,7 +2609,7 @@ export function registerIpcHandlers(
 				}
 			: { screenVideoPath, createdAt, ...(cursorCaptureMode ? { cursorCaptureMode } : {}) };
 		setCurrentRecordingSessionState(session);
-		currentProjectPath = null;
+		clearCurrentProjectForNewMedia();
 
 		await writePendingCursorTelemetry(screenVideoPath);
 
@@ -2774,6 +2797,107 @@ export function registerIpcHandlers(
 			};
 		}
 	});
+
+	ipcMain.handle(
+		"combine-export-segments",
+		async (_, segmentPaths: unknown, outputPath: unknown) => {
+			const segments = Array.isArray(segmentPaths)
+				? segmentPaths.filter((segment): segment is string => typeof segment === "string")
+				: [];
+			const normalizedOutput = typeof outputPath === "string" ? path.normalize(outputPath) : "";
+			if (
+				segments.length < 2 ||
+				!path.isAbsolute(normalizedOutput) ||
+				!normalizedOutput.toLowerCase().endsWith(".mp4") ||
+				segments.some(
+					(segment) =>
+						!path.isAbsolute(segment) ||
+						!segment.toLowerCase().endsWith(".mp4") ||
+						!isExportSegmentPath(path.normalize(segment), normalizedOutput),
+				)
+			) {
+				return { success: false, message: "Invalid export segment paths" };
+			}
+
+			const normalizedSegments = segments.map((segment) => path.normalize(segment));
+			const listPath = path.join(
+				os.tmpdir(),
+				`openscreen-export-concat-${process.pid}-${Date.now()}.txt`,
+			);
+			try {
+				for (const segment of normalizedSegments) {
+					const stats = await fs.stat(segment);
+					if (!stats.isFile()) throw new Error(`Export segment is not a file: ${segment}`);
+				}
+				await fs.writeFile(
+					listPath,
+					normalizedSegments.map((segment) => `file '${escapeConcatFilePath(segment)}'`).join("\n"),
+					"utf-8",
+				);
+				const result = await runProcess(getFfmpegBinary(), [
+					"-hide_banner",
+					"-loglevel",
+					"error",
+					"-y",
+					"-f",
+					"concat",
+					"-safe",
+					"0",
+					"-i",
+					listPath,
+					"-map",
+					"0:v:0",
+					"-map",
+					"0:a:0?",
+					"-c",
+					"copy",
+					"-movflags",
+					"+faststart",
+					normalizedOutput,
+				]);
+				if (result.code !== 0) {
+					throw new Error(result.stderr || `FFmpeg exited with code ${result.code}`);
+				}
+				await Promise.all(normalizedSegments.map((segment) => fs.rm(segment, { force: true })));
+				return {
+					success: true,
+					path: normalizedOutput,
+					message: "Video segments combined successfully",
+				};
+			} catch (error) {
+				await Promise.all(normalizedSegments.map((segment) => fs.rm(segment, { force: true })));
+				return {
+					success: false,
+					message: "Failed to combine export segments",
+					error: error instanceof Error ? error.message : String(error),
+				};
+			} finally {
+				await fs.rm(listPath, { force: true }).catch(() => undefined);
+			}
+		},
+	);
+
+	ipcMain.handle(
+		"cleanup-export-segments",
+		async (_, segmentPaths: unknown, outputPath: unknown) => {
+			const segments = Array.isArray(segmentPaths)
+				? segmentPaths.filter((segment): segment is string => typeof segment === "string")
+				: [];
+			const normalizedOutput = typeof outputPath === "string" ? path.normalize(outputPath) : "";
+			if (
+				!path.isAbsolute(normalizedOutput) ||
+				!segments.every(
+					(segment) =>
+						path.isAbsolute(segment) &&
+						isExportSegmentPath(path.normalize(segment), normalizedOutput),
+				)
+			) {
+				return { success: false, message: "Invalid export segment paths" };
+			}
+			await Promise.all(segments.map((segment) => fs.rm(path.normalize(segment), { force: true })));
+			return { success: true };
+		},
+	);
 
 	ipcMain.handle("open-video-file-picker", async () => {
 		try {
@@ -3176,14 +3300,28 @@ export function registerIpcHandlers(
 		const normalizedSession = normalizeRecordingSession(session);
 		setCurrentRecordingSessionState(normalizedSession);
 		currentVideoPath = normalizedSession?.screenVideoPath ?? null;
-		currentProjectPath = null;
+		if (!pendingRecordingSceneId) {
+			currentProjectPath = null;
+		}
 		return { success: true, session: currentRecordingSession };
 	});
 
 	ipcMain.handle("get-current-recording-session", () => {
 		return currentRecordingSession
-			? { success: true, session: currentRecordingSession }
-			: { success: false };
+			? {
+					success: true,
+					session: currentRecordingSession,
+					...(pendingRecordingSceneId ? { pendingSceneId: pendingRecordingSceneId } : {}),
+				}
+			: {
+					success: false,
+					...(pendingRecordingSceneId ? { pendingSceneId: pendingRecordingSceneId } : {}),
+				};
+	});
+
+	ipcMain.handle("clear-pending-recording-scene", () => {
+		pendingRecordingSceneId = null;
+		return { success: true };
 	});
 
 	async function setCurrentVideoPath(path: string): Promise<ProjectPathResult> {
@@ -3204,7 +3342,7 @@ export function registerIpcHandlers(
 				createdAt: Date.now(),
 			});
 		}
-		currentProjectPath = null;
+		clearCurrentProjectForNewMedia();
 		return { success: true, path: currentVideoPath ?? normalizedPath };
 	}
 

@@ -48,6 +48,7 @@ interface NativeGpuExportSession {
 	sourceDurationSec: number;
 	trimRegions?: Array<{ startMs: number; endMs: number }>;
 	speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
+	ensureAudioTrack: boolean;
 	totalFrames: number;
 	frameRate: number;
 	sender: WebContents;
@@ -456,6 +457,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 					sourceDurationSec: payload.sourceDurationSec,
 					trimRegions: payload.trimRegions,
 					speedRegions: payload.speedRegions,
+					ensureAudioTrack: payload.ensureAudioTrack === true,
 					totalFrames: payload.plan.frames.length,
 					frameRate: payload.plan.frameRate,
 					sender: event.sender,
@@ -511,7 +513,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 				totalFrames: session.totalFrames,
 				fps: 0,
 			});
-			if (session.audioPath) {
+			if (session.audioPath || session.ensureAudioTrack) {
 				const audioFilter = dependencies.buildAudioTimelineFilter(
 					session.sourceDurationSec,
 					session.trimRegions,
@@ -525,6 +527,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 							videoOnlyPath: session.videoOnlyPath,
 							audioPath: session.audioPath,
 							outputPath: session.outputPath,
+							ensureAudioTrack: session.ensureAudioTrack,
 							totalFrames: session.totalFrames,
 							frameRate: session.frameRate,
 						},

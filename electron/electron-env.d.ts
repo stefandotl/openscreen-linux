@@ -30,7 +30,7 @@ interface Window {
 		getSources: (opts: Electron.SourcesOptions) => Promise<ProcessedDesktopSource[]>;
 		switchToEditor: () => Promise<void>;
 		switchToHud: () => Promise<void>;
-		startNewRecording: () => Promise<{ success: boolean; error?: string }>;
+		startNewRecording: (sceneId?: string) => Promise<{ success: boolean; error?: string }>;
 		openSourceSelector: () => Promise<{
 			opened: boolean;
 			reason?: string;
@@ -200,6 +200,23 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		combineExportSegments: (
+			segmentPaths: string[],
+			outputPath: string,
+		) => Promise<{
+			success: boolean;
+			path?: string;
+			message?: string;
+			error?: string;
+		}>;
+		cleanupExportSegments: (
+			segmentPaths: string[],
+			outputPath: string,
+		) => Promise<{
+			success: boolean;
+			message?: string;
+			error?: string;
+		}>;
 		startNativeGpuExport: (
 			payload: import("../src/lib/exporter/nativeGpuExportProtocol").NativeGpuExportRequest,
 		) => Promise<import("../src/lib/exporter/nativeGpuExportProtocol").NativeGpuExportStartResult>;
@@ -228,7 +245,9 @@ interface Window {
 		getCurrentRecordingSession: () => Promise<{
 			success: boolean;
 			session?: import("../src/lib/recordingSession").RecordingSession;
+			pendingSceneId?: string;
 		}>;
+		clearPendingRecordingScene: () => Promise<{ success: boolean }>;
 		readBinaryFile: (filePath: string) => Promise<{
 			success: boolean;
 			data?: ArrayBuffer;

@@ -30,4 +30,21 @@ describe("buildNativeGpuAudioMuxArgs", () => {
 		);
 		expect(args).toContain("[native_audio]");
 	});
+
+	it("creates a silent AAC track when a scene has no source audio", () => {
+		const args = buildNativeGpuAudioMuxArgs(
+			{
+				videoOnlyPath: "/tmp/video.mp4",
+				ensureAudioTrack: true,
+				outputPath: "/tmp/output.mp4",
+				totalFrames: 30,
+				frameRate: 30,
+			},
+			null,
+		);
+
+		expect(args).toContain("anullsrc=channel_layout=stereo:sample_rate=48000");
+		expect(args).toContain("1:a?");
+		expect(args).toContain("-c:a");
+	});
 });

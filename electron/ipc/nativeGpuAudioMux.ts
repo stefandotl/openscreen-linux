@@ -5,7 +5,8 @@ export interface AudioTimelineFilter {
 
 interface NativeGpuAudioMuxInput {
 	videoOnlyPath: string;
-	audioPath: string;
+	audioPath?: string;
+	ensureAudioTrack?: boolean;
 	outputPath: string;
 	totalFrames: number;
 	frameRate: number;
@@ -23,14 +24,18 @@ export function buildNativeGpuAudioMuxArgs(
 				`${audioFilter.filter};${audioFilter.outputLabel}apad=whole_dur=${outputDuration}${paddedAudioLabel}`,
 			]
 		: ["-af", `apad=whole_dur=${outputDuration}`];
+	const audioInputArgs = input.audioPath
+		? ["-i", input.audioPath]
+		: input.ensureAudioTrack
+			? ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"]
+			: [];
 
 	return [
 		"-hide_banner",
 		"-y",
 		"-i",
 		input.videoOnlyPath,
-		"-i",
-		input.audioPath,
+		...audioInputArgs,
 		...audioFilterArgs,
 		"-map",
 		"0:v:0",

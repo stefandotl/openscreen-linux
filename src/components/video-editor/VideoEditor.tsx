@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { FolderOpen, Languages, Save, Video } from "lucide-react";
+import { FolderOpen, Languages, PanelLeftOpen, Save, Video } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -237,8 +237,10 @@ export default function VideoEditor() {
 	const [webcamVideoSourcePath, setWebcamVideoSourcePath] = useState<string | null>(null);
 	const [scenes, setScenes] = useState<EditorScene[]>([]);
 	const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
+	const [shouldPersistAttachedRecording, setShouldPersistAttachedRecording] = useState(false);
 	const scenesRef = useRef<EditorScene[]>([]);
 	const activeSceneIdRef = useRef<string | null>(null);
+	const pendingRecordingSceneIdRef = useRef<string | null>(null);
 	const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -260,6 +262,7 @@ export default function VideoEditor() {
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDialog, setShowExportDialog] = useState(false);
 	const [showNewRecordingDialog, setShowNewRecordingDialog] = useState(false);
+	const [isSceneStripOpen, setIsSceneStripOpen] = useState(true);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(
 		DEFAULT_EXPORT_SETTINGS.quality,
 	);
@@ -465,14 +468,7 @@ export default function VideoEditor() {
 		const nextScenes = [...scenesRef.current, scene];
 		scenesRef.current = nextScenes;
 		setScenes(nextScenes);
-		activeSceneIdRef.current = scene.id;
-		setActiveSceneId(scene.id);
-		applySceneMedia(null);
-		resetState(scene.editor);
-		setCurrentTime(0);
-		setDuration(0);
-		setIsPlaying(false);
-	}, [applySceneMedia, createSceneFromMedia, resetState, updateActiveSceneSnapshot]);
+	}, [createSceneFromMedia, updateActiveSceneSnapshot]);
 
 	const handleSelectScene = useCallback(
 		(sceneId: string) => {
@@ -542,6 +538,28 @@ export default function VideoEditor() {
 		[applySceneMedia, installInitialScene],
 	);
 
+	const attachRecordingToScene = useCallback(
+		(sceneId: string, media: ProjectMedia) => {
+			const scene = scenesRef.current.find((candidate) => candidate.id === sceneId);
+			if (!scene) return false;
+
+			const nextScenes = scenesRef.current.map((candidate) =>
+				candidate.id === sceneId ? { ...candidate, media } : candidate,
+			);
+			scenesRef.current = nextScenes;
+			setScenes(nextScenes);
+			activeSceneIdRef.current = sceneId;
+			setActiveSceneId(sceneId);
+			applySceneMedia(media);
+			resetState(scene.editor);
+			setCurrentTime(0);
+			setDuration(0);
+			setIsPlaying(false);
+			return true;
+		},
+		[applySceneMedia, resetState],
+	);
+
 	const projectEditorForScene = useCallback(
 		(sceneEditor: EditorState): ProjectEditorState => ({
 			...sceneEditor,
@@ -572,14 +590,17 @@ export default function VideoEditor() {
 
 			const project = candidate;
 			const savedScenes = normalizeProjectScenes(project.scenes);
-			const savedActiveScene = savedScenes.find((scene) => scene.id === project.activeSceneId);
-			const projectMedia = savedActiveScene?.media ?? resolveProjectMedia(project);
-			if (!projectMedia) {
+			const savedActiveScene =
+				savedScenes.find((scene) => scene.id === project.activeSceneId) ?? savedScenes[0];
+			const fallbackProjectMedia =
+				resolveProjectMedia(project) ?? savedScenes.find((scene) => scene.media)?.media ?? null;
+			const projectMedia = savedActiveScene?.media ?? fallbackProjectMedia;
+			if (!fallbackProjectMedia) {
 				return false;
 			}
-			const sourcePath = projectMedia.screenVideoPath;
-			const webcamSourcePath = projectMedia.webcamVideoPath ?? null;
-			const projectCursorCaptureMode = projectMedia.cursorCaptureMode ?? null;
+			const sourcePath = projectMedia?.screenVideoPath ?? null;
+			const webcamSourcePath = projectMedia?.webcamVideoPath ?? null;
+			const projectCursorCaptureMode = projectMedia?.cursorCaptureMode ?? null;
 			const normalizedEditor = normalizeProjectEditor(savedActiveScene?.editor ?? project.editor);
 			const loadedSceneEditor = editorStateForScene({
 				wallpaper: normalizedEditor.wallpaper,
@@ -631,7 +652,7 @@ export default function VideoEditor() {
 
 			setError(null);
 			setVideoSourcePath(sourcePath);
-			setVideoPath(toFileUrl(sourcePath));
+			setVideoPath(sourcePath ? toFileUrl(sourcePath) : null);
 			setWebcamVideoSourcePath(webcamSourcePath);
 			setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
 			setRecordingCursorCaptureMode(projectCursorCaptureMode);
@@ -744,14 +765,29 @@ export default function VideoEditor() {
 					0,
 				) + 1;
 
+			const savedSnapshotScenes =
+				savedScenes.length > 1
+					? loadedSceneList.map((scene) => ({
+							id: scene.id,
+							name: scene.name,
+							media: scene.media,
+							editor: {
+								...scene.editor,
+								exportQuality: normalizedEditor.exportQuality,
+								exportFormat: normalizedEditor.exportFormat,
+								gifFrameRate: normalizedEditor.gifFrameRate,
+								gifLoop: normalizedEditor.gifLoop,
+								gifSizePreset: normalizedEditor.gifSizePreset,
+								cursorTheme: normalizedEditor.cursorTheme,
+							},
+						}))
+					: undefined;
 			setLastSavedSnapshot(
 				createProjectSnapshot(
-					{
-						screenVideoPath: sourcePath,
-						...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
-						...(projectCursorCaptureMode ? { cursorCaptureMode: projectCursorCaptureMode } : {}),
-					},
+					fallbackProjectMedia,
 					normalizedEditor,
+					savedSnapshotScenes,
+					activeLoadedScene.id,
 				),
 			);
 			return true;
@@ -760,12 +796,13 @@ export default function VideoEditor() {
 	);
 
 	const currentProjectSnapshot = useMemo(() => {
-		if (!currentProjectMedia) {
+		const snapshotMedia = currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
+		if (!snapshotMedia) {
 			return null;
 		}
 		const persistedScenes = scenes.length > 1 ? projectScenes : undefined;
 		return createProjectSnapshot(
-			currentProjectMedia,
+			snapshotMedia,
 			{
 				wallpaper,
 				shadowIntensity,
@@ -802,7 +839,7 @@ export default function VideoEditor() {
 		currentProjectMedia,
 		activeSceneId,
 		projectScenes,
-		scenes.length,
+		scenes,
 		cursorTheme,
 		wallpaper,
 		shadowIntensity,
@@ -837,6 +874,7 @@ export default function VideoEditor() {
 	useEffect(() => {
 		async function loadInitialData() {
 			try {
+				const currentSessionResult = await window.electronAPI.getCurrentRecordingSession();
 				const currentProjectResult = await nativeBridgeClient.project.loadCurrentProjectFile();
 				if (currentProjectResult.success && currentProjectResult.project) {
 					const restored = await applyLoadedProject(
@@ -844,11 +882,29 @@ export default function VideoEditor() {
 						currentProjectResult.path ?? null,
 					);
 					if (restored) {
+						const pendingSceneId = currentSessionResult.pendingSceneId;
+						const session = currentSessionResult.session;
+						if (pendingSceneId && session) {
+							const sessionMedia: ProjectMedia = {
+								screenVideoPath: fromFileUrl(session.screenVideoPath),
+								...(session.webcamVideoPath
+									? { webcamVideoPath: fromFileUrl(session.webcamVideoPath) }
+									: {}),
+								...(session.cursorCaptureMode
+									? { cursorCaptureMode: session.cursorCaptureMode }
+									: {}),
+							};
+							if (!attachRecordingToScene(pendingSceneId, sessionMedia)) {
+								toast.error("The recorded video could not be attached to its scene.");
+							} else {
+								setShouldPersistAttachedRecording(true);
+							}
+							await window.electronAPI.clearPendingRecordingScene();
+						}
 						return;
 					}
 				}
 
-				const currentSessionResult = await window.electronAPI.getCurrentRecordingSession();
 				if (currentSessionResult.success && currentSessionResult.session) {
 					const session = currentSessionResult.session;
 					const sourcePath = fromFileUrl(session.screenVideoPath);
@@ -861,6 +917,9 @@ export default function VideoEditor() {
 						...(session.cursorCaptureMode ? { cursorCaptureMode: session.cursorCaptureMode } : {}),
 					};
 					installInitialScene(sessionMedia);
+					if (currentSessionResult.pendingSceneId) {
+						await window.electronAPI.clearPendingRecordingScene();
+					}
 					setCurrentProjectPath(null);
 					setLastSavedSnapshot(
 						createProjectSnapshot(
@@ -895,7 +954,7 @@ export default function VideoEditor() {
 		}
 
 		loadInitialData();
-	}, [applyLoadedProject, installInitialScene]);
+	}, [applyLoadedProject, attachRecordingToScene, installInitialScene]);
 
 	// Avoid overwriting saved prefs with defaults before they've loaded.
 	const [prefsHydrated, setPrefsHydrated] = useState(false);
@@ -1043,6 +1102,12 @@ export default function VideoEditor() {
 	}, [hasUnsavedChanges]);
 
 	useEffect(() => {
+		if (!shouldPersistAttachedRecording) return;
+		setShouldPersistAttachedRecording(false);
+		void saveProject(false);
+	}, [saveProject, shouldPersistAttachedRecording]);
+
+	useEffect(() => {
 		const cleanup = window.electronAPI.onRequestSaveBeforeClose(async () => {
 			return saveProject(false);
 		});
@@ -1079,11 +1144,32 @@ export default function VideoEditor() {
 		await saveProject(true);
 	}, [saveProject]);
 
+	const handleStartSceneRecording = useCallback(async () => {
+		const sceneId = activeSceneIdRef.current;
+		if (!sceneId) {
+			setShowNewRecordingDialog(true);
+			return;
+		}
+
+		pendingRecordingSceneIdRef.current = sceneId;
+		// Persist the complete project before the recorder replaces this window.
+		// This also opens Save As for projects that have not been saved yet, so
+		// the scene list cannot be lost during the recorder transition.
+		const saved = await saveProject(false);
+		if (!saved) {
+			pendingRecordingSceneIdRef.current = null;
+			return;
+		}
+		setShowNewRecordingDialog(true);
+	}, [saveProject]);
+
 	const handleNewRecordingConfirm = useCallback(async () => {
-		const result = await window.electronAPI.startNewRecording();
+		const sceneId = pendingRecordingSceneIdRef.current ?? undefined;
+		const result = await window.electronAPI.startNewRecording(sceneId);
 		if (result.success) {
 			setShowNewRecordingDialog(false);
 		} else {
+			pendingRecordingSceneIdRef.current = null;
 			console.error("Failed to start new recording:", result.error);
 			setError("Failed to start new recording: " + (result.error || "Unknown error"));
 		}
@@ -2142,6 +2228,13 @@ export default function VideoEditor() {
 				toast.error("No video loaded");
 				return;
 			}
+			const scenesWithMedia = projectScenes.filter(
+				(scene): scene is ProjectSceneData & { media: ProjectMedia } => Boolean(scene.media),
+			);
+			if (settings.format === "gif" && scenesWithMedia.length > 1) {
+				toast.error("GIF export currently supports one scene at a time.");
+				return;
+			}
 
 			const video = videoPlaybackRef.current?.video;
 			if (!video) {
@@ -2289,98 +2382,222 @@ export default function VideoEditor() {
 						aspectRatioValue,
 					});
 
-					const exporter = new VideoExporter({
-						videoUrl: videoPath,
-						webcamVideoUrl: webcamVideoPath || undefined,
-						nativeOutputPath: targetPath,
-						nativeAudioPath: videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : undefined),
-						preferNativeNvenc: true,
-						width: exportWidth,
-						height: exportHeight,
-						frameRate: MP4_EXPORT_FRAME_RATE,
-						bitrate,
-						codec: "avc1.640033",
-						wallpaper,
-						zoomRegions,
-						trimRegions,
-						speedRegions,
-						showShadow: shadowIntensity > 0,
-						shadowIntensity,
-						showBlur,
-						motionBlurAmount,
-						borderRadius,
-						padding,
-						cropRegion,
-						cursorRecordingData,
-						cursorScale: effectiveShowCursor ? cursorSize : 0,
-						cursorSmoothing,
-						cursorMotionBlur,
-						cursorClickBounce,
-						cursorClipToBounds,
-						cursorTheme,
-						annotationRegions,
-						webcamLayoutPreset,
-						webcamMaskShape,
-						webcamMirrored,
-						webcamReactiveZoom,
-						webcamSizePreset,
-						webcamPosition,
-						previewWidth,
-						previewHeight,
-						cursorTelemetry,
-						cursorClickTimestamps,
-						onProgress: (progress: ExportProgress) => {
-							setExportProgress(progress);
-						},
-					});
+					if (scenesWithMedia.length > 1) {
+						const segmentPaths: string[] = [];
+						try {
+							for (let sceneIndex = 0; sceneIndex < scenesWithMedia.length; sceneIndex += 1) {
+								const scene = scenesWithMedia[sceneIndex];
+								const media = scene.media;
+								const sceneEditor = scene.editor;
+								const segmentPath = `${targetPath}.segment-${sceneIndex}.mp4`;
+								let sceneCursorRecordingData =
+									scene.id === activeSceneId ? cursorRecordingData : null;
+								let sceneCursorTelemetry = scene.id === activeSceneId ? cursorTelemetry : [];
+								if (effectiveShowCursor && scene.id !== activeSceneId) {
+									try {
+										[sceneCursorRecordingData, sceneCursorTelemetry] = await Promise.all([
+											nativeBridgeClient.cursor.getRecordingData(media.screenVideoPath),
+											nativeBridgeClient.cursor.getTelemetry(media.screenVideoPath),
+										]);
+									} catch (error) {
+										console.warn("[multi-scene-export] Cursor data unavailable for scene", {
+											sceneId: scene.id,
+											error: String(error),
+										});
+									}
+								}
 
-					exporterRef.current = exporter;
-					const result = await exporter.export();
-
-					if (result.success && result.path) {
-						if (result.warnings) {
-							for (const warning of result.warnings) {
-								toast.warning(warning);
+								const sceneExporter = new VideoExporter({
+									videoUrl: toFileUrl(media.screenVideoPath),
+									webcamVideoUrl: media.webcamVideoPath
+										? toFileUrl(media.webcamVideoPath)
+										: undefined,
+									nativeOutputPath: segmentPath,
+									nativeAudioPath: media.screenVideoPath,
+									ensureAudioTrack: true,
+									preferNativeNvenc: true,
+									width: exportWidth,
+									height: exportHeight,
+									frameRate: MP4_EXPORT_FRAME_RATE,
+									bitrate,
+									codec: "avc1.640033",
+									wallpaper: sceneEditor.wallpaper,
+									zoomRegions: sceneEditor.zoomRegions,
+									trimRegions: sceneEditor.trimRegions,
+									speedRegions: sceneEditor.speedRegions,
+									showShadow: sceneEditor.shadowIntensity > 0,
+									shadowIntensity: sceneEditor.shadowIntensity,
+									showBlur: sceneEditor.showBlur,
+									motionBlurAmount: sceneEditor.motionBlurAmount,
+									borderRadius: sceneEditor.borderRadius,
+									padding: sceneEditor.padding,
+									videoPadding: sceneEditor.padding,
+									cropRegion: sceneEditor.cropRegion,
+									cursorRecordingData: sceneCursorRecordingData,
+									cursorScale: effectiveShowCursor ? cursorSize : 0,
+									cursorSmoothing,
+									cursorMotionBlur,
+									cursorClickBounce,
+									cursorClipToBounds,
+									cursorTheme,
+									annotationRegions: sceneEditor.annotationRegions,
+									webcamLayoutPreset: sceneEditor.webcamLayoutPreset,
+									webcamMaskShape: sceneEditor.webcamMaskShape,
+									webcamMirrored: sceneEditor.webcamMirrored,
+									webcamReactiveZoom: sceneEditor.webcamReactiveZoom,
+									webcamSizePreset: sceneEditor.webcamSizePreset,
+									webcamPosition: sceneEditor.webcamPosition,
+									previewWidth,
+									previewHeight,
+									cursorTelemetry: sceneCursorTelemetry,
+									cursorClickTimestamps: scene.id === activeSceneId ? cursorClickTimestamps : [],
+									onProgress: (progress: ExportProgress) => {
+										setExportProgress({
+											...progress,
+											percentage:
+												((sceneIndex + progress.percentage / 100) / scenesWithMedia.length) * 100,
+										});
+									},
+								});
+								exporterRef.current = sceneExporter;
+								const sceneResult = await sceneExporter.export();
+								if (!sceneResult.success) {
+									throw new Error(
+										`Scene ${sceneIndex + 1} export failed: ${sceneResult.error || "unknown error"}`,
+									);
+								}
+								if (sceneResult.path) {
+									segmentPaths.push(sceneResult.path);
+								} else if (sceneResult.blob) {
+									segmentPaths.push(segmentPath);
+									const segmentData = await window.electronAPI.writeExportToPath(
+										await sceneResult.blob.arrayBuffer(),
+										segmentPath,
+									);
+									if (!segmentData.success || !segmentData.path) {
+										throw new Error(
+											segmentData.error || segmentData.message || "Failed to save scene segment",
+										);
+									}
+									segmentPaths[segmentPaths.length - 1] = segmentData.path;
+								} else {
+									throw new Error(`Scene ${sceneIndex + 1} export returned no output`);
+								}
 							}
-						}
-						setUnsavedExport(null);
-						handleExportSaved("Video", result.path);
-					} else if (result.success && result.blob) {
-						const arrayBuffer = await result.blob.arrayBuffer();
 
-						if (result.warnings) {
-							for (const warning of result.warnings) {
-								toast.warning(warning);
-							}
-						}
-
-						const saveResult = await window.electronAPI.writeExportToPath(arrayBuffer, targetPath);
-
-						if (saveResult.success && saveResult.path) {
-							setUnsavedExport(null);
-							handleExportSaved("Video", saveResult.path);
-						} else {
-							setUnsavedExport({ arrayBuffer, fileName: targetFileName, format: "mp4" });
-							const message = buildSaveDiagnosticMessage(
-								"Video",
-								saveResult.message || "Failed to save video",
+							const combineResult = await window.electronAPI.combineExportSegments(
+								segmentPaths,
+								targetPath,
 							);
-							setExportError(message);
-							toast.error(message);
+							if (!combineResult.success || !combineResult.path) {
+								throw new Error(
+									combineResult.error || combineResult.message || "Failed to combine scene exports",
+								);
+							}
+							setUnsavedExport(null);
+							handleExportSaved("Video", combineResult.path);
+						} finally {
+							if (segmentPaths.length > 0) {
+								await window.electronAPI.cleanupExportSegments(segmentPaths, targetPath);
+							}
 						}
 					} else {
-						const message = buildExportDiagnosticMessage({
-							formatLabel: "Video",
-							reason: result.error || "Export failed",
-							sourcePath: videoSourcePath ?? videoPath,
+						const exporter = new VideoExporter({
+							videoUrl: videoPath,
+							webcamVideoUrl: webcamVideoPath || undefined,
+							nativeOutputPath: targetPath,
+							nativeAudioPath: videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : undefined),
+							preferNativeNvenc: true,
 							width: exportWidth,
 							height: exportHeight,
 							frameRate: MP4_EXPORT_FRAME_RATE,
-							codec: "avc1.640033",
 							bitrate,
+							codec: "avc1.640033",
+							wallpaper,
+							zoomRegions,
+							trimRegions,
+							speedRegions,
+							showShadow: shadowIntensity > 0,
+							shadowIntensity,
+							showBlur,
+							motionBlurAmount,
+							borderRadius,
+							padding,
+							cropRegion,
+							cursorRecordingData,
+							cursorScale: effectiveShowCursor ? cursorSize : 0,
+							cursorSmoothing,
+							cursorMotionBlur,
+							cursorClickBounce,
+							cursorClipToBounds,
+							cursorTheme,
+							annotationRegions,
+							webcamLayoutPreset,
+							webcamMaskShape,
+							webcamMirrored,
+							webcamReactiveZoom,
+							webcamSizePreset,
+							webcamPosition,
+							previewWidth,
+							previewHeight,
+							cursorTelemetry,
+							cursorClickTimestamps,
+							onProgress: (progress: ExportProgress) => {
+								setExportProgress(progress);
+							},
 						});
-						setExportError(message);
-						toast.error(message);
+
+						exporterRef.current = exporter;
+						const result = await exporter.export();
+
+						if (result.success && result.path) {
+							if (result.warnings) {
+								for (const warning of result.warnings) {
+									toast.warning(warning);
+								}
+							}
+							setUnsavedExport(null);
+							handleExportSaved("Video", result.path);
+						} else if (result.success && result.blob) {
+							const arrayBuffer = await result.blob.arrayBuffer();
+
+							if (result.warnings) {
+								for (const warning of result.warnings) {
+									toast.warning(warning);
+								}
+							}
+
+							const saveResult = await window.electronAPI.writeExportToPath(
+								arrayBuffer,
+								targetPath,
+							);
+
+							if (saveResult.success && saveResult.path) {
+								setUnsavedExport(null);
+								handleExportSaved("Video", saveResult.path);
+							} else {
+								setUnsavedExport({ arrayBuffer, fileName: targetFileName, format: "mp4" });
+								const message = buildSaveDiagnosticMessage(
+									"Video",
+									saveResult.message || "Failed to save video",
+								);
+								setExportError(message);
+								toast.error(message);
+							}
+						} else {
+							const message = buildExportDiagnosticMessage({
+								formatLabel: "Video",
+								reason: result.error || "Export failed",
+								sourcePath: videoSourcePath ?? videoPath,
+								width: exportWidth,
+								height: exportHeight,
+								frameRate: MP4_EXPORT_FRAME_RATE,
+								codec: "avc1.640033",
+								bitrate,
+							});
+							setExportError(message);
+							toast.error(message);
+						}
 					}
 				}
 
@@ -2447,6 +2664,8 @@ export default function VideoEditor() {
 			cursorClickBounce,
 			cursorClipToBounds,
 			cursorTheme,
+			activeSceneId,
+			projectScenes,
 			t,
 		],
 	);
@@ -2806,9 +3025,44 @@ export default function VideoEditor() {
 		);
 	}
 
+	const sceneStripOverlay =
+		scenes.length > 0 ? (
+			isSceneStripOpen ? (
+				<div className="absolute bottom-2 left-2 top-2 z-[70] w-[112px] overflow-hidden rounded-xl border border-white/[0.12] shadow-2xl shadow-black/40">
+					<SceneStrip
+						scenes={scenes}
+						activeSceneId={activeSceneId}
+						onSelect={handleSelectScene}
+						onAdd={handleAddScene}
+						onDelete={handleDeleteScene}
+						onCollapse={() => setIsSceneStripOpen(false)}
+						addLabel={t("emptyState.importVideoButton")}
+						deleteLabel={t("project.failedToLoad")}
+						collapseLabel="Collapse scenes"
+					/>
+				</div>
+			) : (
+				<button
+					type="button"
+					onClick={() => setIsSceneStripOpen(true)}
+					className="absolute left-2 top-2 z-[70] flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-[#0b0b0d]/95 text-white/55 shadow-xl shadow-black/30 transition-colors hover:bg-[#17171a] hover:text-white"
+					aria-label="Show scenes"
+					title="Show scenes"
+				>
+					<PanelLeftOpen size={16} />
+				</button>
+			)
+		) : null;
+
 	return (
 		<div className="flex flex-col h-screen bg-[#09090b] text-slate-200 overflow-hidden selection:bg-[#34B27B]/30">
-			<Dialog open={showNewRecordingDialog} onOpenChange={setShowNewRecordingDialog}>
+			<Dialog
+				open={showNewRecordingDialog}
+				onOpenChange={(open) => {
+					if (!open) pendingRecordingSceneIdRef.current = null;
+					setShowNewRecordingDialog(open);
+				}}
+			>
 				<DialogContent
 					className="sm:max-w-[425px]"
 					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
@@ -3047,7 +3301,10 @@ export default function VideoEditor() {
 					</div>
 					<button
 						type="button"
-						onClick={() => setShowNewRecordingDialog(true)}
+						onClick={() => {
+							pendingRecordingSceneIdRef.current = null;
+							setShowNewRecordingDialog(true);
+						}}
 						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
 					>
 						<Video size={14} />
@@ -3075,19 +3332,11 @@ export default function VideoEditor() {
 			{/* Empty state shown when no video is loaded */}
 			{!videoPath && (
 				<div className="flex flex-1 min-h-0 relative">
-					{scenes.length > 0 && (
-						<SceneStrip
-							scenes={scenes}
-							activeSceneId={activeSceneId}
-							onSelect={handleSelectScene}
-							onAdd={handleAddScene}
-							onDelete={handleDeleteScene}
-							addLabel={t("emptyState.importVideoButton")}
-							deleteLabel={t("project.failedToLoad")}
-						/>
-					)}
+					{sceneStripOverlay}
 					<EditorEmptyState
 						onVideoImported={handleSceneVideoImported}
+						onStartRecording={handleStartSceneRecording}
+						recordVideoLabel={t("newRecording.title")}
 						onProjectOpened={async (project, path) => {
 							const restored = await applyLoadedProject(project, path);
 							if (!restored) {
@@ -3100,15 +3349,7 @@ export default function VideoEditor() {
 
 			{videoPath && (
 				<div className="editor-workspace flex flex-1 min-h-0 relative">
-					<SceneStrip
-						scenes={scenes}
-						activeSceneId={activeSceneId}
-						onSelect={handleSelectScene}
-						onAdd={handleAddScene}
-						onDelete={handleDeleteScene}
-						addLabel={t("emptyState.importVideoButton")}
-						deleteLabel={t("project.failedToLoad")}
-					/>
+					{sceneStripOverlay}
 					<PanelGroup direction="vertical" className="gap-3 min-h-0">
 						{/* Top section: preview and contextual settings */}
 						<Panel defaultSize={67} maxSize={76} minSize={46} className="min-h-[300px]">

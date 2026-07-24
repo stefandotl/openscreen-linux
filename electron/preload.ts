@@ -57,8 +57,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	switchToHud: () => {
 		return ipcRenderer.invoke("switch-to-hud");
 	},
-	startNewRecording: () => {
-		return ipcRenderer.invoke("start-new-recording");
+	startNewRecording: (sceneId?: string) => {
+		return ipcRenderer.invoke("start-new-recording", sceneId);
 	},
 	openSourceSelector: () => {
 		return ipcRenderer.invoke("open-source-selector");
@@ -168,6 +168,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	writeExportToPath: (videoData: ArrayBuffer, filePath: string) => {
 		return ipcRenderer.invoke("write-export-to-path", videoData, filePath);
 	},
+	combineExportSegments: (segmentPaths: string[], outputPath: string) => {
+		return ipcRenderer.invoke("combine-export-segments", segmentPaths, outputPath);
+	},
+	cleanupExportSegments: (segmentPaths: string[], outputPath: string) => {
+		return ipcRenderer.invoke("cleanup-export-segments", segmentPaths, outputPath);
+	},
 	startNativeGpuExport: (payload: NativeGpuExportRequest) => {
 		return ipcRenderer.invoke(NATIVE_GPU_EXPORT_CHANNELS.start, payload);
 	},
@@ -198,6 +204,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	},
 	getCurrentRecordingSession: () => {
 		return ipcRenderer.invoke("get-current-recording-session");
+	},
+	clearPendingRecordingScene: () => {
+		return ipcRenderer.invoke("clear-pending-recording-scene");
 	},
 	readBinaryFile: (filePath: string) => {
 		return ipcRenderer.invoke("read-binary-file", filePath);

@@ -47,6 +47,8 @@ export interface NativeGpuExportRequest {
 	plan: NativeGpuExportPlan;
 	outputPath: string;
 	audioPath?: string;
+	/** Multi-scene exports require every segment to expose the same audio layout. */
+	ensureAudioTrack?: boolean;
 	sourceDurationSec: number;
 	trimRegions?: TrimRegion[];
 	speedRegions?: SpeedRegion[];

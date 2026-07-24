@@ -63,6 +63,7 @@ export interface VideoExporterConfig extends ExportConfig {
 	linuxFrameSource?: LinuxExportFrameSource;
 	nativeOutputPath?: string;
 	nativeAudioPath?: string;
+	ensureAudioTrack?: boolean;
 	preferNativeNvenc?: boolean;
 	onProgress?: (progress: ExportProgress) => void;
 }
@@ -292,7 +293,8 @@ export class VideoExporter {
 			const startResult = await window.electronAPI.startNativeGpuExport({
 				plan,
 				outputPath: this.config.nativeOutputPath!,
-				audioPath: this.config.nativeAudioPath,
+				audioPath: videoInfo.hasAudio ? this.config.nativeAudioPath : undefined,
+				ensureAudioTrack: this.config.ensureAudioTrack,
 				sourceDurationSec: videoInfo.duration,
 				trimRegions: this.config.trimRegions,
 				speedRegions: this.config.speedRegions,
