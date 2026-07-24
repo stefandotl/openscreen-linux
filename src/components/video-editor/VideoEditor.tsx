@@ -3037,7 +3037,8 @@ export default function VideoEditor() {
 						onDelete={handleDeleteScene}
 						onCollapse={() => setIsSceneStripOpen(false)}
 						addLabel={t("emptyState.importVideoButton")}
-						deleteLabel={t("project.failedToLoad")}
+						deleteLabel={rawT("common.actions.delete")}
+						cancelLabel={rawT("common.actions.cancel")}
 						collapseLabel="Collapse scenes"
 					/>
 				</div>

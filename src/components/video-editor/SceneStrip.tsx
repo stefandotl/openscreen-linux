@@ -1,4 +1,13 @@
 import { Film, PanelLeftClose, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
 import type { EditorScene } from "./sceneModel";
 
 interface SceneStripProps {
@@ -10,6 +19,7 @@ interface SceneStripProps {
 	onCollapse: () => void;
 	addLabel: string;
 	deleteLabel: string;
+	cancelLabel: string;
 	collapseLabel: string;
 }
 
@@ -30,10 +40,20 @@ export default function SceneStrip({
 	onCollapse,
 	addLabel,
 	deleteLabel,
+	cancelLabel,
 	collapseLabel,
 }: SceneStripProps) {
+	const [pendingDeleteSceneId, setPendingDeleteSceneId] = useState<string | null>(null);
+	const pendingDeleteScene = scenes.find((scene) => scene.id === pendingDeleteSceneId) ?? null;
+
+	const confirmDelete = () => {
+		if (!pendingDeleteSceneId) return;
+		onDelete(pendingDeleteSceneId);
+		setPendingDeleteSceneId(null);
+	};
+
 	return (
-		<aside className="flex h-full w-full flex-col gap-2 bg-[#0b0b0d] p-2">
+		<aside className="flex h-full w-full min-w-0 flex-col gap-2 overflow-hidden bg-[#0b0b0d] p-2">
 			<div className="flex items-center justify-end border-b border-white/[0.08] pb-1">
 				<button
 					type="button"
@@ -45,11 +65,11 @@ export default function SceneStrip({
 					<PanelLeftClose size={14} />
 				</button>
 			</div>
-			<div className="flex flex-col gap-2 overflow-y-auto">
+			<div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-x-hidden overflow-y-auto custom-scrollbar">
 				{scenes.map((scene, index) => {
 					const isActive = scene.id === activeSceneId;
 					return (
-						<div key={scene.id} className="group relative">
+						<div key={scene.id} className="group relative min-w-0">
 							<button
 								type="button"
 								onClick={() => onSelect(scene.id)}
@@ -71,8 +91,8 @@ export default function SceneStrip({
 							{scenes.length > 1 && (
 								<button
 									type="button"
-									onClick={() => onDelete(scene.id)}
-									className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full border border-white/10 bg-[#17171a] text-white/40 hover:text-red-300 group-hover:flex"
+									onClick={() => setPendingDeleteSceneId(scene.id)}
+									className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full border border-white/10 bg-[#17171a] text-white/40 hover:text-red-300 group-hover:flex"
 									aria-label={`${deleteLabel}: ${scene.name}`}
 									title={deleteLabel}
 								>
@@ -92,6 +112,37 @@ export default function SceneStrip({
 			>
 				<Plus size={17} />
 			</button>
+			<Dialog
+				open={pendingDeleteScene !== null}
+				onOpenChange={(open) => !open && setPendingDeleteSceneId(null)}
+			>
+				<DialogContent className="max-w-sm border-white/10 bg-[#09090b]">
+					<DialogHeader>
+						<DialogTitle>Delete scene?</DialogTitle>
+						<DialogDescription className="text-white/60">
+							{pendingDeleteScene
+								? `This will permanently remove ${pendingDeleteScene.name} and its editor settings.`
+								: "This scene will be removed."}
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<button
+							type="button"
+							onClick={() => setPendingDeleteSceneId(null)}
+							className="rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+						>
+							{cancelLabel}
+						</button>
+						<button
+							type="button"
+							onClick={confirmDelete}
+							className="rounded-md bg-red-500/85 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
+						>
+							{deleteLabel}
+						</button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 		</aside>
 	);
 }
