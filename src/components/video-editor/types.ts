@@ -281,6 +281,8 @@ export interface AnnotationTextStyle {
 	fontStyle: "normal" | "italic";
 	textDecoration: "none" | "underline";
 	textAlign: "left" | "center" | "right";
+	textStrokeWidth?: number;
+	textStrokeColor?: string;
 	textAnimation?: AnnotationTextAnimation;
 	/** Highlights the currently spoken word when `captionWords` timing is available. */
 	wordHighlight?: boolean;
@@ -334,6 +336,8 @@ export const DEFAULT_ANNOTATION_STYLE: AnnotationTextStyle = {
 	fontStyle: "normal",
 	textDecoration: "none",
 	textAlign: "center",
+	textStrokeWidth: 0,
+	textStrokeColor: "#000000",
 	textAnimation: "none",
 	wordHighlight: false,
 	wordHighlightMode: "background",

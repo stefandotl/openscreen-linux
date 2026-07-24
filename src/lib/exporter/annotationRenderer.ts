@@ -285,6 +285,10 @@ function renderText(
 	const scaledFontSize = style.fontSize * scaleFactor;
 	ctx.font = `${fontStyle} ${fontWeight} ${scaledFontSize}px ${style.fontFamily}`;
 	ctx.textBaseline = "middle";
+	const parsedTextStrokeWidth = Number(style.textStrokeWidth);
+	const textStrokeWidth = Number.isFinite(parsedTextStrokeWidth) ? parsedTextStrokeWidth : 0;
+	const textStrokeColor = style.textStrokeColor || style.color;
+	const scaledStrokeWidth = Math.max(0, textStrokeWidth * scaleFactor);
 
 	const containerPadding = 8 * scaleFactor;
 
@@ -404,13 +408,31 @@ function renderText(
 		if (highlightOnly && activeWord) {
 			const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
 			ctx.fillStyle = highlightTextOnly ? style.wordHighlightColor || "#34B27B" : style.color;
+			if (scaledStrokeWidth > 0) {
+				ctx.strokeStyle = textStrokeColor;
+				ctx.lineWidth = scaledStrokeWidth;
+				ctx.lineJoin = "round";
+				ctx.strokeText(activeWord.text, startX + prefixWidth, currentY);
+			}
 			ctx.fillText(activeWord.text, startX + prefixWidth, currentY);
 		} else {
 			ctx.fillStyle = style.color;
+			if (scaledStrokeWidth > 0) {
+				ctx.strokeStyle = textStrokeColor;
+				ctx.lineWidth = scaledStrokeWidth;
+				ctx.lineJoin = "round";
+				ctx.strokeText(visibleLine, startX, currentY);
+			}
 			ctx.fillText(visibleLine, startX, currentY);
 			if (activeWord && highlightTextOnly) {
 				const prefixWidth = ctx.measureText(line.slice(0, activeWord.start)).width;
 				ctx.fillStyle = style.wordHighlightColor || "#34B27B";
+				if (scaledStrokeWidth > 0) {
+					ctx.strokeStyle = textStrokeColor;
+					ctx.lineWidth = scaledStrokeWidth;
+					ctx.lineJoin = "round";
+					ctx.strokeText(activeWord.text, startX + prefixWidth, currentY);
+				}
 				ctx.fillText(activeWord.text, startX + prefixWidth, currentY);
 			}
 		}

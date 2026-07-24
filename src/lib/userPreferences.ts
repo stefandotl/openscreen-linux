@@ -113,6 +113,17 @@ function normalizeStoredAnnotationStyle(value: unknown): AnnotationTextStyle | n
 			typeof style.wordHighlight === "boolean"
 				? style.wordHighlight
 				: DEFAULT_ANNOTATION_STYLE.wordHighlight,
+		textStrokeWidth:
+			typeof style.textStrokeWidth === "number" &&
+			Number.isFinite(style.textStrokeWidth) &&
+			style.textStrokeWidth >= 0 &&
+			style.textStrokeWidth <= 16
+				? style.textStrokeWidth
+				: DEFAULT_ANNOTATION_STYLE.textStrokeWidth,
+		textStrokeColor:
+			typeof style.textStrokeColor === "string"
+				? style.textStrokeColor
+				: DEFAULT_ANNOTATION_STYLE.textStrokeColor,
 		wordHighlightMode:
 			style.wordHighlightMode === "text" ? "text" : DEFAULT_ANNOTATION_STYLE.wordHighlightMode,
 		wordHighlightColor:

@@ -104,6 +104,8 @@ describe("projectPersistence media compatibility", () => {
 						wordHighlight: true,
 						wordHighlightMode: "text",
 						wordHighlightColor: "#123456",
+						textStrokeWidth: 3,
+						textStrokeColor: "#000",
 					},
 					zIndex: 1,
 				},
@@ -119,6 +121,8 @@ describe("projectPersistence media compatibility", () => {
 				wordHighlight: true,
 				wordHighlightMode: "text",
 				wordHighlightColor: "#123456",
+				textStrokeWidth: 3,
+				textStrokeColor: "#000",
 			},
 		});
 	});

@@ -399,6 +399,15 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 								typeof region.style?.wordHighlight === "boolean"
 									? region.style.wordHighlight
 									: region.annotationSource === "auto-caption",
+							textStrokeWidth:
+								typeof region.style?.textStrokeWidth === "number" &&
+								isFiniteNumber(region.style.textStrokeWidth)
+									? clamp(region.style.textStrokeWidth, 0, 16)
+									: DEFAULT_ANNOTATION_STYLE.textStrokeWidth,
+							textStrokeColor:
+								typeof region.style?.textStrokeColor === "string"
+									? region.style.textStrokeColor
+									: DEFAULT_ANNOTATION_STYLE.textStrokeColor,
 							wordHighlightMode: region.style?.wordHighlightMode === "text" ? "text" : "background",
 							wordHighlightColor:
 								typeof region.style?.wordHighlightColor === "string"

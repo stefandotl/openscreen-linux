@@ -121,6 +121,8 @@ describe("user preferences", () => {
 				wordHighlight: true,
 				wordHighlightMode: "text",
 				wordHighlightColor: "#123456",
+				textStrokeWidth: 4,
+				textStrokeColor: "#000",
 			},
 		});
 
@@ -137,6 +139,8 @@ describe("user preferences", () => {
 			wordHighlight: true,
 			wordHighlightMode: "text",
 			wordHighlightColor: "#123456",
+			textStrokeWidth: 4,
+			textStrokeColor: "#000",
 		});
 	});
 
@@ -149,6 +153,8 @@ describe("user preferences", () => {
 					fontSize: -2,
 					fontWeight: "heavy",
 					textAlign: "around",
+					textStrokeWidth: -12,
+					textStrokeColor: 123,
 				},
 			}),
 		);
@@ -158,6 +164,8 @@ describe("user preferences", () => {
 			fontSize: 32,
 			fontWeight: "bold",
 			textAlign: "center",
+			textStrokeWidth: 0,
+			textStrokeColor: "#000000",
 		});
 	});
 

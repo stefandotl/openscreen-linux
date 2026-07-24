@@ -295,6 +295,8 @@ export function AnnotationOverlay({
 					animationState.revealProgress < 1
 						? `inset(0 ${100 - animationState.revealProgress * 100}% 0 0)`
 						: undefined;
+				const textStrokeWidth = Number(annotation.style.textStrokeWidth);
+				const textStrokeColor = annotation.style.textStrokeColor || annotation.style.color;
 				return (
 					<div
 						className="w-full h-full flex items-center p-2 overflow-hidden"
@@ -317,6 +319,9 @@ export function AnnotationOverlay({
 								fontWeight: annotation.style.fontWeight,
 								fontStyle: annotation.style.fontStyle,
 								textDecoration: annotation.style.textDecoration,
+								WebkitTextStrokeWidth: `${Number.isFinite(textStrokeWidth) ? textStrokeWidth : 0}px`,
+								WebkitTextStrokeColor: textStrokeColor,
+								paintOrder: "stroke fill",
 								textAlign: annotation.style.textAlign,
 								opacity: animationState.opacity,
 								transform: `translate(${animationState.translateX}px, ${animationState.translateY}px) scale(${animationState.scale})`,

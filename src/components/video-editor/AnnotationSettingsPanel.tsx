@@ -296,6 +296,22 @@ export function AnnotationSettingsPanel({
 								</div>
 							</div>
 
+							<div>
+								<label className="text-xs font-medium text-slate-200 mb-2 block">
+									{t("annotation.strokeWidth", {
+										width: String(annotation.style.textStrokeWidth || 0),
+									})}
+								</label>
+								<Slider
+									value={[annotation.style.textStrokeWidth || 0]}
+									onValueChange={([value]) => onStyleChange({ textStrokeWidth: value })}
+									min={0}
+									max={8}
+									step={1}
+									className="w-full"
+								/>
+							</div>
+
 							{/* Add Custom Font Button */}
 							<div>
 								<AddCustomFontDialog
@@ -577,6 +593,47 @@ export function AnnotationSettingsPanel({
 												clearBackgroundOption={true}
 												onUpdateColor={(color) => {
 													onStyleChange({ backgroundColor: color });
+												}}
+											/>
+										</PopoverContent>
+									</Popover>
+								</div>
+								<div>
+									<label className="text-xs font-medium text-slate-200 mb-2 block">
+										Outline Color
+									</label>
+									<Popover>
+										<PopoverTrigger asChild>
+											<Button
+												variant="outline"
+												className="w-full h-9 justify-start gap-2 bg-white/5 border-white/10 hover:bg-white/10"
+											>
+												<div
+													className="w-4 h-4 rounded-full border border-white/20"
+													style={{
+														backgroundColor:
+															annotation.style.textStrokeColor || annotation.style.color,
+													}}
+												/>
+												<span className="text-xs text-slate-300 truncate flex-1 text-left">
+													{annotation.style.textStrokeColor || annotation.style.color}
+												</span>
+												<ChevronDown className="h-3 w-3 opacity-50" />
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent
+											side="top"
+											className="w-[260px] p-3 bg-[#1a1a1c] border border-white/10 rounded-xl shadow-xl"
+										>
+											<ColorPicker
+												selectedColor={annotation.style.textStrokeColor || annotation.style.color}
+												colorPalette={colorPalette}
+												translations={{
+													colorWheel: t("annotation.colorWheel"),
+													colorPalette: t("annotation.colorPalette"),
+												}}
+												onUpdateColor={(color) => {
+													onStyleChange({ textStrokeColor: color });
 												}}
 											/>
 										</PopoverContent>

@@ -159,4 +159,25 @@ describe("native GPU export assets", () => {
 			),
 		).toBe(true);
 	});
+
+	it("renders text outlines with the configured outline color", async () => {
+		const outlined = caption("outlined", 100, 900, 5);
+		outlined.style.backgroundColor = "transparent";
+		outlined.style.textStrokeWidth = 2;
+		outlined.style.textStrokeColor = "#000000";
+		outlined.style.color = "#ffffff";
+
+		const assets = await createNativeGpuExportAssets({
+			...createConfig(false),
+			annotationRegions: [outlined],
+		});
+
+		expect(assets.overlayPngs).toHaveLength(1);
+		expect(
+			await pngContainsColor(
+				assets.overlayPngs[0]!,
+				(red, green, blue, alpha) => red < 20 && green < 20 && blue < 20 && alpha > 120,
+			),
+		).toBe(true);
+	});
 });
