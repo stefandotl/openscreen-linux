@@ -4,6 +4,7 @@ import {
 	createProjectSnapshot,
 	hasProjectUnsavedChanges,
 	normalizeProjectEditor,
+	normalizeProjectScenes,
 	PROJECT_VERSION,
 	resolveProjectMedia,
 	validateProjectData,
@@ -61,6 +62,31 @@ describe("projectPersistence media compatibility", () => {
 			webcamVideoPath: "/tmp/webcam.webm",
 		});
 		expect(validateProjectData(project)).toBe(true);
+	});
+
+	it("round-trips multiple ordered scenes without breaking legacy media", () => {
+		const editor = normalizeProjectEditor({});
+		const project = createProjectData(
+			{ screenVideoPath: "/tmp/scene-one.webm" },
+			editor,
+			[
+				{
+					id: "scene-1",
+					name: "Scene 1",
+					media: { screenVideoPath: "/tmp/scene-one.webm" },
+					editor,
+				},
+				{ id: "scene-2", name: "Scene 2", media: null, editor },
+			],
+			"scene-2",
+		);
+
+		expect(validateProjectData(project)).toBe(true);
+		expect(project.activeSceneId).toBe("scene-2");
+		expect(normalizeProjectScenes(project.scenes)).toMatchObject([
+			{ id: "scene-1", media: { screenVideoPath: "/tmp/scene-one.webm" } },
+			{ id: "scene-2", media: null },
+		]);
 	});
 
 	it("normalizes webcam mask shape values safely", () => {

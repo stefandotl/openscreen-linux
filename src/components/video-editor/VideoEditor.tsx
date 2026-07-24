@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
-import { INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory";
+import { type EditorState, INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory";
 import { type Locale } from "@/i18n/config";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
 import {
@@ -94,11 +94,16 @@ import {
 	fromFileUrl,
 	hasProjectUnsavedChanges,
 	normalizeProjectEditor,
+	normalizeProjectScenes,
+	type ProjectEditorState,
+	type ProjectSceneData,
 	resolveProjectMedia,
 	toFileUrl,
 	validateProjectData,
 } from "./projectPersistence";
+import SceneStrip from "./SceneStrip";
 import { SettingsPanel } from "./SettingsPanel";
+import { createSceneId, createSceneName, type EditorScene } from "./sceneModel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
 import {
@@ -230,6 +235,10 @@ export default function VideoEditor() {
 	const [videoSourcePath, setVideoSourcePath] = useState<string | null>(null);
 	const [webcamVideoPath, setWebcamVideoPath] = useState<string | null>(null);
 	const [webcamVideoSourcePath, setWebcamVideoSourcePath] = useState<string | null>(null);
+	const [scenes, setScenes] = useState<EditorScene[]>([]);
+	const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
+	const scenesRef = useRef<EditorScene[]>([]);
+	const activeSceneIdRef = useRef<string | null>(null);
 	const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -387,6 +396,174 @@ export default function VideoEditor() {
 		recordingCursorCaptureMode,
 	]);
 
+	useEffect(() => {
+		scenesRef.current = scenes;
+		activeSceneIdRef.current = activeSceneId;
+	}, [scenes, activeSceneId]);
+
+	const editorStateForScene = useCallback(
+		(partial: Partial<EditorState> = {}): EditorState => ({
+			...INITIAL_EDITOR_STATE,
+			...partial,
+		}),
+		[],
+	);
+
+	const updateActiveSceneSnapshot = useCallback(() => {
+		const sceneId = activeSceneIdRef.current;
+		if (!sceneId) return;
+
+		const nextScenes = scenesRef.current.map((scene) =>
+			scene.id === sceneId
+				? {
+						...scene,
+						media: currentProjectMedia,
+						editor: editorState,
+					}
+				: scene,
+		);
+		scenesRef.current = nextScenes;
+		setScenes(nextScenes);
+	}, [currentProjectMedia, editorState]);
+
+	const applySceneMedia = useCallback((media: ProjectMedia | null) => {
+		const sourcePath = media?.screenVideoPath ?? null;
+		const webcamSourcePath = media?.webcamVideoPath ?? null;
+		setVideoSourcePath(sourcePath);
+		setVideoPath(sourcePath ? toFileUrl(sourcePath) : null);
+		setWebcamVideoSourcePath(webcamSourcePath);
+		setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
+		setRecordingCursorCaptureMode(media?.cursorCaptureMode ?? null);
+	}, []);
+
+	const createSceneFromMedia = useCallback(
+		(media: ProjectMedia | null, sceneEditor: EditorState = INITIAL_EDITOR_STATE): EditorScene => ({
+			id: createSceneId(),
+			name: createSceneName(scenesRef.current.length),
+			media,
+			editor: editorStateForScene(sceneEditor),
+		}),
+		[editorStateForScene],
+	);
+
+	const installInitialScene = useCallback(
+		(media: ProjectMedia, sceneEditor: EditorState = INITIAL_EDITOR_STATE) => {
+			const scene = createSceneFromMedia(media, sceneEditor);
+			scenesRef.current = [scene];
+			setScenes([scene]);
+			activeSceneIdRef.current = scene.id;
+			setActiveSceneId(scene.id);
+			applySceneMedia(media);
+			resetState(scene.editor);
+		},
+		[applySceneMedia, createSceneFromMedia, resetState],
+	);
+
+	const handleAddScene = useCallback(() => {
+		updateActiveSceneSnapshot();
+		const scene = createSceneFromMedia(null);
+		const nextScenes = [...scenesRef.current, scene];
+		scenesRef.current = nextScenes;
+		setScenes(nextScenes);
+		activeSceneIdRef.current = scene.id;
+		setActiveSceneId(scene.id);
+		applySceneMedia(null);
+		resetState(scene.editor);
+		setCurrentTime(0);
+		setDuration(0);
+		setIsPlaying(false);
+	}, [applySceneMedia, createSceneFromMedia, resetState, updateActiveSceneSnapshot]);
+
+	const handleSelectScene = useCallback(
+		(sceneId: string) => {
+			if (sceneId === activeSceneIdRef.current) return;
+			const scene = scenesRef.current.find((candidate) => candidate.id === sceneId);
+			if (!scene) return;
+
+			updateActiveSceneSnapshot();
+			activeSceneIdRef.current = scene.id;
+			setActiveSceneId(scene.id);
+			applySceneMedia(scene.media);
+			resetState(scene.editor);
+			setCurrentTime(0);
+			setDuration(0);
+			setIsPlaying(false);
+			setSelectedZoomId(null);
+			setSelectedTrimId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+		},
+		[applySceneMedia, resetState, updateActiveSceneSnapshot],
+	);
+
+	const handleDeleteScene = useCallback(
+		(sceneId: string) => {
+			if (scenesRef.current.length <= 1) return;
+			const index = scenesRef.current.findIndex((scene) => scene.id === sceneId);
+			if (index < 0) return;
+
+			updateActiveSceneSnapshot();
+			const nextScenes = scenesRef.current.filter((scene) => scene.id !== sceneId);
+			scenesRef.current = nextScenes;
+			setScenes(nextScenes);
+
+			if (sceneId !== activeSceneIdRef.current) return;
+			const nextScene = nextScenes[Math.max(0, index - 1)] ?? nextScenes[0];
+			activeSceneIdRef.current = nextScene.id;
+			setActiveSceneId(nextScene.id);
+			applySceneMedia(nextScene.media);
+			resetState(nextScene.editor);
+			setCurrentTime(0);
+			setDuration(0);
+			setIsPlaying(false);
+		},
+		[applySceneMedia, resetState, updateActiveSceneSnapshot],
+	);
+
+	const handleSceneVideoImported = useCallback(
+		(sourcePath: string) => {
+			const media: ProjectMedia = { screenVideoPath: sourcePath };
+			if (!activeSceneIdRef.current) {
+				installInitialScene(media);
+				return;
+			}
+
+			const nextScenes = scenesRef.current.map((scene) =>
+				scene.id === activeSceneIdRef.current ? { ...scene, media } : scene,
+			);
+			scenesRef.current = nextScenes;
+			setScenes(nextScenes);
+			applySceneMedia(media);
+			setCurrentTime(0);
+			setDuration(0);
+			setIsPlaying(false);
+		},
+		[applySceneMedia, installInitialScene],
+	);
+
+	const projectEditorForScene = useCallback(
+		(sceneEditor: EditorState): ProjectEditorState => ({
+			...sceneEditor,
+			exportQuality,
+			exportFormat,
+			gifFrameRate,
+			gifLoop,
+			gifSizePreset,
+			cursorTheme,
+		}),
+		[cursorTheme, exportFormat, exportQuality, gifFrameRate, gifLoop, gifSizePreset],
+	);
+
+	const projectScenes = useMemo<ProjectSceneData[]>(() => {
+		return scenes.map((scene) => ({
+			id: scene.id,
+			name: scene.name,
+			media: scene.id === activeSceneId ? currentProjectMedia : scene.media,
+			editor: projectEditorForScene(scene.id === activeSceneId ? editorState : scene.editor),
+		}));
+	}, [activeSceneId, currentProjectMedia, editorState, projectEditorForScene, scenes]);
+
 	const applyLoadedProject = useCallback(
 		async (candidate: unknown, path?: string | null) => {
 			if (!validateProjectData(candidate)) {
@@ -394,14 +571,39 @@ export default function VideoEditor() {
 			}
 
 			const project = candidate;
-			const projectMedia = resolveProjectMedia(project);
+			const savedScenes = normalizeProjectScenes(project.scenes);
+			const savedActiveScene = savedScenes.find((scene) => scene.id === project.activeSceneId);
+			const projectMedia = savedActiveScene?.media ?? resolveProjectMedia(project);
 			if (!projectMedia) {
 				return false;
 			}
 			const sourcePath = projectMedia.screenVideoPath;
 			const webcamSourcePath = projectMedia.webcamVideoPath ?? null;
 			const projectCursorCaptureMode = projectMedia.cursorCaptureMode ?? null;
-			const normalizedEditor = normalizeProjectEditor(project.editor);
+			const normalizedEditor = normalizeProjectEditor(savedActiveScene?.editor ?? project.editor);
+			const loadedSceneEditor = editorStateForScene({
+				wallpaper: normalizedEditor.wallpaper,
+				shadowIntensity: normalizedEditor.shadowIntensity,
+				showBlur: normalizedEditor.showBlur,
+				showTrimWaveform: normalizedEditor.showTrimWaveform,
+				motionBlurAmount: normalizedEditor.motionBlurAmount,
+				borderRadius: normalizedEditor.borderRadius,
+				padding: normalizedEditor.padding,
+				cropRegion: normalizedEditor.cropRegion,
+				zoomRegions: normalizedEditor.zoomRegions,
+				autoZoomEnabled: normalizedEditor.autoZoomEnabled,
+				autoFocusAll: normalizedEditor.autoFocusAll,
+				trimRegions: normalizedEditor.trimRegions,
+				speedRegions: normalizedEditor.speedRegions,
+				annotationRegions: normalizedEditor.annotationRegions,
+				aspectRatio: normalizedEditor.aspectRatio,
+				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
+				webcamMaskShape: normalizedEditor.webcamMaskShape,
+				webcamMirrored: normalizedEditor.webcamMirrored,
+				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
+				webcamSizePreset: normalizedEditor.webcamSizePreset,
+				webcamPosition: normalizedEditor.webcamPosition,
+			});
 			const savedProjectTextStyle = [...normalizedEditor.annotationRegions]
 				.filter((region) => region.type === "text")
 				.sort((a, b) => {
@@ -434,6 +636,43 @@ export default function VideoEditor() {
 			setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
 			setRecordingCursorCaptureMode(projectCursorCaptureMode);
 			setCurrentProjectPath(path ?? null);
+			const loadedScene = createSceneFromMedia(projectMedia, loadedSceneEditor);
+			const loadedSceneList: EditorScene[] = savedScenes.length
+				? savedScenes.map((scene) => ({
+						id: scene.id,
+						name: scene.name,
+						media: scene.media,
+						editor: editorStateForScene({
+							wallpaper: scene.editor.wallpaper,
+							shadowIntensity: scene.editor.shadowIntensity,
+							showBlur: scene.editor.showBlur,
+							showTrimWaveform: scene.editor.showTrimWaveform,
+							motionBlurAmount: scene.editor.motionBlurAmount,
+							borderRadius: scene.editor.borderRadius,
+							padding: scene.editor.padding,
+							cropRegion: scene.editor.cropRegion,
+							zoomRegions: scene.editor.zoomRegions,
+							autoZoomEnabled: scene.editor.autoZoomEnabled,
+							autoFocusAll: scene.editor.autoFocusAll,
+							trimRegions: scene.editor.trimRegions,
+							speedRegions: scene.editor.speedRegions,
+							annotationRegions: scene.editor.annotationRegions,
+							aspectRatio: scene.editor.aspectRatio,
+							webcamLayoutPreset: scene.editor.webcamLayoutPreset,
+							webcamMaskShape: scene.editor.webcamMaskShape,
+							webcamMirrored: scene.editor.webcamMirrored,
+							webcamReactiveZoom: scene.editor.webcamReactiveZoom,
+							webcamSizePreset: scene.editor.webcamSizePreset,
+							webcamPosition: scene.editor.webcamPosition,
+						}),
+					}))
+				: [loadedScene];
+			scenesRef.current = loadedSceneList;
+			setScenes(loadedSceneList);
+			const activeLoadedScene =
+				loadedSceneList.find((scene) => scene.id === project.activeSceneId) ?? loadedSceneList[0];
+			activeSceneIdRef.current = activeLoadedScene.id;
+			setActiveSceneId(activeLoadedScene.id);
 
 			// A loaded project keeps its zooms exactly as saved, so never auto-suggest
 			// over it (even if it has zero zooms because the user deleted them all).
@@ -517,44 +756,53 @@ export default function VideoEditor() {
 			);
 			return true;
 		},
-		[pushState],
+		[createSceneFromMedia, editorStateForScene, pushState],
 	);
 
 	const currentProjectSnapshot = useMemo(() => {
 		if (!currentProjectMedia) {
 			return null;
 		}
-		return createProjectSnapshot(currentProjectMedia, {
-			wallpaper,
-			shadowIntensity,
-			showBlur,
-			showTrimWaveform,
-			motionBlurAmount,
-			borderRadius,
-			padding,
-			cropRegion,
-			zoomRegions,
-			autoZoomEnabled,
-			autoFocusAll,
-			trimRegions,
-			speedRegions,
-			annotationRegions,
-			aspectRatio,
-			webcamLayoutPreset,
-			webcamMaskShape,
-			webcamMirrored,
-			webcamReactiveZoom,
-			webcamSizePreset,
-			webcamPosition,
-			exportQuality,
-			exportFormat,
-			gifFrameRate,
-			gifLoop,
-			gifSizePreset,
-			cursorTheme,
-		});
+		const persistedScenes = scenes.length > 1 ? projectScenes : undefined;
+		return createProjectSnapshot(
+			currentProjectMedia,
+			{
+				wallpaper,
+				shadowIntensity,
+				showBlur,
+				showTrimWaveform,
+				motionBlurAmount,
+				borderRadius,
+				padding,
+				cropRegion,
+				zoomRegions,
+				autoZoomEnabled,
+				autoFocusAll,
+				trimRegions,
+				speedRegions,
+				annotationRegions,
+				aspectRatio,
+				webcamLayoutPreset,
+				webcamMaskShape,
+				webcamMirrored,
+				webcamReactiveZoom,
+				webcamSizePreset,
+				webcamPosition,
+				exportQuality,
+				exportFormat,
+				gifFrameRate,
+				gifLoop,
+				gifSizePreset,
+				cursorTheme,
+			},
+			persistedScenes,
+			activeSceneId,
+		);
 	}, [
 		currentProjectMedia,
+		activeSceneId,
+		projectScenes,
+		scenes.length,
 		cursorTheme,
 		wallpaper,
 		shadowIntensity,
@@ -607,11 +855,12 @@ export default function VideoEditor() {
 					const webcamSourcePath = session.webcamVideoPath
 						? fromFileUrl(session.webcamVideoPath)
 						: null;
-					setVideoSourcePath(sourcePath);
-					setVideoPath(toFileUrl(sourcePath));
-					setWebcamVideoSourcePath(webcamSourcePath);
-					setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
-					setRecordingCursorCaptureMode(session.cursorCaptureMode ?? null);
+					const sessionMedia: ProjectMedia = {
+						screenVideoPath: sourcePath,
+						...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
+						...(session.cursorCaptureMode ? { cursorCaptureMode: session.cursorCaptureMode } : {}),
+					};
+					installInitialScene(sessionMedia);
 					setCurrentProjectPath(null);
 					setLastSavedSnapshot(
 						createProjectSnapshot(
@@ -630,9 +879,7 @@ export default function VideoEditor() {
 
 				const result = await nativeBridgeClient.project.getCurrentVideoPath();
 				if (result.success && result.path) {
-					setVideoSourcePath(result.path);
-					setVideoPath(toFileUrl(result.path));
-					setRecordingCursorCaptureMode(null);
+					installInitialScene({ screenVideoPath: result.path });
 					setCurrentProjectPath(null);
 					setLastSavedSnapshot(
 						createProjectSnapshot({ screenVideoPath: result.path }, INITIAL_EDITOR_STATE),
@@ -648,7 +895,7 @@ export default function VideoEditor() {
 		}
 
 		loadInitialData();
-	}, [applyLoadedProject]);
+	}, [applyLoadedProject, installInitialScene]);
 
 	// Avoid overwriting saved prefs with defaults before they've loaded.
 	const [prefsHydrated, setPrefsHydrated] = useState(false);
@@ -673,13 +920,10 @@ export default function VideoEditor() {
 
 	const saveProject = useCallback(
 		async (forceSaveAs: boolean) => {
-			if (!videoPath) {
+			const mediaForProject =
+				currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
+			if (!mediaForProject) {
 				toast.error(t("errors.noVideoLoaded"));
-				return false;
-			}
-
-			if (!currentProjectMedia) {
-				toast.error(t("errors.unableToDetermineSourcePath"));
 				return false;
 			}
 
@@ -712,16 +956,27 @@ export default function VideoEditor() {
 				gifSizePreset,
 				cursorTheme,
 			};
-			const projectData = createProjectData(currentProjectMedia, editorState);
+			const projectData = createProjectData(
+				mediaForProject,
+				editorState,
+				projectScenes,
+				activeSceneId,
+			);
+			const persistedScenes = scenes.length > 1 ? projectScenes : undefined;
 
 			const fileNameBase =
-				currentProjectMedia.screenVideoPath
+				mediaForProject.screenVideoPath
 					.split(/[\\/]/)
 					.pop()
 					?.replace(/\.[^.]+$/, "") || `project-${Date.now()}`;
 			// Normalize the same way as currentProjectSnapshot so the post-save
 			// baseline compares equal and hasUnsavedChanges clears.
-			const projectSnapshot = createProjectSnapshot(currentProjectMedia, editorState);
+			const projectSnapshot = createProjectSnapshot(
+				mediaForProject,
+				editorState,
+				persistedScenes,
+				activeSceneId,
+			);
 			const result = await nativeBridgeClient.project.saveProjectFile(
 				projectData,
 				fileNameBase,
@@ -749,6 +1004,9 @@ export default function VideoEditor() {
 		[
 			currentProjectMedia,
 			currentProjectPath,
+			activeSceneId,
+			projectScenes,
+			scenes,
 			wallpaper,
 			shadowIntensity,
 			showBlur,
@@ -776,7 +1034,6 @@ export default function VideoEditor() {
 			gifLoop,
 			gifSizePreset,
 			cursorTheme,
-			videoPath,
 			t,
 		],
 	);
@@ -2817,14 +3074,20 @@ export default function VideoEditor() {
 
 			{/* Empty state shown when no video is loaded */}
 			{!videoPath && (
-				<div className="flex-1 min-h-0 relative">
+				<div className="flex flex-1 min-h-0 relative">
+					{scenes.length > 0 && (
+						<SceneStrip
+							scenes={scenes}
+							activeSceneId={activeSceneId}
+							onSelect={handleSelectScene}
+							onAdd={handleAddScene}
+							onDelete={handleDeleteScene}
+							addLabel={t("emptyState.importVideoButton")}
+							deleteLabel={t("project.failedToLoad")}
+						/>
+					)}
 					<EditorEmptyState
-						onVideoImported={(path) => {
-							setVideoPath(toFileUrl(path));
-							setVideoSourcePath(path);
-							setWebcamVideoPath(null);
-							setWebcamVideoSourcePath(null);
-						}}
+						onVideoImported={handleSceneVideoImported}
 						onProjectOpened={async (project, path) => {
 							const restored = await applyLoadedProject(project, path);
 							if (!restored) {
@@ -2836,7 +3099,16 @@ export default function VideoEditor() {
 			)}
 
 			{videoPath && (
-				<div className="editor-workspace flex-1 min-h-0 relative">
+				<div className="editor-workspace flex flex-1 min-h-0 relative">
+					<SceneStrip
+						scenes={scenes}
+						activeSceneId={activeSceneId}
+						onSelect={handleSelectScene}
+						onAdd={handleAddScene}
+						onDelete={handleDeleteScene}
+						addLabel={t("emptyState.importVideoButton")}
+						deleteLabel={t("project.failedToLoad")}
+					/>
 					<PanelGroup direction="vertical" className="gap-3 min-h-0">
 						{/* Top section: preview and contextual settings */}
 						<Panel defaultSize={67} maxSize={76} minSize={46} className="min-h-[300px]">

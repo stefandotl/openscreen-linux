@@ -94,11 +94,20 @@ export interface ProjectEditorState {
 	cursorTheme: string;
 }
 
+export interface ProjectSceneData {
+	id: string;
+	name: string;
+	media: ProjectMedia | null;
+	editor: ProjectEditorState;
+}
+
 export interface EditorProjectData {
 	version: number;
 	media?: ProjectMedia;
 	editor: ProjectEditorState;
 	videoPath?: string;
+	scenes?: ProjectSceneData[];
+	activeSceneId?: string;
 }
 
 function isFiniteNumber(value: unknown): value is number {
@@ -197,7 +206,11 @@ export function validateProjectData(candidate: unknown): candidate is EditorProj
 	if (!candidate || typeof candidate !== "object") return false;
 	const project = candidate as Partial<EditorProjectData>;
 	if (typeof project.version !== "number") return false;
-	if (!resolveProjectMedia(project)) return false;
+	const hasTopLevelMedia = Boolean(resolveProjectMedia(project));
+	const hasSceneMedia = Array.isArray(project.scenes)
+		? project.scenes.some((scene) => Boolean(scene && normalizeProjectMedia(scene.media)))
+		: false;
+	if (!hasTopLevelMedia && !hasSceneMedia) return false;
 	if (!project.editor || typeof project.editor !== "object") return false;
 	return true;
 }
@@ -567,22 +580,58 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 	};
 }
 
+export function normalizeProjectScenes(value: unknown): ProjectSceneData[] {
+	if (!Array.isArray(value)) return [];
+
+	return value.flatMap((candidate, index) => {
+		if (!candidate || typeof candidate !== "object") return [];
+		const scene = candidate as Partial<ProjectSceneData>;
+		if (typeof scene.id !== "string" || !scene.id.trim()) return [];
+
+		return [
+			{
+				id: scene.id,
+				name:
+					typeof scene.name === "string" && scene.name.trim()
+						? scene.name
+						: createSceneFallbackName(index),
+				media: normalizeProjectMedia(scene.media),
+				editor: normalizeProjectEditor(
+					scene.editor && typeof scene.editor === "object" ? scene.editor : {},
+				),
+			},
+		];
+	});
+}
+
+function createSceneFallbackName(index: number) {
+	return `Scene ${index + 1}`;
+}
+
 export function createProjectData(
 	media: ProjectMedia,
 	editor: ProjectEditorState,
+	scenes?: ProjectSceneData[],
+	activeSceneId?: string | null,
 ): EditorProjectData {
 	return {
 		version: PROJECT_VERSION,
 		media,
 		editor,
+		...(scenes ? { scenes } : {}),
+		...(activeSceneId ? { activeSceneId } : {}),
 	};
 }
 
 export function createProjectSnapshot(
 	media: ProjectMedia,
 	editor: Partial<ProjectEditorState>,
+	scenes?: ProjectSceneData[],
+	activeSceneId?: string | null,
 ): string {
-	return JSON.stringify(createProjectData(media, normalizeProjectEditor(editor)));
+	return JSON.stringify(
+		createProjectData(media, normalizeProjectEditor(editor), scenes, activeSceneId),
+	);
 }
 
 export function hasProjectUnsavedChanges(
