@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	getSourceCopyFastPathBlockers,
 	isSourceCopyFastPathEligible,
+	shouldAttemptNativeNvencExport,
 	shouldUseCpuFrameReadback,
 	type VideoExporterConfig,
 } from "./videoExporter";
@@ -151,6 +152,38 @@ describe("shouldUseCpuFrameReadback", () => {
 			shouldUseCpuFrameReadback({
 				platform: "darwin",
 				linuxFrameSource: "readback",
+			}),
+		).toBe(false);
+	});
+});
+
+describe("shouldAttemptNativeNvencExport", () => {
+	it("keeps the required native NVENC path on Linux", () => {
+		expect(
+			shouldAttemptNativeNvencExport({
+				platform: "linux",
+				preferNativeNvenc: true,
+			}),
+		).toBe(true);
+	});
+
+	it.each([
+		"darwin",
+		"win32",
+	])("uses the cross-platform exporter instead of Linux NVENC on %s", (platform) => {
+		expect(
+			shouldAttemptNativeNvencExport({
+				platform,
+				preferNativeNvenc: true,
+			}),
+		).toBe(false);
+	});
+
+	it("does not enable native NVENC when it was not requested", () => {
+		expect(
+			shouldAttemptNativeNvencExport({
+				platform: "linux",
+				preferNativeNvenc: false,
 			}),
 		).toBe(false);
 	});

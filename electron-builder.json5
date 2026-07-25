@@ -57,12 +57,12 @@
   "mac": {
     "notarize": false,
     "hardenedRuntime": true,
+    "minimumSystemVersion": "13.0",
     "entitlements": "macos.entitlements",
     "entitlementsInherit": "macos.entitlements",
     "target": [
       {
-        "target": "dmg",
-        "arch": ["x64", "arm64"]
+        "target": "dmg"
       }
     ],
     "icon": "icons/icons/mac/icon.icns",

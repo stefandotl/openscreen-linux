@@ -20,6 +20,7 @@ const buildDir = path.join(packageDir, "build");
 const swiftBuildDir = path.join(buildDir, "swiftpm");
 const localHelperPath = path.join(buildDir, helperName);
 const localCursorHelperPath = path.join(buildDir, cursorHelperName);
+const defaultXcodeDeveloperDir = "/Applications/Xcode.app/Contents/Developer";
 
 // Build a separate single-arch binary per requested arch and place each in its own
 // electron/native/bin/darwin-<arch> folder (the runtime resolves that folder by the running app's
@@ -37,10 +38,31 @@ const archs = (process.env.OPENSCREEN_MAC_HELPER_ARCHS ?? hostArch)
 	.filter(Boolean)
 	.map(normalizeArch);
 
-const xcodebuildVersion = spawnSync("xcodebuild", ["-version"], {
+let buildEnv = process.env;
+let xcodebuildVersion = spawnSync("xcodebuild", ["-version"], {
 	cwd: root,
 	encoding: "utf8",
+	env: buildEnv,
 });
+
+// Command Line Tools can remain selected even when full Xcode is installed. SwiftPM needs the
+// macOS SDK and platform metadata from full Xcode, so use the standard installation directly
+// without requiring a machine-wide `sudo xcode-select` change.
+if (
+	xcodebuildVersion.status !== 0 &&
+	!process.env.DEVELOPER_DIR &&
+	fs.existsSync(defaultXcodeDeveloperDir)
+) {
+	buildEnv = {
+		...process.env,
+		DEVELOPER_DIR: defaultXcodeDeveloperDir,
+	};
+	xcodebuildVersion = spawnSync("xcodebuild", ["-version"], {
+		cwd: root,
+		encoding: "utf8",
+		env: buildEnv,
+	});
+}
 
 if (xcodebuildVersion.status !== 0) {
 	const message = `${xcodebuildVersion.stderr ?? ""}${xcodebuildVersion.stdout ?? ""}`.trim();
@@ -109,6 +131,7 @@ for (const { swift, tag } of archs) {
 		{
 			cwd: root,
 			stdio: "inherit",
+			env: buildEnv,
 		},
 	);
 	if (result.error) {

@@ -53,7 +53,9 @@ import type {
 } from "../../src/native/contracts";
 import { ParakeetModelManager } from "../captioning/parakeetModelManager";
 import { ParakeetTranscriptionService } from "../captioning/parakeetTranscription";
+import { resolveFfmpegBinary } from "../ffmpegBinary";
 import { mainT } from "../i18n";
+import { resolveMacScreenAccessProbe } from "../macScreenAccess";
 import { RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
@@ -91,7 +93,11 @@ const approvedPaths = new Set<string>();
 const TIMELINE_EPSILON_SEC = 0.0001;
 
 function getFfmpegBinary() {
-	return process.env.OPENSCREEN_FFMPEG_PATH || "ffmpeg";
+	return resolveFfmpegBinary({
+		explicitPath: process.env.OPENSCREEN_FFMPEG_PATH,
+		platform: process.platform,
+		resourcesPath: process.resourcesPath,
+	});
 }
 
 function buildAudioTimelineFilter(
@@ -1630,6 +1636,22 @@ export function registerIpcHandlers(
 				return { success: true, granted: false, status: "not-determined" };
 			}
 
+			// macOS can keep reporting "denied" to Electron immediately after the user
+			// enables an app. Trust an actual source enumeration when it succeeds so the
+			// picker does not remain blocked behind a stale TCC status.
+			try {
+				const sources = await desktopCapturer.getSources({
+					types: ["screen"],
+					thumbnailSize: { width: 1, height: 1 },
+				});
+				const resolved = resolveMacScreenAccessProbe(status, sources.length);
+				if (resolved.granted) {
+					return { success: true, ...resolved };
+				}
+			} catch (error) {
+				console.warn(`[screen-access] macOS reports "${status}" and source probing failed:`, error);
+			}
+
 			return { success: true, granted: false, status };
 		} catch (error) {
 			console.error("Failed to request screen access:", error);
@@ -1774,7 +1796,7 @@ export function registerIpcHandlers(
 					cancelId: 1,
 					message: "Screen Recording permission is required",
 					detail:
-						"Allow OpenScreen in macOS System Settings, then come back and choose a screen or window.",
+						"Allow OpenScreen under System Settings → Privacy & Security → Screen & System Audio Recording. If it is already enabled, quit OpenScreen completely and launch this exact build directly from Finder. Development builds started by VS Code or a terminal may require permission for that host app instead.",
 				} satisfies Electron.MessageBoxOptions;
 				const result =
 					mainWin && !mainWin.isDestroyed()

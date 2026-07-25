@@ -166,6 +166,16 @@ export function shouldUseCpuFrameReadback({
 	return true;
 }
 
+export function shouldAttemptNativeNvencExport({
+	platform,
+	preferNativeNvenc,
+}: {
+	platform: string;
+	preferNativeNvenc?: boolean;
+}) {
+	return platform === "linux" && preferNativeNvenc === true;
+}
+
 export class VideoExporter {
 	private config: VideoExporterConfig;
 	private streamingDecoder: StreamingVideoDecoder | null = null;
@@ -246,6 +256,14 @@ export class VideoExporter {
 	private async tryNativeGpuExport(): Promise<ExportResult | null> {
 		if (!this.config.preferNativeNvenc) return null;
 		const platform = await getPlatform();
+		if (
+			!shouldAttemptNativeNvencExport({
+				platform,
+				preferNativeNvenc: this.config.preferNativeNvenc,
+			})
+		) {
+			return null;
+		}
 		const bridgeBlocker = this.getNativeGpuBridgeBlocker(platform);
 		if (bridgeBlocker) {
 			return { success: false, error: `Required native GPU export unavailable: ${bridgeBlocker}` };
