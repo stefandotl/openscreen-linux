@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { RecordingProjectTransitionState } from "./recordingProjectTransition";
+import {
+	beginRecordingProjectTransition,
+	RecordingProjectTransitionState,
+} from "./recordingProjectTransition";
 
 describe("RecordingProjectTransitionState", () => {
 	it("keeps a scene-targeted project snapshot for exactly one editor restore", () => {
@@ -31,5 +34,22 @@ describe("RecordingProjectTransitionState", () => {
 
 		expect(transition.sceneId).toBeNull();
 		expect(transition.consumeProjectData()).toBeNull();
+	});
+
+	it("clears the previous recording session before entering the recorder", () => {
+		const transition = new RecordingProjectTransitionState();
+		let currentSession: object | null = { screenVideoPath: "/tmp/previous.webm" };
+
+		beginRecordingProjectTransition(
+			transition,
+			() => {
+				currentSession = null;
+			},
+			"scene-3",
+			{ scenes: [] },
+		);
+
+		expect(currentSession).toBeNull();
+		expect(transition.sceneId).toBe("scene-3");
 	});
 });

@@ -62,7 +62,10 @@ import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/rec
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { RecordingPreferencesStore } from "../recordingPreferencesStore";
-import { RecordingProjectTransitionState } from "../recordingProjectTransition";
+import {
+	beginRecordingProjectTransition,
+	RecordingProjectTransitionState,
+} from "../recordingProjectTransition";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -1838,7 +1841,12 @@ export function registerIpcHandlers(
 	});
 
 	ipcMain.handle("start-new-recording", (_, sceneId?: string, projectData?: unknown) => {
-		recordingProjectTransition.begin(sceneId, projectData);
+		beginRecordingProjectTransition(
+			recordingProjectTransition,
+			() => setCurrentRecordingSessionState(null),
+			sceneId,
+			projectData,
+		);
 		_switchToHud?.();
 		return { success: true };
 	});

@@ -23,3 +23,15 @@ export class RecordingProjectTransitionState {
 		this.pendingProjectData = null;
 	}
 }
+
+export function beginRecordingProjectTransition(
+	transition: RecordingProjectTransitionState,
+	clearCurrentRecordingSession: () => void,
+	sceneId?: string,
+	projectData?: unknown,
+) {
+	transition.begin(sceneId, projectData);
+	// A session already present here belongs to the previous editor visit. Only a
+	// session stored after this transition may be attached to the target scene.
+	clearCurrentRecordingSession();
+}
