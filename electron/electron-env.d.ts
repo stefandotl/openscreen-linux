@@ -30,7 +30,10 @@ interface Window {
 		getSources: (opts: Electron.SourcesOptions) => Promise<ProcessedDesktopSource[]>;
 		switchToEditor: () => Promise<void>;
 		switchToHud: () => Promise<void>;
-		startNewRecording: (sceneId?: string) => Promise<{ success: boolean; error?: string }>;
+		startNewRecording: (
+			sceneId?: string,
+			projectData?: unknown,
+		) => Promise<{ success: boolean; error?: string }>;
 		openSourceSelector: () => Promise<{
 			opened: boolean;
 			reason?: string;

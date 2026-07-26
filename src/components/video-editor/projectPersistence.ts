@@ -604,6 +604,19 @@ export function normalizeProjectScenes(value: unknown): ProjectSceneData[] {
 	});
 }
 
+export function resolveActiveProjectMedia(
+	scenes: ProjectSceneData[],
+	activeSceneId: string | undefined,
+	fallbackMedia: ProjectMedia | null,
+): ProjectMedia | null {
+	if (scenes.length === 0) {
+		return fallbackMedia;
+	}
+
+	const activeScene = scenes.find((scene) => scene.id === activeSceneId) ?? scenes[0];
+	return activeScene.media;
+}
+
 function createSceneFallbackName(index: number) {
 	return `Scene ${index + 1}`;
 }

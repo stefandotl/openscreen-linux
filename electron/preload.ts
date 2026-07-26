@@ -57,8 +57,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	switchToHud: () => {
 		return ipcRenderer.invoke("switch-to-hud");
 	},
-	startNewRecording: (sceneId?: string) => {
-		return ipcRenderer.invoke("start-new-recording", sceneId);
+	startNewRecording: (sceneId?: string, projectData?: unknown) => {
+		return ipcRenderer.invoke("start-new-recording", sceneId, projectData);
 	},
 	openSourceSelector: () => {
 		return ipcRenderer.invoke("open-source-selector");

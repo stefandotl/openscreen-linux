@@ -97,13 +97,20 @@ import {
 	normalizeProjectScenes,
 	type ProjectEditorState,
 	type ProjectSceneData,
+	resolveActiveProjectMedia,
 	resolveProjectMedia,
 	toFileUrl,
 	validateProjectData,
 } from "./projectPersistence";
 import SceneStrip from "./SceneStrip";
 import { SettingsPanel } from "./SettingsPanel";
-import { createSceneId, createSceneName, type EditorScene } from "./sceneModel";
+import {
+	createSceneId,
+	createSceneName,
+	createScenePlaybackKey,
+	type EditorScene,
+	reorderScenes,
+} from "./sceneModel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
 import {
@@ -468,7 +475,14 @@ export default function VideoEditor() {
 		const nextScenes = [...scenesRef.current, scene];
 		scenesRef.current = nextScenes;
 		setScenes(nextScenes);
-	}, [createSceneFromMedia, updateActiveSceneSnapshot]);
+		activeSceneIdRef.current = scene.id;
+		setActiveSceneId(scene.id);
+		applySceneMedia(null);
+		resetState(scene.editor);
+		setCurrentTime(0);
+		setDuration(0);
+		setIsPlaying(false);
+	}, [applySceneMedia, createSceneFromMedia, resetState, updateActiveSceneSnapshot]);
 
 	const handleSelectScene = useCallback(
 		(sceneId: string) => {
@@ -515,6 +529,17 @@ export default function VideoEditor() {
 			setIsPlaying(false);
 		},
 		[applySceneMedia, resetState, updateActiveSceneSnapshot],
+	);
+
+	const handleReorderScene = useCallback(
+		(sceneId: string, targetIndex: number) => {
+			updateActiveSceneSnapshot();
+			const nextScenes = reorderScenes(scenesRef.current, sceneId, targetIndex);
+			if (nextScenes === scenesRef.current) return;
+			scenesRef.current = nextScenes;
+			setScenes(nextScenes);
+		},
+		[updateActiveSceneSnapshot],
 	);
 
 	const handleSceneVideoImported = useCallback(
@@ -594,7 +619,11 @@ export default function VideoEditor() {
 				savedScenes.find((scene) => scene.id === project.activeSceneId) ?? savedScenes[0];
 			const fallbackProjectMedia =
 				resolveProjectMedia(project) ?? savedScenes.find((scene) => scene.media)?.media ?? null;
-			const projectMedia = savedActiveScene?.media ?? fallbackProjectMedia;
+			const projectMedia = resolveActiveProjectMedia(
+				savedScenes,
+				project.activeSceneId,
+				fallbackProjectMedia,
+			);
 			if (!fallbackProjectMedia) {
 				return false;
 			}
@@ -882,6 +911,10 @@ export default function VideoEditor() {
 						currentProjectResult.path ?? null,
 					);
 					if (restored) {
+						if (!currentProjectResult.path) {
+							// An in-memory recorder transition is not a disk save.
+							setLastSavedSnapshot(null);
+						}
 						const pendingSceneId = currentSessionResult.pendingSceneId;
 						const session = currentSessionResult.session;
 						if (pendingSceneId && session) {
@@ -896,9 +929,11 @@ export default function VideoEditor() {
 							};
 							if (!attachRecordingToScene(pendingSceneId, sessionMedia)) {
 								toast.error("The recorded video could not be attached to its scene.");
-							} else {
+							} else if (currentProjectResult.path) {
 								setShouldPersistAttachedRecording(true);
 							}
+						}
+						if (pendingSceneId) {
 							await window.electronAPI.clearPendingRecordingScene();
 						}
 						return;
@@ -1152,20 +1187,32 @@ export default function VideoEditor() {
 		}
 
 		pendingRecordingSceneIdRef.current = sceneId;
-		// Persist the complete project before the recorder replaces this window.
-		// This also opens Save As for projects that have not been saved yet, so
-		// the scene list cannot be lost during the recorder transition.
-		const saved = await saveProject(false);
-		if (!saved) {
-			pendingRecordingSceneIdRef.current = null;
-			return;
+		// Existing project files can be updated without prompting. New projects
+		// travel through the recorder as an in-memory snapshot and remain unsaved.
+		if (currentProjectPath && hasUnsavedChanges) {
+			const saved = await saveProject(false);
+			if (!saved) {
+				pendingRecordingSceneIdRef.current = null;
+				return;
+			}
 		}
 		setShowNewRecordingDialog(true);
-	}, [saveProject]);
+	}, [currentProjectPath, hasUnsavedChanges, saveProject]);
 
 	const handleNewRecordingConfirm = useCallback(async () => {
 		const sceneId = pendingRecordingSceneIdRef.current ?? undefined;
-		const result = await window.electronAPI.startNewRecording(sceneId);
+		const mediaForProject =
+			currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
+		const projectData =
+			sceneId && mediaForProject
+				? createProjectData(
+						mediaForProject,
+						projectEditorForScene(editorState),
+						projectScenes,
+						activeSceneId,
+					)
+				: undefined;
+		const result = await window.electronAPI.startNewRecording(sceneId, projectData);
 		if (result.success) {
 			setShowNewRecordingDialog(false);
 		} else {
@@ -1173,7 +1220,14 @@ export default function VideoEditor() {
 			console.error("Failed to start new recording:", result.error);
 			setError("Failed to start new recording: " + (result.error || "Unknown error"));
 		}
-	}, []);
+	}, [
+		activeSceneId,
+		currentProjectMedia,
+		editorState,
+		projectEditorForScene,
+		projectScenes,
+		scenes,
+	]);
 
 	const doLoadProject = useCallback(async () => {
 		const result = await nativeBridgeClient.project.loadProjectFile(getProjectFolder());
@@ -3025,33 +3079,37 @@ export default function VideoEditor() {
 		);
 	}
 
-	const sceneStripOverlay =
+	const sceneSidebar =
 		scenes.length > 0 ? (
 			isSceneStripOpen ? (
-				<div className="absolute bottom-2 left-2 top-2 z-[70] w-[112px] overflow-hidden rounded-xl border border-white/[0.12] shadow-2xl shadow-black/40">
+				<div className="h-full w-[176px] flex-shrink-0 overflow-hidden border-r border-white/[0.07]">
 					<SceneStrip
 						scenes={scenes}
 						activeSceneId={activeSceneId}
 						onSelect={handleSelectScene}
 						onAdd={handleAddScene}
 						onDelete={handleDeleteScene}
+						onReorder={handleReorderScene}
 						onCollapse={() => setIsSceneStripOpen(false)}
 						addLabel={t("emptyState.importVideoButton")}
 						deleteLabel={rawT("common.actions.delete")}
 						cancelLabel={rawT("common.actions.cancel")}
 						collapseLabel="Collapse scenes"
+						reorderLabel="Drag to reorder scene"
 					/>
 				</div>
 			) : (
-				<button
-					type="button"
-					onClick={() => setIsSceneStripOpen(true)}
-					className="absolute left-2 top-2 z-[70] flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.12] bg-[#0b0b0d]/95 text-white/55 shadow-xl shadow-black/30 transition-colors hover:bg-[#17171a] hover:text-white"
-					aria-label="Show scenes"
-					title="Show scenes"
-				>
-					<PanelLeftOpen size={16} />
-				</button>
+				<div className="flex h-full w-10 flex-shrink-0 justify-center border-r border-white/[0.07] bg-[#0c0d0f] pt-2">
+					<button
+						type="button"
+						onClick={() => setIsSceneStripOpen(true)}
+						className="flex h-7 w-7 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/[0.08] hover:text-white"
+						aria-label="Show scenes"
+						title="Show scenes"
+					>
+						<PanelLeftOpen size={15} />
+					</button>
+				</div>
 			)
 		) : null;
 
@@ -3333,25 +3391,30 @@ export default function VideoEditor() {
 			{/* Empty state shown when no video is loaded */}
 			{!videoPath && (
 				<div className="flex flex-1 min-h-0 relative">
-					{sceneStripOverlay}
-					<EditorEmptyState
-						onVideoImported={handleSceneVideoImported}
-						onStartRecording={handleStartSceneRecording}
-						recordVideoLabel={t("newRecording.title")}
-						onProjectOpened={async (project, path) => {
-							const restored = await applyLoadedProject(project, path);
-							if (!restored) {
-								toast.error(t("project.invalidFormat"));
-							}
-						}}
-					/>
+					{sceneSidebar}
+					<div className="min-w-0 flex-1">
+						<EditorEmptyState
+							onVideoImported={handleSceneVideoImported}
+							onStartRecording={handleStartSceneRecording}
+							recordVideoLabel={t("newRecording.title")}
+							onProjectOpened={async (project, path) => {
+								const restored = await applyLoadedProject(project, path);
+								if (!restored) {
+									toast.error(t("project.invalidFormat"));
+								}
+							}}
+						/>
+					</div>
 				</div>
 			)}
 
 			{videoPath && (
-				<div className="editor-workspace flex flex-1 min-h-0 relative">
-					{sceneStripOverlay}
-					<PanelGroup direction="vertical" className="gap-3 min-h-0">
+				<div className="flex flex-1 min-h-0 relative">
+					{sceneSidebar}
+					<PanelGroup
+						direction="vertical"
+						className="editor-workspace gap-3 flex-1 min-w-0 min-h-0"
+					>
 						{/* Top section: preview and contextual settings */}
 						<Panel defaultSize={67} maxSize={76} minSize={46} className="min-h-[300px]">
 							<div className="editor-main-deck h-full min-h-0">
@@ -3382,7 +3445,11 @@ export default function VideoEditor() {
 												}}
 											>
 												<VideoPlayback
-													key={`${videoPath || "no-video"}:${webcamVideoPath || "no-webcam"}`}
+													key={createScenePlaybackKey(
+														activeSceneId,
+														videoPath || "",
+														webcamVideoPath,
+													)}
 													aspectRatio={aspectRatio}
 													ref={videoPlaybackRef}
 													videoPath={videoPath || ""}
@@ -3694,6 +3761,7 @@ export default function VideoEditor() {
 										})
 									}
 									videoUrl={videoPath ?? undefined}
+									hasVideoSource={Boolean(videoPath)}
 									showTrimWaveform={showTrimWaveform}
 									detectSilenceLabel={t("silenceDetection.button")}
 									isDetectingSilence={isDetectingSilence}

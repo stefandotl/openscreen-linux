@@ -62,6 +62,7 @@ import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/rec
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { RecordingPreferencesStore } from "../recordingPreferencesStore";
+import { RecordingProjectTransitionState } from "../recordingProjectTransition";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -593,7 +594,7 @@ let selectedDesktopSource: DesktopCapturerSource | null = null;
 let lastEnumeratedSources = new Map<string, DesktopCapturerSource>();
 let currentProjectPath: string | null = null;
 let currentRecordingSession: RecordingSession | null = null;
-let pendingRecordingSceneId: string | null = null;
+const recordingProjectTransition = new RecordingProjectTransitionState();
 
 // Cached source from the user's pick. Used by setDisplayMediaRequestHandler in main.ts for cursor-free capture.
 export function getSelectedDesktopSource(): DesktopCapturerSource | null {
@@ -1456,7 +1457,7 @@ function setCurrentRecordingSessionState(session: RecordingSession | null) {
 }
 
 function clearCurrentProjectForNewMedia() {
-	if (!pendingRecordingSceneId) {
+	if (!recordingProjectTransition.sceneId) {
 		currentProjectPath = null;
 	}
 }
@@ -1836,8 +1837,8 @@ export function registerIpcHandlers(
 		return { success: true };
 	});
 
-	ipcMain.handle("start-new-recording", (_, sceneId?: string) => {
-		pendingRecordingSceneId = typeof sceneId === "string" && sceneId.length > 0 ? sceneId : null;
+	ipcMain.handle("start-new-recording", (_, sceneId?: string, projectData?: unknown) => {
+		recordingProjectTransition.begin(sceneId, projectData);
 		_switchToHud?.();
 		return { success: true };
 	});
@@ -3290,6 +3291,15 @@ export function registerIpcHandlers(
 
 	async function loadCurrentProjectFile(): Promise<ProjectFileResult> {
 		try {
+			const pendingProjectData = recordingProjectTransition.consumeProjectData();
+			if (pendingProjectData !== null) {
+				return {
+					success: true,
+					...(currentProjectPath ? { path: currentProjectPath } : {}),
+					project: pendingProjectData,
+				};
+			}
+
 			if (!currentProjectPath) {
 				return { success: false, message: "No active project" };
 			}
@@ -3322,7 +3332,7 @@ export function registerIpcHandlers(
 		const normalizedSession = normalizeRecordingSession(session);
 		setCurrentRecordingSessionState(normalizedSession);
 		currentVideoPath = normalizedSession?.screenVideoPath ?? null;
-		if (!pendingRecordingSceneId) {
+		if (!recordingProjectTransition.sceneId) {
 			currentProjectPath = null;
 		}
 		return { success: true, session: currentRecordingSession };
@@ -3333,16 +3343,20 @@ export function registerIpcHandlers(
 			? {
 					success: true,
 					session: currentRecordingSession,
-					...(pendingRecordingSceneId ? { pendingSceneId: pendingRecordingSceneId } : {}),
+					...(recordingProjectTransition.sceneId
+						? { pendingSceneId: recordingProjectTransition.sceneId }
+						: {}),
 				}
 			: {
 					success: false,
-					...(pendingRecordingSceneId ? { pendingSceneId: pendingRecordingSceneId } : {}),
+					...(recordingProjectTransition.sceneId
+						? { pendingSceneId: recordingProjectTransition.sceneId }
+						: {}),
 				};
 	});
 
 	ipcMain.handle("clear-pending-recording-scene", () => {
-		pendingRecordingSceneId = null;
+		recordingProjectTransition.clear();
 		return { success: true };
 	});
 

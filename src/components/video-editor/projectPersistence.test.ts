@@ -6,6 +6,7 @@ import {
 	normalizeProjectEditor,
 	normalizeProjectScenes,
 	PROJECT_VERSION,
+	resolveActiveProjectMedia,
 	resolveProjectMedia,
 	validateProjectData,
 } from "./projectPersistence";
@@ -87,6 +88,18 @@ describe("projectPersistence media compatibility", () => {
 			{ id: "scene-1", media: { screenVideoPath: "/tmp/scene-one.webm" } },
 			{ id: "scene-2", media: null },
 		]);
+	});
+
+	it("keeps an active empty scene empty instead of borrowing another scene's media", () => {
+		const editor = normalizeProjectEditor({});
+		const fallbackMedia = { screenVideoPath: "/tmp/scene-one.webm" };
+		const scenes = normalizeProjectScenes([
+			{ id: "scene-1", name: "Scene 1", media: fallbackMedia, editor },
+			{ id: "scene-2", name: "Scene 2", media: null, editor },
+		]);
+
+		expect(resolveActiveProjectMedia(scenes, "scene-2", fallbackMedia)).toBeNull();
+		expect(resolveActiveProjectMedia([], undefined, fallbackMedia)).toEqual(fallbackMedia);
 	});
 
 	it("normalizes webcam mask shape values safely", () => {
