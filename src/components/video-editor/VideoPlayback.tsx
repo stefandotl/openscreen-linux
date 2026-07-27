@@ -79,6 +79,7 @@ import {
 import { clampFocusToScale } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { clamp01 } from "./videoPlayback/mathUtils";
+import { seekMediaElement } from "./videoPlayback/mediaElementPlayback";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
@@ -106,6 +107,8 @@ interface VideoPlaybackProps {
 	onTimeUpdate: (time: number) => void;
 	currentTime: number;
 	onPlayStateChange: (playing: boolean) => void;
+	onEnded?: () => void;
+	onReady?: () => void;
 	onError: (error: string) => void;
 	wallpaper?: string;
 	zoomRegions: ZoomRegion[];
@@ -157,6 +160,7 @@ export interface VideoPlaybackRef {
 	videoSprite: Sprite | null;
 	videoContainer: Container | null;
 	containerRef: React.RefObject<HTMLDivElement>;
+	seek: (timeSeconds: number) => Promise<void>;
 	play: () => Promise<void>;
 	pause: () => void;
 }
@@ -233,6 +237,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			onTimeUpdate,
 			currentTime,
 			onPlayStateChange,
+			onEnded,
+			onReady,
 			onError,
 			wallpaper,
 			zoomRegions,
@@ -357,6 +363,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const motionBlurStateRef = useRef<MotionBlurState>(createMotionBlurState());
 		const onTimeUpdateRef = useRef(onTimeUpdate);
 		const onPlayStateChangeRef = useRef(onPlayStateChange);
+		const onEndedRef = useRef(onEnded);
 		const videoReadyRafRef = useRef<number | null>(null);
 		const smoothedAutoFocusRef = useRef<ZoomFocus | null>(null);
 		const prevTargetProgressRef = useRef(0);
@@ -618,16 +625,18 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			videoSprite: videoSpriteRef.current,
 			videoContainer: videoContainerRef.current,
 			containerRef,
+			seek: async (timeSeconds: number) => {
+				const video = videoRef.current;
+				if (!video) return;
+				await seekMediaElement(video, timeSeconds);
+			},
 			play: async () => {
 				const vid = videoRef.current;
 				if (!vid) return;
 				try {
 					allowPlaybackRef.current = true;
 					enableAllPreviewAudioTracks(vid);
-					await vid.play().catch((err) => {
-						console.log("PLAY ERROR:", err);
-						throw err;
-					});
+					await vid.play();
 					const supplementalAudio = supplementalAudioRef.current;
 					if (supplementalAudio) {
 						supplementalAudio.currentTime = vid.currentTime;
@@ -884,6 +893,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		useEffect(() => {
 			onPlayStateChangeRef.current = onPlayStateChange;
 		}, [onPlayStateChange]);
+
+		useEffect(() => {
+			onEndedRef.current = onEnded;
+		}, [onEnded]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
@@ -1207,7 +1220,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			blurFilter.quality = 3;
 			blurFilter.resolution = app.renderer.resolution;
 			blurFilter.blur = 0;
-			const motionBlurFilter = new MotionBlurFilter([0, 0], 5, 0);
+			const motionBlurFilter = new MotionBlurFilter({
+				velocity: { x: 0, y: 0 },
+				kernelSize: 5,
+				offset: 0,
+			});
 			blurFilterRef.current = blurFilter;
 			motionBlurFilterRef.current = motionBlurFilter;
 
@@ -1223,6 +1240,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				timeUpdateAnimationRef,
 				onPlayStateChange: (playing) => onPlayStateChangeRef.current(playing),
 				onTimeUpdate: (time) => onTimeUpdateRef.current(time),
+				onTerminalTrim: () => onEndedRef.current?.(),
 				trimRegionsRef,
 				speedRegionsRef,
 				isScrubbingRef,
@@ -1233,6 +1251,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			video.addEventListener("play", handlePlay);
 			video.addEventListener("pause", handlePause);
 			video.addEventListener("ended", handlePause);
+			const handleEnded = () => onEndedRef.current?.();
+			video.addEventListener("ended", handleEnded);
 			video.addEventListener("seeked", handleSeeked);
 			video.addEventListener("seeking", handleSeeking);
 
@@ -1240,6 +1260,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				video.removeEventListener("play", handlePlay);
 				video.removeEventListener("pause", handlePause);
 				video.removeEventListener("ended", handlePause);
+				video.removeEventListener("ended", handleEnded);
 				video.removeEventListener("seeked", handleSeeked);
 				video.removeEventListener("seeking", handleSeeking);
 
@@ -1277,6 +1298,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				videoSpriteRef.current = null;
 			};
 		}, [pixiReady, videoReady]);
+
+		useEffect(() => {
+			if (pixiReady && videoReady && (!webcamVideoPath || webcamDimensions)) onReady?.();
+		}, [onReady, pixiReady, videoReady, webcamDimensions, webcamVideoPath]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
@@ -1818,15 +1843,20 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						width: webcamVideo.videoWidth,
 						height: webcamVideo.videoHeight,
 					});
+				} else if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
+					onError("Webcam video metadata has invalid dimensions");
 				}
 			};
+			const handleError = () => onError("Failed to load webcam video");
 
 			webcamVideo.addEventListener("loadedmetadata", handleLoadedMetadata);
+			webcamVideo.addEventListener("error", handleError);
 			handleLoadedMetadata();
 			return () => {
 				webcamVideo.removeEventListener("loadedmetadata", handleLoadedMetadata);
+				webcamVideo.removeEventListener("error", handleError);
 			};
-		}, [webcamVideoPath]);
+		}, [onError, webcamVideoPath]);
 
 		useEffect(() => {
 			const webcamVideo = webcamVideoRef.current;

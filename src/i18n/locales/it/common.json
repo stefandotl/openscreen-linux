@@ -41,7 +41,16 @@
 		"play": "Riproduci",
 		"pause": "Pausa",
 		"fullscreen": "Schermo intero",
-		"exitFullscreen": "Esci dallo schermo intero"
+		"exitFullscreen": "Esci dallo schermo intero",
+		"scope": "Ambito di riproduzione",
+		"scene": "Scena",
+		"project": "Progetto",
+		"sceneSegment": "Segmento scena: {{name}}",
+		"emptyScene": "Scena vuota: {{name}}",
+		"projectTimeline": "Timeline del progetto",
+		"sceneTimeline": "Timeline della scena",
+		"preparing": "Preparazione della riproduzione del progetto…",
+		"noPlayableScenes": "Il progetto non contiene scene riproducibili."
 	},
 	"locale": {
 		"name": "Italiano",

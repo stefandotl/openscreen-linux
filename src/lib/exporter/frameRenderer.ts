@@ -212,7 +212,11 @@ export class FrameRenderer {
 		this.blurFilter.quality = 5;
 		this.blurFilter.resolution = this.app.renderer.resolution;
 		this.blurFilter.blur = 0;
-		this.motionBlurFilter = new MotionBlurFilter([0, 0], 5, 0);
+		this.motionBlurFilter = new MotionBlurFilter({
+			velocity: { x: 0, y: 0 },
+			kernelSize: 5,
+			offset: 0,
+		});
 		this.videoContainer.filters = [this.blurFilter, this.motionBlurFilter];
 
 		// Composite canvas: final output with shadows

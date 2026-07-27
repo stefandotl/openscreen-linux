@@ -41,7 +41,16 @@
 		"play": "Play",
 		"pause": "Pause",
 		"fullscreen": "Fullscreen",
-		"exitFullscreen": "Exit Fullscreen"
+		"exitFullscreen": "Exit Fullscreen",
+		"scope": "Playback scope",
+		"scene": "Scene",
+		"project": "Project",
+		"sceneSegment": "Scene segment: {{name}}",
+		"emptyScene": "Empty scene: {{name}}",
+		"projectTimeline": "Project timeline",
+		"sceneTimeline": "Scene timeline",
+		"preparing": "Preparing project playback…",
+		"noPlayableScenes": "The project has no playable scenes."
 	},
 	"locale": {
 		"name": "English",

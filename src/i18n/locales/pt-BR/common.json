@@ -41,7 +41,16 @@
 		"play": "Play",
 		"pause": "Pause",
 		"fullscreen": "Tela Cheia",
-		"exitFullscreen": "Sair da Tela Cheia"
+		"exitFullscreen": "Sair da Tela Cheia",
+		"scope": "Escopo de reprodução",
+		"scene": "Cena",
+		"project": "Projeto",
+		"sceneSegment": "Segmento de cena: {{name}}",
+		"emptyScene": "Cena vazia: {{name}}",
+		"projectTimeline": "Linha do tempo do projeto",
+		"sceneTimeline": "Linha do tempo da cena",
+		"preparing": "Preparando reprodução do projeto…",
+		"noPlayableScenes": "O projeto não tem cenas reproduzíveis."
 	},
 	"locale": {
 		"name": "Português Brasileiro",

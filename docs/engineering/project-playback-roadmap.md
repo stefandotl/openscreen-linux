@@ -9,6 +9,20 @@ This first project-preview milestone covers direct cuts only. Configurable visua
 transitions such as crossfades, wipes, or overlap are a separate feature because the current MP4
 export renders independent scene segments and concatenates them without overlap.
 
+## Implementation status
+
+Implemented in the editor:
+
+- export-consistent effective duration and bidirectional project/source time mapping;
+- the `Scene | Project` scope switch and segmented, duration-proportional project rail;
+- deterministic boundary seeking, with an exact boundary selecting the later scene;
+- automatic direct cuts across keyed player remounts, including terminal trims;
+- bounded project-playback state across pause, switch, resume, and completion;
+- eager screen/webcam preload with explicit media errors and metadata timeouts.
+
+A real Electron desktop comparison against native Linux MP4 export remains a release check. Visual
+or audio transition effects remain intentionally out of scope.
+
 ## Proposed interaction
 
 - Keep the existing scene-local controls as the default editing mode.

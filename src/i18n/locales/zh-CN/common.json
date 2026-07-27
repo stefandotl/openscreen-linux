@@ -41,7 +41,16 @@
 		"play": "播放",
 		"pause": "暂停",
 		"fullscreen": "全屏",
-		"exitFullscreen": "退出全屏"
+		"exitFullscreen": "退出全屏",
+		"scope": "播放范围",
+		"scene": "场景",
+		"project": "项目",
+		"sceneSegment": "场景片段：{{name}}",
+		"emptyScene": "空场景：{{name}}",
+		"projectTimeline": "项目时间线",
+		"sceneTimeline": "场景时间线",
+		"preparing": "正在准备项目播放…",
+		"noPlayableScenes": "项目中没有可播放的场景。"
 	},
 	"locale": {
 		"name": "简体中文",

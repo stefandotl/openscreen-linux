@@ -41,7 +41,16 @@
 		"play": "재생",
 		"pause": "일시정지",
 		"fullscreen": "전체화면",
-		"exitFullscreen": "전체화면 종료"
+		"exitFullscreen": "전체화면 종료",
+		"scope": "재생 범위",
+		"scene": "장면",
+		"project": "프로젝트",
+		"sceneSegment": "장면 구간: {{name}}",
+		"emptyScene": "빈 장면: {{name}}",
+		"projectTimeline": "프로젝트 타임라인",
+		"sceneTimeline": "장면 타임라인",
+		"preparing": "프로젝트 재생 준비 중…",
+		"noPlayableScenes": "재생할 수 있는 장면이 없습니다."
 	},
 	"locale": {
 		"name": "한국어",

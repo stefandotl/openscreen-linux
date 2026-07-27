@@ -87,6 +87,7 @@ import {
 	DEFAULT_SOURCE_DIMENSIONS,
 } from "./editorDefaults";
 import PlaybackControls from "./PlaybackControls";
+import ProjectPlaybackPreloader from "./ProjectPlaybackPreloader";
 import {
 	createProjectData,
 	createProjectSnapshot,
@@ -102,6 +103,15 @@ import {
 	toFileUrl,
 	validateProjectData,
 } from "./projectPersistence";
+import {
+	buildProjectPlaybackPlan,
+	getNextProjectPlaybackSegment,
+	getProjectPlaybackDuration,
+	type ProjectPlaybackPosition,
+	type ProjectPlaybackSegment,
+	projectTimeToSceneSource,
+	sceneSourceTimeToProjectTime,
+} from "./projectPlayback";
 import SceneStrip from "./SceneStrip";
 import { SettingsPanel } from "./SettingsPanel";
 import {
@@ -145,6 +155,33 @@ import VideoPlayback, { VideoPlaybackRef } from "./VideoPlayback";
 const AUTO_CAPTION_PROGRESS_TOAST_ID = "auto-caption-progress";
 const SILENCE_DETECTION_PROGRESS_TOAST_ID = "silence-detection-progress";
 const MP4_EXPORT_FRAME_RATE = 30;
+
+type ProjectPlaybackControllerState = "scene" | "playing" | "switching" | "paused" | "completed";
+
+interface SceneDurationRecord {
+	sourcePath: string;
+	durationSeconds: number;
+}
+
+interface ScenePreloadErrorRecord {
+	sourcePath: string;
+	message: string;
+}
+
+interface SceneMediaReadyRecord {
+	sourcePath: string;
+}
+
+interface PendingProjectPlaybackPosition extends ProjectPlaybackPosition {
+	requestId: number;
+	shouldPlay: boolean;
+}
+
+function isAbortError(error: unknown) {
+	return (
+		typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
+	);
+}
 
 function isClickInteractionType(interactionType: string | null | undefined) {
 	return (
@@ -260,6 +297,21 @@ export default function VideoEditor() {
 	currentTimeRef.current = currentTime;
 	const durationRef = useRef(duration);
 	durationRef.current = duration;
+	const [playbackScope, setPlaybackScope] = useState<"scene" | "project">("scene");
+	const playbackScopeRef = useRef<"scene" | "project">("scene");
+	const [projectPlaybackState, setProjectPlaybackState] =
+		useState<ProjectPlaybackControllerState>("scene");
+	const projectPlaybackStateRef = useRef<ProjectPlaybackControllerState>("scene");
+	const [projectPlaybackTime, setProjectPlaybackTime] = useState(0);
+	const [sceneDurations, setSceneDurations] = useState<Record<string, SceneDurationRecord>>({});
+	const [scenePreloadErrors, setScenePreloadErrors] = useState<
+		Record<string, ScenePreloadErrorRecord>
+	>({});
+	const [sceneMediaReady, setSceneMediaReady] = useState<Record<string, SceneMediaReadyRecord>>({});
+	const pendingProjectPlaybackPositionRef = useRef<PendingProjectPlaybackPosition | null>(null);
+	const readyProjectPlaybackKeyRef = useRef<string | null>(null);
+	const nextProjectPlaybackRequestIdRef = useRef(1);
+	const completingProjectPlaybackRequestIdRef = useRef<number | null>(null);
 	const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
 	const [isPreviewingZoom, setIsPreviewingZoom] = useState(false);
 	const [selectedTrimId, setSelectedTrimId] = useState<string | null>(null);
@@ -409,6 +461,27 @@ export default function VideoEditor() {
 		recordingCursorCaptureMode,
 	]);
 
+	const setProjectControllerState = useCallback((state: ProjectPlaybackControllerState) => {
+		projectPlaybackStateRef.current = state;
+		setProjectPlaybackState(state);
+	}, []);
+
+	const exitProjectPlayback = useCallback(() => {
+		videoPlaybackRef.current?.pause();
+		pendingProjectPlaybackPositionRef.current = null;
+		playbackScopeRef.current = "scene";
+		setPlaybackScope("scene");
+		setProjectControllerState("scene");
+		setProjectPlaybackTime(0);
+	}, [setProjectControllerState]);
+
+	const pauseProjectPlaybackForEditing = useCallback(() => {
+		if (playbackScopeRef.current !== "project") return;
+		videoPlaybackRef.current?.pause();
+		pendingProjectPlaybackPositionRef.current = null;
+		setProjectControllerState("paused");
+	}, [setProjectControllerState]);
+
 	useEffect(() => {
 		scenesRef.current = scenes;
 		activeSceneIdRef.current = activeSceneId;
@@ -473,6 +546,7 @@ export default function VideoEditor() {
 	);
 
 	const handleAddScene = useCallback(() => {
+		exitProjectPlayback();
 		updateActiveSceneSnapshot();
 		const scene = createSceneFromMedia(null);
 		const nextScenes = [...scenesRef.current, scene];
@@ -485,7 +559,13 @@ export default function VideoEditor() {
 		setCurrentTime(0);
 		setDuration(0);
 		setIsPlaying(false);
-	}, [applySceneMedia, createSceneFromMedia, resetState, updateActiveSceneSnapshot]);
+	}, [
+		applySceneMedia,
+		createSceneFromMedia,
+		exitProjectPlayback,
+		resetState,
+		updateActiveSceneSnapshot,
+	]);
 
 	const handleSelectScene = useCallback(
 		(sceneId: string) => {
@@ -493,6 +573,7 @@ export default function VideoEditor() {
 			const scene = scenesRef.current.find((candidate) => candidate.id === sceneId);
 			if (!scene) return;
 
+			pauseProjectPlaybackForEditing();
 			updateActiveSceneSnapshot();
 			activeSceneIdRef.current = scene.id;
 			setActiveSceneId(scene.id);
@@ -507,7 +588,7 @@ export default function VideoEditor() {
 			setSelectedAnnotationId(null);
 			setSelectedBlurId(null);
 		},
-		[applySceneMedia, resetState, updateActiveSceneSnapshot],
+		[applySceneMedia, pauseProjectPlaybackForEditing, resetState, updateActiveSceneSnapshot],
 	);
 
 	const handleDeleteScene = useCallback(
@@ -516,6 +597,7 @@ export default function VideoEditor() {
 			const index = scenesRef.current.findIndex((scene) => scene.id === sceneId);
 			if (index < 0) return;
 
+			exitProjectPlayback();
 			updateActiveSceneSnapshot();
 			const nextScenes = scenesRef.current.filter((scene) => scene.id !== sceneId);
 			scenesRef.current = nextScenes;
@@ -531,18 +613,19 @@ export default function VideoEditor() {
 			setDuration(0);
 			setIsPlaying(false);
 		},
-		[applySceneMedia, resetState, updateActiveSceneSnapshot],
+		[applySceneMedia, exitProjectPlayback, resetState, updateActiveSceneSnapshot],
 	);
 
 	const handleReorderScene = useCallback(
 		(sceneId: string, targetIndex: number) => {
+			exitProjectPlayback();
 			updateActiveSceneSnapshot();
 			const nextScenes = reorderScenes(scenesRef.current, sceneId, targetIndex);
 			if (nextScenes === scenesRef.current) return;
 			scenesRef.current = nextScenes;
 			setScenes(nextScenes);
 		},
-		[updateActiveSceneSnapshot],
+		[exitProjectPlayback, updateActiveSceneSnapshot],
 	);
 
 	const handleRenameScene = useCallback((sceneId: string, value: string) => {
@@ -561,6 +644,7 @@ export default function VideoEditor() {
 
 	const handleSceneVideoImported = useCallback(
 		(sourcePath: string) => {
+			exitProjectPlayback();
 			const media: ProjectMedia = { screenVideoPath: sourcePath };
 			if (!activeSceneIdRef.current) {
 				installInitialScene(media);
@@ -577,11 +661,12 @@ export default function VideoEditor() {
 			setDuration(0);
 			setIsPlaying(false);
 		},
-		[applySceneMedia, installInitialScene],
+		[applySceneMedia, exitProjectPlayback, installInitialScene],
 	);
 
 	const attachRecordingToScene = useCallback(
 		(sceneId: string, media: ProjectMedia) => {
+			exitProjectPlayback();
 			const scene = scenesRef.current.find((candidate) => candidate.id === sceneId);
 			if (!scene) return false;
 
@@ -599,7 +684,7 @@ export default function VideoEditor() {
 			setIsPlaying(false);
 			return true;
 		},
-		[applySceneMedia, resetState],
+		[applySceneMedia, exitProjectPlayback, resetState],
 	);
 
 	const projectEditorForScene = useCallback(
@@ -624,12 +709,113 @@ export default function VideoEditor() {
 		}));
 	}, [activeSceneId, currentProjectMedia, editorState, projectEditorForScene, scenes]);
 
+	const recordSceneDuration = useCallback(
+		(sceneId: string, sourcePath: string, durationSeconds: number) => {
+			if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return;
+			setSceneDurations((current) => {
+				const existing = current[sceneId];
+				if (existing?.sourcePath === sourcePath && existing.durationSeconds === durationSeconds) {
+					return current;
+				}
+				return {
+					...current,
+					[sceneId]: { sourcePath, durationSeconds },
+				};
+			});
+		},
+		[],
+	);
+
+	const recordScenePreloadError = useCallback(
+		(sceneId: string, sourcePath: string, message: string) => {
+			const scene = scenesRef.current.find((candidate) => candidate.id === sceneId);
+			if (scene?.media?.screenVideoPath !== sourcePath) return;
+			setScenePreloadErrors((current) =>
+				current[sceneId]?.sourcePath === sourcePath && current[sceneId]?.message === message
+					? current
+					: { ...current, [sceneId]: { sourcePath, message } },
+			);
+		},
+		[],
+	);
+
+	const recordSceneMediaReady = useCallback((sceneId: string, sourcePath: string) => {
+		setSceneMediaReady((current) =>
+			current[sceneId]?.sourcePath === sourcePath
+				? current
+				: { ...current, [sceneId]: { sourcePath } },
+		);
+	}, []);
+
+	const populatedProjectScenes = useMemo(
+		() => projectScenes.filter((scene) => Boolean(scene.media?.screenVideoPath)),
+		[projectScenes],
+	);
+	const projectMetadataReady = populatedProjectScenes.every((scene) => {
+		const sourcePath = scene.media?.screenVideoPath;
+		const cachedDuration = sceneDurations[scene.id];
+		return Boolean(
+			sourcePath &&
+				cachedDuration?.sourcePath === sourcePath &&
+				cachedDuration.durationSeconds > 0 &&
+				sceneMediaReady[scene.id]?.sourcePath === sourcePath,
+		);
+	});
+	const projectPreloadError = populatedProjectScenes
+		.map((scene) => {
+			const errorRecord = scenePreloadErrors[scene.id];
+			return errorRecord?.sourcePath === scene.media?.screenVideoPath
+				? errorRecord.message
+				: undefined;
+		})
+		.find(Boolean);
+	const projectPlaybackPlan = useMemo(
+		() =>
+			projectMetadataReady
+				? buildProjectPlaybackPlan(
+						populatedProjectScenes.map((scene) => ({
+							id: scene.id,
+							name: scene.name,
+							sourceDurationSeconds: sceneDurations[scene.id].durationSeconds,
+							trimRegions: scene.editor.trimRegions,
+							speedRegions: scene.editor.speedRegions,
+						})),
+					)
+				: [],
+		[populatedProjectScenes, projectMetadataReady, sceneDurations],
+	);
+	const projectPlaybackPlanRef = useRef<readonly ProjectPlaybackSegment[]>([]);
+	projectPlaybackPlanRef.current = projectPlaybackPlan;
+	const projectPlaybackDuration = getProjectPlaybackDuration(projectPlaybackPlan);
+	const showProjectPlaybackScope = populatedProjectScenes.length >= 2;
+	const projectPlaybackMarkers = useMemo(() => {
+		let projectCursor = 0;
+		return projectScenes.map((scene) => {
+			const segment = projectPlaybackPlan.find((candidate) => candidate.sceneId === scene.id);
+			const marker = {
+				sceneId: scene.id,
+				name: scene.name,
+				projectTimeSeconds: segment?.projectStartSeconds ?? projectCursor,
+				isPlayable: Boolean(segment),
+			};
+			if (segment) projectCursor = segment.projectEndSeconds;
+			return marker;
+		});
+	}, [projectPlaybackPlan, projectScenes]);
+
+	useEffect(() => {
+		if (!showProjectPlaybackScope && playbackScopeRef.current === "project") {
+			exitProjectPlayback();
+		}
+	}, [exitProjectPlayback, showProjectPlaybackScope]);
+
 	const applyLoadedProject = useCallback(
 		async (candidate: unknown, path?: string | null) => {
 			if (!validateProjectData(candidate)) {
 				return false;
 			}
 
+			exitProjectPlayback();
 			const project = candidate;
 			const savedScenes = normalizeProjectScenes(project.scenes);
 			const savedActiveScene =
@@ -837,7 +1023,7 @@ export default function VideoEditor() {
 			);
 			return true;
 		},
-		[createSceneFromMedia, editorStateForScene, pushState],
+		[createSceneFromMedia, editorStateForScene, exitProjectPlayback, pushState],
 	);
 
 	const currentProjectSnapshot = useMemo(() => {
@@ -1297,6 +1483,7 @@ export default function VideoEditor() {
 	// New Project: clear all media/project/editor state back to the empty
 	// Studio dashboard. Prompts to save first when there are unsaved changes.
 	const doNewProject = useCallback(async () => {
+		exitProjectPlayback();
 		await nativeBridgeClient.project.clearCurrentVideoPath();
 		setVideoPath(null);
 		setVideoSourcePath(null);
@@ -1330,7 +1517,7 @@ export default function VideoEditor() {
 		nextSpeedIdRef.current = 1;
 		nextAnnotationIdRef.current = 1;
 		nextAnnotationZIndexRef.current = 1;
-	}, [resetState]);
+	}, [exitProjectPlayback, resetState]);
 
 	const handleNewProject = useCallback(async () => {
 		if (hasUnsavedChanges) {
@@ -1400,17 +1587,335 @@ export default function VideoEditor() {
 		}
 	}, [cursorRecordingDataError]);
 
-	function togglePlayPause() {
-		const playback = videoPlaybackRef.current;
-		const video = playback?.video;
-		if (!playback || !video) return;
+	const failProjectPlayback = useCallback(
+		(message: string) => {
+			videoPlaybackRef.current?.pause();
+			pendingProjectPlaybackPositionRef.current = null;
+			setProjectControllerState(playbackScopeRef.current === "project" ? "paused" : "scene");
+			toast.error(message);
+		},
+		[setProjectControllerState],
+	);
 
-		if (isPlaying) {
-			playback.pause();
-		} else {
-			playback.play().catch((err) => console.error("Video play failed:", err));
+	useEffect(() => {
+		if (projectPreloadError && playbackScopeRef.current === "project") {
+			failProjectPlayback(projectPreloadError);
 		}
-	}
+	}, [failProjectPlayback, projectPreloadError]);
+
+	const handlePlaybackError = useCallback(
+		(message: string) => {
+			if (playbackScopeRef.current !== "project") {
+				setError(message);
+				return;
+			}
+			const sceneName =
+				scenesRef.current.find((scene) => scene.id === activeSceneIdRef.current)?.name ??
+				activeSceneIdRef.current ??
+				"unknown";
+			failProjectPlayback(`Project playback failed in scene "${sceneName}": ${message}`);
+		},
+		[failProjectPlayback],
+	);
+
+	const completePendingProjectPlaybackPosition = useCallback(() => {
+		const pending = pendingProjectPlaybackPositionRef.current;
+		const playback = videoPlaybackRef.current;
+		if (!pending || pending.sceneId !== activeSceneIdRef.current || !playback?.video) return;
+		if (completingProjectPlaybackRequestIdRef.current === pending.requestId) return;
+		completingProjectPlaybackRequestIdRef.current = pending.requestId;
+
+		void (async () => {
+			try {
+				await playback.seek(pending.sourceTimeSeconds);
+				if (
+					pendingProjectPlaybackPositionRef.current !== pending ||
+					pending.sceneId !== activeSceneIdRef.current
+				) {
+					return;
+				}
+
+				setCurrentTime(pending.sourceTimeSeconds);
+				setProjectPlaybackTime(pending.projectTimeSeconds);
+				if (!pending.shouldPlay) {
+					pendingProjectPlaybackPositionRef.current = null;
+					playback.pause();
+					setProjectControllerState("paused");
+					return;
+				}
+
+				setProjectControllerState("playing");
+				await playback.play();
+				if (pendingProjectPlaybackPositionRef.current === pending) {
+					pendingProjectPlaybackPositionRef.current = null;
+				}
+			} catch (playbackError) {
+				if (pendingProjectPlaybackPositionRef.current !== pending) return;
+				if (!pending.shouldPlay && isAbortError(playbackError)) {
+					pendingProjectPlaybackPositionRef.current = null;
+					return;
+				}
+				console.error("Project playback failed:", playbackError);
+				failProjectPlayback(
+					playbackError instanceof Error ? playbackError.message : "Project playback failed",
+				);
+			} finally {
+				if (completingProjectPlaybackRequestIdRef.current === pending.requestId) {
+					completingProjectPlaybackRequestIdRef.current = null;
+				}
+			}
+		})();
+	}, [failProjectPlayback, setProjectControllerState]);
+
+	const handlePlaybackReady = useCallback(() => {
+		const sceneId = activeSceneIdRef.current;
+		const media = scenesRef.current.find((scene) => scene.id === sceneId)?.media;
+		const sourcePath = media?.screenVideoPath;
+		if (sceneId && sourcePath) {
+			recordSceneMediaReady(sceneId, sourcePath);
+			readyProjectPlaybackKeyRef.current = createScenePlaybackKey(
+				sceneId,
+				toFileUrl(sourcePath),
+				media?.webcamVideoPath ? toFileUrl(media.webcamVideoPath) : null,
+			);
+		}
+		completePendingProjectPlaybackPosition();
+	}, [completePendingProjectPlaybackPosition, recordSceneMediaReady]);
+
+	const moveProjectPlaybackTo = useCallback(
+		(position: ProjectPlaybackPosition, shouldPlay: boolean) => {
+			const scene = scenesRef.current.find((candidate) => candidate.id === position.sceneId);
+			if (!scene?.media?.screenVideoPath) {
+				failProjectPlayback(`Project playback scene "${position.sceneId}" has no media`);
+				return;
+			}
+
+			pendingProjectPlaybackPositionRef.current = {
+				...position,
+				requestId: nextProjectPlaybackRequestIdRef.current++,
+				shouldPlay,
+			};
+			setProjectPlaybackTime(position.projectTimeSeconds);
+
+			const targetPlaybackKey = createScenePlaybackKey(
+				scene.id,
+				toFileUrl(scene.media.screenVideoPath),
+				scene.media.webcamVideoPath ? toFileUrl(scene.media.webcamVideoPath) : null,
+			);
+			if (
+				position.sceneId === activeSceneIdRef.current &&
+				readyProjectPlaybackKeyRef.current === targetPlaybackKey &&
+				videoPlaybackRef.current?.video
+			) {
+				completePendingProjectPlaybackPosition();
+				return;
+			}
+
+			setProjectControllerState("switching");
+			if (position.sceneId === activeSceneIdRef.current) return;
+			updateActiveSceneSnapshot();
+			activeSceneIdRef.current = scene.id;
+			setActiveSceneId(scene.id);
+			applySceneMedia(scene.media);
+			resetState(scene.editor);
+			setCurrentTime(position.sourceTimeSeconds);
+			setDuration(0);
+			setIsPlaying(false);
+			setSelectedZoomId(null);
+			setSelectedTrimId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+		},
+		[
+			applySceneMedia,
+			completePendingProjectPlaybackPosition,
+			failProjectPlayback,
+			resetState,
+			setProjectControllerState,
+			updateActiveSceneSnapshot,
+		],
+	);
+
+	const advanceProjectPlayback = useCallback(
+		(sceneId: string) => {
+			if (
+				playbackScopeRef.current !== "project" ||
+				projectPlaybackStateRef.current !== "playing" ||
+				sceneId !== activeSceneIdRef.current
+			) {
+				return;
+			}
+
+			const plan = projectPlaybackPlanRef.current;
+			const nextSegment = getNextProjectPlaybackSegment(plan, sceneId);
+			if (!nextSegment) {
+				videoPlaybackRef.current?.pause();
+				pendingProjectPlaybackPositionRef.current = null;
+				setProjectPlaybackTime(getProjectPlaybackDuration(plan));
+				setProjectControllerState("completed");
+				return;
+			}
+
+			setProjectControllerState("switching");
+			moveProjectPlaybackTo(
+				{
+					sceneId: nextSegment.sceneId,
+					sourceTimeSeconds: nextSegment.sourceStartSeconds,
+					projectTimeSeconds: nextSegment.projectStartSeconds,
+				},
+				true,
+			);
+		},
+		[moveProjectPlaybackTo, setProjectControllerState],
+	);
+
+	const handlePlaybackTimeUpdate = useCallback(
+		(timeSeconds: number) => {
+			setCurrentTime(timeSeconds);
+			if (playbackScopeRef.current !== "project" || !activeSceneIdRef.current) return;
+
+			const plan = projectPlaybackPlanRef.current;
+			const mappedProjectTime = sceneSourceTimeToProjectTime(
+				plan,
+				activeSceneIdRef.current,
+				timeSeconds,
+			);
+			if (mappedProjectTime === null) return;
+			setProjectPlaybackTime(mappedProjectTime);
+
+			const activeSegment = plan.find((segment) => segment.sceneId === activeSceneIdRef.current);
+			if (
+				projectPlaybackStateRef.current === "playing" &&
+				activeSegment &&
+				mappedProjectTime >= activeSegment.projectEndSeconds - 0.001
+			) {
+				advanceProjectPlayback(activeSegment.sceneId);
+			}
+		},
+		[advanceProjectPlayback],
+	);
+
+	const handlePlaybackEnded = useCallback(() => {
+		if (activeSceneIdRef.current) {
+			advanceProjectPlayback(activeSceneIdRef.current);
+		}
+	}, [advanceProjectPlayback]);
+
+	const handlePlaybackDurationChange = useCallback(
+		(nextDuration: number) => {
+			setDuration(nextDuration);
+			const sceneId = activeSceneIdRef.current;
+			const sourcePath = currentProjectMedia?.screenVideoPath;
+			if (sceneId && sourcePath) {
+				recordSceneDuration(sceneId, sourcePath, nextDuration);
+			}
+		},
+		[currentProjectMedia?.screenVideoPath, recordSceneDuration],
+	);
+
+	const handlePlaybackScopeChange = useCallback(
+		(nextScope: "scene" | "project") => {
+			if (nextScope === playbackScopeRef.current) return;
+			videoPlaybackRef.current?.pause();
+			pendingProjectPlaybackPositionRef.current = null;
+
+			if (nextScope === "scene") {
+				playbackScopeRef.current = "scene";
+				setPlaybackScope("scene");
+				setProjectControllerState("scene");
+				return;
+			}
+
+			if (projectPreloadError) {
+				failProjectPlayback(projectPreloadError);
+				return;
+			}
+			if (!projectMetadataReady) {
+				toast.info(rawT("common.playback.preparing"));
+				return;
+			}
+			if (projectPlaybackPlan.length === 0) {
+				failProjectPlayback(rawT("common.playback.noPlayableScenes"));
+				return;
+			}
+
+			playbackScopeRef.current = "project";
+			setPlaybackScope("project");
+			setProjectControllerState("paused");
+			const activeProjectTime = activeSceneIdRef.current
+				? sceneSourceTimeToProjectTime(
+						projectPlaybackPlan,
+						activeSceneIdRef.current,
+						currentTimeRef.current,
+					)
+				: null;
+			if (activeProjectTime !== null) {
+				setProjectPlaybackTime(activeProjectTime);
+				return;
+			}
+
+			const firstPosition = projectTimeToSceneSource(projectPlaybackPlan, 0);
+			if (firstPosition) moveProjectPlaybackTo(firstPosition, false);
+		},
+		[
+			failProjectPlayback,
+			moveProjectPlaybackTo,
+			projectMetadataReady,
+			projectPlaybackPlan,
+			projectPreloadError,
+			rawT,
+			setProjectControllerState,
+		],
+	);
+
+	const togglePlayPause = useCallback(() => {
+		const playback = videoPlaybackRef.current;
+		if (playbackScopeRef.current === "scene") {
+			if (!playback?.video) return;
+			if (isPlaying) {
+				playback.pause();
+			} else {
+				void playback.play().catch((playError) => {
+					console.error("Video play failed:", playError);
+				});
+			}
+			return;
+		}
+
+		if (
+			projectPlaybackStateRef.current === "playing" ||
+			projectPlaybackStateRef.current === "switching"
+		) {
+			playback?.pause();
+			const pending = pendingProjectPlaybackPositionRef.current;
+			if (pending) pending.shouldPlay = false;
+			setProjectControllerState("paused");
+			return;
+		}
+
+		if (projectPreloadError) {
+			failProjectPlayback(projectPreloadError);
+			return;
+		}
+		if (!projectMetadataReady) {
+			toast.info(rawT("common.playback.preparing"));
+			return;
+		}
+
+		const resumeTime = projectPlaybackStateRef.current === "completed" ? 0 : projectPlaybackTime;
+		const position = projectTimeToSceneSource(projectPlaybackPlanRef.current, resumeTime);
+		if (position) moveProjectPlaybackTo(position, true);
+	}, [
+		failProjectPlayback,
+		isPlaying,
+		moveProjectPlaybackTo,
+		projectMetadataReady,
+		projectPlaybackTime,
+		projectPreloadError,
+		rawT,
+		setProjectControllerState,
+	]);
 
 	const toggleFullscreen = useCallback(() => {
 		setIsFullscreen((prev) => !prev);
@@ -1427,11 +1932,23 @@ export default function VideoEditor() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [isFullscreen]);
 
-	function handleSeek(time: number) {
-		const video = videoPlaybackRef.current?.video;
-		if (!video) return;
-		video.currentTime = time;
-	}
+	const handleSeek = useCallback(
+		(time: number) => {
+			if (playbackScopeRef.current === "scene") {
+				const video = videoPlaybackRef.current?.video;
+				if (video) video.currentTime = time;
+				return;
+			}
+
+			const position = projectTimeToSceneSource(projectPlaybackPlanRef.current, time);
+			if (!position) return;
+			const shouldPlay =
+				projectPlaybackStateRef.current === "playing" ||
+				projectPlaybackStateRef.current === "switching";
+			moveProjectPlaybackTo(position, shouldPlay);
+		},
+		[moveProjectPlaybackTo],
+	);
 
 	const handleSelectZoom = useCallback((id: string | null) => {
 		setSelectedZoomId(id);
@@ -2147,11 +2664,18 @@ export default function VideoEditor() {
 					return;
 				}
 				e.preventDefault();
-				const video = videoPlaybackRef.current?.video;
-				if (!video) {
+				const direction = e.key === "ArrowLeft" ? "backward" : "forward";
+				if (playbackScopeRef.current === "project") {
+					const newTime = computeFrameStepTime(
+						projectPlaybackTime,
+						projectPlaybackDuration,
+						direction,
+					);
+					handleSeek(newTime);
 					return;
 				}
-				const direction = e.key === "ArrowLeft" ? "backward" : "forward";
+				const video = videoPlaybackRef.current?.video;
+				if (!video) return;
 				const newTime = computeFrameStepTime(
 					video.currentTime,
 					Number.isFinite(video.duration) ? video.duration : durationRef.current,
@@ -2174,16 +2698,22 @@ export default function VideoEditor() {
 					return;
 				}
 				e.preventDefault();
-				const playback = videoPlaybackRef.current;
-				if (playback?.video) {
-					playback.video.paused ? playback.play().catch(console.error) : playback.pause();
-				}
+				togglePlayPause();
 			}
 		};
 
 		window.addEventListener("keydown", handleKeyDown, { capture: true });
 		return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
-	}, [undo, redo, shortcuts, isMac]);
+	}, [
+		handleSeek,
+		isMac,
+		projectPlaybackDuration,
+		projectPlaybackTime,
+		redo,
+		shortcuts,
+		togglePlayPause,
+		undo,
+	]);
 
 	useEffect(() => {
 		if (selectedZoomId && !zoomRegions.some((region) => region.id === selectedZoomId)) {
@@ -3409,6 +3939,16 @@ export default function VideoEditor() {
 				</div>
 			</div>
 
+			{showProjectPlaybackScope && (
+				<ProjectPlaybackPreloader
+					scenes={scenes}
+					toVideoUrl={toFileUrl}
+					onDuration={recordSceneDuration}
+					onReady={recordSceneMediaReady}
+					onError={recordScenePreloadError}
+				/>
+			)}
+
 			{/* Empty state shown when no video is loaded */}
 			{!videoPath && (
 				<div className="flex flex-1 min-h-0 relative">
@@ -3486,11 +4026,13 @@ export default function VideoEditor() {
 													webcamPosition={webcamPosition}
 													onWebcamPositionChange={(pos) => updateState({ webcamPosition: pos })}
 													onWebcamPositionDragEnd={commitState}
-													onDurationChange={setDuration}
-													onTimeUpdate={setCurrentTime}
+													onDurationChange={handlePlaybackDurationChange}
+													onTimeUpdate={handlePlaybackTimeUpdate}
 													currentTime={currentTime}
 													onPlayStateChange={setIsPlaying}
-													onError={setError}
+													onEnded={handlePlaybackEnded}
+													onReady={handlePlaybackReady}
+													onError={handlePlaybackError}
 													wallpaper={wallpaper}
 													zoomRegions={zoomRegions}
 													selectedZoomId={selectedZoomId}
@@ -3537,9 +4079,24 @@ export default function VideoEditor() {
 										<div className="w-full flex justify-center items-center h-14 flex-shrink-0 px-4 py-2">
 											<div className="w-full max-w-[760px]">
 												<PlaybackControls
-													isPlaying={isPlaying}
-													currentTime={currentTime}
-													duration={duration}
+													isPlaying={
+														playbackScope === "project"
+															? projectPlaybackState === "playing" ||
+																(projectPlaybackState === "switching" &&
+																	pendingProjectPlaybackPositionRef.current?.shouldPlay === true)
+															: isPlaying
+													}
+													currentTime={
+														playbackScope === "project" ? projectPlaybackTime : currentTime
+													}
+													duration={
+														playbackScope === "project" ? projectPlaybackDuration : duration
+													}
+													scope={playbackScope}
+													showScopeSwitch={showProjectPlaybackScope}
+													projectSegments={projectPlaybackPlan}
+													projectSceneMarkers={projectPlaybackMarkers}
+													onScopeChange={handlePlaybackScopeChange}
 													isFullscreen={isFullscreen}
 													onToggleFullscreen={toggleFullscreen}
 													onTogglePlayPause={togglePlayPause}

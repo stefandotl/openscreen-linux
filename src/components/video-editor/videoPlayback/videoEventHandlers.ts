@@ -14,6 +14,7 @@ interface VideoEventHandlersParams {
 	timeUpdateAnimationRef: React.MutableRefObject<number | null>;
 	onPlayStateChange: (playing: boolean) => void;
 	onTimeUpdate: (time: number) => void;
+	onTerminalTrim?: () => void;
 	trimRegionsRef: React.MutableRefObject<TrimRegion[]>;
 	speedRegionsRef: React.MutableRefObject<SpeedRegion[]>;
 	isScrubbingRef?: React.MutableRefObject<boolean>;
@@ -31,6 +32,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		timeUpdateAnimationRef,
 		onPlayStateChange,
 		onTimeUpdate,
+		onTerminalTrim,
 		trimRegionsRef,
 		speedRegionsRef,
 		isScrubbingRef,
@@ -79,6 +81,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 			// Pause if the skip would run past the end
 			if (skipToTime >= video.duration) {
+				onTerminalTrim?.();
 				video.pause();
 			} else {
 				video.currentTime = skipToTime;
@@ -144,6 +147,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			const skipToTime = activeTrimRegion.endMs / 1000;
 
 			if (skipToTime >= video.duration) {
+				onTerminalTrim?.();
 				video.pause();
 			} else {
 				video.currentTime = skipToTime;
@@ -168,7 +172,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			}
 		}
 
-		if (!isPlayingRef.current && !video.paused) {
+		if (!isPlayingRef.current && !allowPlaybackRef.current && !video.paused) {
 			video.pause();
 		}
 		emitTime(video.currentTime);

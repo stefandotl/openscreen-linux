@@ -41,7 +41,16 @@
 		"play": "تشغيل",
 		"pause": "ايقاف مؤقت",
 		"fullscreen": "ملء الشاشة",
-		"exitFullscreen": "خروج من ملء الشاشة"
+		"exitFullscreen": "خروج من ملء الشاشة",
+		"scope": "نطاق التشغيل",
+		"scene": "مشهد",
+		"project": "المشروع",
+		"sceneSegment": "مقطع المشهد: {{name}}",
+		"emptyScene": "مشهد فارغ: {{name}}",
+		"projectTimeline": "الخط الزمني للمشروع",
+		"sceneTimeline": "الخط الزمني للمشهد",
+		"preparing": "جارٍ تحضير تشغيل المشروع…",
+		"noPlayableScenes": "لا يحتوي المشروع على مشاهد قابلة للتشغيل."
 	},
 	"locale": {
 		"name": "عربي",

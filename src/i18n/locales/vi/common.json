@@ -41,7 +41,16 @@
 		"play": "Phát",
 		"pause": "Tạm dừng",
 		"fullscreen": "Toàn màn hình",
-		"exitFullscreen": "Thoát toàn màn hình"
+		"exitFullscreen": "Thoát toàn màn hình",
+		"scope": "Phạm vi phát",
+		"scene": "Cảnh",
+		"project": "Dự án",
+		"sceneSegment": "Đoạn cảnh: {{name}}",
+		"emptyScene": "Cảnh trống: {{name}}",
+		"projectTimeline": "Dòng thời gian dự án",
+		"sceneTimeline": "Dòng thời gian cảnh",
+		"preparing": "Đang chuẩn bị phát dự án…",
+		"noPlayableScenes": "Dự án không có cảnh nào có thể phát."
 	},
 	"locale": {
 		"name": "Tiếng Việt",

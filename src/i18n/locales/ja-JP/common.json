@@ -41,7 +41,16 @@
 		"play": "再生",
 		"pause": "一時停止",
 		"fullscreen": "全画面表示",
-		"exitFullscreen": "全画面表示を終了"
+		"exitFullscreen": "全画面表示を終了",
+		"scope": "再生範囲",
+		"scene": "シーン",
+		"project": "プロジェクト",
+		"sceneSegment": "シーン区間: {{name}}",
+		"emptyScene": "空のシーン: {{name}}",
+		"projectTimeline": "プロジェクトタイムライン",
+		"sceneTimeline": "シーンタイムライン",
+		"preparing": "プロジェクト再生を準備中…",
+		"noPlayableScenes": "再生可能なシーンがありません。"
 	},
 	"locale": {
 		"name": "日本語",

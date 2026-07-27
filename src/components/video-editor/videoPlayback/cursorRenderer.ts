@@ -543,7 +543,11 @@ export class PixiCursorOverlay {
 			this.cursorSprites[key] = sprite;
 		}
 
-		this.cursorMotionBlurFilter = new MotionBlurFilter([0, 0], 5, 0);
+		this.cursorMotionBlurFilter = new MotionBlurFilter({
+			velocity: { x: 0, y: 0 },
+			kernelSize: 5,
+			offset: 0,
+		});
 		this.container.filters = null;
 
 		this.container.addChild(

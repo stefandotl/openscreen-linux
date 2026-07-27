@@ -41,7 +41,16 @@
 		"play": "播放",
 		"pause": "暫停",
 		"fullscreen": "全螢幕",
-		"exitFullscreen": "退出全螢幕"
+		"exitFullscreen": "退出全螢幕",
+		"scope": "播放範圍",
+		"scene": "場景",
+		"project": "專案",
+		"sceneSegment": "場景片段：{{name}}",
+		"emptyScene": "空場景：{{name}}",
+		"projectTimeline": "專案時間軸",
+		"sceneTimeline": "場景時間軸",
+		"preparing": "正在準備專案播放…",
+		"noPlayableScenes": "專案中沒有可播放的場景。"
 	},
 	"locale": {
 		"name": "繁體中文",

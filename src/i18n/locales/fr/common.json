@@ -41,7 +41,16 @@
 		"play": "Lecture",
 		"pause": "Pause",
 		"fullscreen": "Plein écran",
-		"exitFullscreen": "Quitter le plein écran"
+		"exitFullscreen": "Quitter le plein écran",
+		"scope": "Portée de la lecture",
+		"scene": "Scène",
+		"project": "Projet",
+		"sceneSegment": "Segment de scène : {{name}}",
+		"emptyScene": "Scène vide : {{name}}",
+		"projectTimeline": "Chronologie du projet",
+		"sceneTimeline": "Chronologie de la scène",
+		"preparing": "Préparation de la lecture du projet…",
+		"noPlayableScenes": "Le projet ne contient aucune scène lisible."
 	},
 	"locale": {
 		"name": "Français",

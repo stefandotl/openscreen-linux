@@ -3,6 +3,7 @@ import arrowUrl from "../../../assets/cursors/Cursor=Default.svg";
 import closedHandUrl from "../../../assets/cursors/Cursor=Hand-(Grabbing).svg";
 import openHandUrl from "../../../assets/cursors/Cursor=Hand-(Open).svg";
 import pointerUrl from "../../../assets/cursors/Cursor=Hand-(Pointing).svg";
+import notAllowedUrl from "../../../assets/cursors/Cursor=Not-Allowed.svg";
 import resizeNsUrl from "../../../assets/cursors/Cursor=Resize-North-South.svg";
 import resizeEwUrl from "../../../assets/cursors/Cursor=Resize-West-East.svg";
 import textUrl from "../../../assets/cursors/Cursor=Text-Cursor.svg";
@@ -65,6 +66,11 @@ export const uploadedCursorAssets: Partial<Record<CursorAssetKey, UploadedCursor
 	"resize-ns": {
 		url: resizeNsUrl,
 		trim: { x: 376, y: 178, width: 271, height: 669 },
+		fallbackAnchor: { x: 0.5, y: 0.5 },
+	},
+	"not-allowed": {
+		url: notAllowedUrl,
+		trim: { x: 160, y: 160, width: 704, height: 704 },
 		fallbackAnchor: { x: 0.5, y: 0.5 },
 	},
 };

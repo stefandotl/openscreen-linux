@@ -41,7 +41,16 @@
 		"play": "Воспроизвести",
 		"pause": "Пауза",
 		"fullscreen": "Полный экран",
-		"exitFullscreen": "Выход из полного экрана"
+		"exitFullscreen": "Выход из полного экрана",
+		"scope": "Область воспроизведения",
+		"scene": "Сцена",
+		"project": "Проект",
+		"sceneSegment": "Сегмент сцены: {{name}}",
+		"emptyScene": "Пустая сцена: {{name}}",
+		"projectTimeline": "Шкала проекта",
+		"sceneTimeline": "Шкала сцены",
+		"preparing": "Подготовка воспроизведения проекта…",
+		"noPlayableScenes": "В проекте нет сцен для воспроизведения."
 	},
 	"locale": {
 		"name": "Русский",

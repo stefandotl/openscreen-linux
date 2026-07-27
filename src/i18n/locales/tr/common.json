@@ -41,7 +41,16 @@
 		"play": "Oynat",
 		"pause": "Duraklat",
 		"fullscreen": "Tam Ekran",
-		"exitFullscreen": "Tam Ekrandan Çık"
+		"exitFullscreen": "Tam Ekrandan Çık",
+		"scope": "Oynatma kapsamı",
+		"scene": "Sahne",
+		"project": "Proje",
+		"sceneSegment": "Sahne bölümü: {{name}}",
+		"emptyScene": "Boş sahne: {{name}}",
+		"projectTimeline": "Proje zaman çizelgesi",
+		"sceneTimeline": "Sahne zaman çizelgesi",
+		"preparing": "Proje oynatımı hazırlanıyor…",
+		"noPlayableScenes": "Projede oynatılabilir sahne yok."
 	},
 	"locale": {
 		"name": "Türkçe",
