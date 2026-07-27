@@ -1,6 +1,7 @@
 import { Application, Graphics, Sprite } from "pixi.js";
 import {
 	computeCompositeLayout,
+	isFullBleedWebcamLayout,
 	type RenderRect,
 	type Size,
 	type StyledRenderRect,
@@ -85,7 +86,7 @@ export function layoutVideoContent(params: LayoutParams): LayoutResult | null {
 
 	// Padding is a percent (0-100); 50 matches the original VIEWPORT_SCALE of 0.8.
 	// Vertical stack is full-bleed, so it ignores padding.
-	const effectivePadding = webcamLayoutPreset === "vertical-stack" ? 0 : padding;
+	const effectivePadding = isFullBleedWebcamLayout(webcamLayoutPreset) ? 0 : padding;
 	const paddingScale = 1.0 - (effectivePadding / 100) * 0.4;
 	const maxDisplayWidth = width * paddingScale;
 	const maxDisplayHeight = height * paddingScale;

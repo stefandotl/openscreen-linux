@@ -45,6 +45,7 @@ import {
 import {
 	computeCompositeLayout,
 	getWebcamLayoutPresetDefinition,
+	isFullBleedWebcamLayout,
 	reactiveWebcamScale,
 	type Size,
 	type StyledRenderRect,
@@ -597,7 +598,7 @@ export class FrameRenderer {
 
 		// Padding is a percentage (0-100), where 50% ~ 0.8 scale.
 		// Vertical stack is full-bleed, so it ignores padding.
-		const effectivePadding = this.config.webcamLayoutPreset === "vertical-stack" ? 0 : padding;
+		const effectivePadding = isFullBleedWebcamLayout(this.config.webcamLayoutPreset) ? 0 : padding;
 		const paddingScale = 1.0 - (effectivePadding / 100) * 0.4;
 		const viewportWidth = width * paddingScale;
 		const viewportHeight = height * paddingScale;

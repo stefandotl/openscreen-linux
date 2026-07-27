@@ -45,6 +45,7 @@
 		"dualFrame": "إطار مزدوج",
 		"webcamShape": "شكل الكاميرا",
 		"webcamSize": "حجم كاميرا الويب",
+		"onlyWebcam": "الكاميرا فقط",
 		"noWebcam": "بدون كاميرا",
 		"mirrorWebcam": "عكس كاميرا الويب",
 		"reactiveWebcam": "تصغير عند التكبير",

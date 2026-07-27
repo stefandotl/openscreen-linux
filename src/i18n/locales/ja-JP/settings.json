@@ -45,6 +45,7 @@
 		"dualFrame": "デュアルフレーム",
 		"webcamShape": "カメラの形状",
 		"webcamSize": "カメラのサイズ",
+		"onlyWebcam": "Webカメラのみ",
 		"noWebcam": "Webカメラなし",
 		"mirrorWebcam": "Webカメラを反転",
 		"reactiveWebcam": "ズーム時に縮小",

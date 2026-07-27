@@ -8,6 +8,7 @@ import type {
 	WebcamSizePreset,
 	ZoomRegion,
 } from "@/components/video-editor/types";
+import { getWebcamLayoutMediaBlocker } from "@/lib/compositeLayout";
 import { BackgroundLoadError } from "@/lib/wallpaper";
 import type { CursorRecordingData } from "@/native/contracts";
 import { getPlatform } from "@/utils/platformUtils";
@@ -127,6 +128,14 @@ export class GifExporter {
 	}
 
 	async export(): Promise<ExportResult> {
+		const webcamLayoutMediaBlocker = getWebcamLayoutMediaBlocker(
+			this.config.webcamLayoutPreset,
+			this.config.webcamVideoUrl,
+		);
+		if (webcamLayoutMediaBlocker) {
+			return { success: false, error: webcamLayoutMediaBlocker };
+		}
+
 		let webcamFrameQueue: TimestampedVideoFrameQueue | null = null;
 
 		const warnings: string[] = [];

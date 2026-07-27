@@ -46,6 +46,7 @@
 		"dualFrame": "雙畫框",
 		"webcamShape": "攝影機形狀",
 		"webcamSize": "攝影機大小",
+		"onlyWebcam": "僅網路攝影機",
 		"noWebcam": "無網路攝影機",
 		"mirrorWebcam": "鏡像攝影機",
 		"reactiveWebcam": "縮放時縮小",

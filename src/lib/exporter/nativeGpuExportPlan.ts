@@ -26,7 +26,9 @@ import {
 import { getCaptionDisplayWords } from "@/lib/captionWordHighlight";
 import {
 	computeCompositeLayout,
+	getWebcamLayoutMediaBlocker,
 	getWebcamLayoutPresetDefinition,
+	isFullBleedWebcamLayout,
 	reactiveWebcamScale,
 } from "@/lib/compositeLayout";
 import { renderAnnotations } from "./annotationRenderer";
@@ -108,6 +110,12 @@ export function getNativeGpuExportBlockers(
 	webcamInfo?: NativeGpuExportWebcamInfo | null,
 ): string[] {
 	const blockers: string[] = [];
+	const webcamOnly = config.webcamLayoutPreset === "only-webcam";
+	const webcamLayoutMediaBlocker = getWebcamLayoutMediaBlocker(
+		config.webcamLayoutPreset,
+		config.webcamVideoUrl,
+	);
+	if (webcamLayoutMediaBlocker) blockers.push(webcamLayoutMediaBlocker);
 	if (
 		!Number.isInteger(config.width) ||
 		!Number.isInteger(config.height) ||
@@ -161,21 +169,27 @@ export function getNativeGpuExportBlockers(
 			blockers.push("webcam duration is invalid");
 		}
 	}
-	if (!isDefaultCrop(config)) blockers.push("cropping is not implemented");
-	if (config.showShadow || config.shadowIntensity > EPSILON) {
+	if (!webcamOnly && !isDefaultCrop(config)) blockers.push("cropping is not implemented");
+	if (!webcamOnly && (config.showShadow || config.shadowIntensity > EPSILON)) {
 		blockers.push("recording shadow is not implemented");
 	}
-	if ((config.borderRadius ?? 0) > EPSILON) blockers.push("recording roundness is not implemented");
+	if (!webcamOnly && (config.borderRadius ?? 0) > EPSILON) {
+		blockers.push("recording roundness is not implemented");
+	}
 	if (
+		!webcamOnly &&
 		(config.cursorScale ?? 0) > 0 &&
 		Boolean(config.cursorRecordingData?.samples.some((sample) => sample.visible !== false))
 	) {
 		blockers.push("editable cursor composition is not implemented");
 	}
-	if (config.zoomRegions.some((region) => region.focusMode === "auto")) {
+	if (!webcamOnly && config.zoomRegions.some((region) => region.focusMode === "auto")) {
 		blockers.push("automatic cursor-follow zoom is not implemented");
 	}
-	if (config.zoomRegions.some((region) => !isRotation3DIdentity(getRotation3D(region)))) {
+	if (
+		!webcamOnly &&
+		config.zoomRegions.some((region) => !isRotation3DIdentity(getRotation3D(region)))
+	) {
 		blockers.push("3D zoom rotation is not implemented");
 	}
 
@@ -360,8 +374,9 @@ export function createNativeGpuExportPlan(
 	if (blockers.length > 0) {
 		throw new Error(`Native GPU export does not support this project: ${blockers.join("; ")}`);
 	}
-	const effectivePadding =
-		config.webcamLayoutPreset === "vertical-stack" ? 0 : (config.padding ?? 0);
+	const effectivePadding = isFullBleedWebcamLayout(config.webcamLayoutPreset)
+		? 0
+		: (config.padding ?? 0);
 	const paddingScale = 1 - (effectivePadding / 100) * 0.4;
 	const visibleWebcam = hasVisibleWebcam(config) && webcamInfo ? webcamInfo : null;
 	const layout = computeCompositeLayout({

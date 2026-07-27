@@ -241,6 +241,21 @@ describe("projectPersistence media compatibility", () => {
 		);
 	});
 
+	it("accepts the only-webcam layout in portrait and landscape projects", () => {
+		expect(
+			normalizeProjectEditor({
+				aspectRatio: "9:16",
+				webcamLayoutPreset: "only-webcam",
+			}).webcamLayoutPreset,
+		).toBe("only-webcam");
+		expect(
+			normalizeProjectEditor({
+				aspectRatio: "16:9",
+				webcamLayoutPreset: "only-webcam",
+			}).webcamLayoutPreset,
+		).toBe("only-webcam");
+	});
+
 	it("falls back from dual frame to picture in picture for portrait aspect ratios", () => {
 		expect(
 			normalizeProjectEditor({

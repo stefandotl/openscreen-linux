@@ -120,6 +120,7 @@ function computeNormalizedWebcamLayoutPreset(
 ): WebcamLayoutPreset {
 	switch (webcamLayoutPreset) {
 		case "picture-in-picture":
+		case "only-webcam":
 		case "no-webcam":
 			return webcamLayoutPreset;
 		case "vertical-stack":

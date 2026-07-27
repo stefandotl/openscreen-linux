@@ -210,6 +210,39 @@ describe("native GPU export plan", () => {
 		expect(plan.frames.every((frame) => frame.webcamScale === 1)).toBe(true);
 	});
 
+	it("plans a full-canvas webcam-only export and ignores hidden screen-only effects", () => {
+		const config = createConfig({
+			webcamVideoUrl: "/tmp/webcam.webm",
+			webcamLayoutPreset: "only-webcam",
+			webcamMaskShape: "circle",
+			webcamSizePreset: 10,
+			padding: 100,
+			cropRegion: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+			showShadow: true,
+			shadowIntensity: 1,
+			borderRadius: 64,
+		});
+		const webcamInfo = { width: 640, height: 480, duration: 1 };
+
+		expect(getNativeGpuExportBlockers(config, videoInfo, webcamInfo)).toEqual([]);
+		const plan = createNativeGpuExportPlan(config, videoInfo, webcamInfo);
+		expect(plan.webcam).toMatchObject({
+			rect: { x: 0, y: 0, width: 1080, height: 1920 },
+			borderRadius: 0,
+			maskShape: "rectangle",
+			shadow: null,
+		});
+		expect(plan.frames.every((frame) => frame.webcamScale === 1)).toBe(true);
+	});
+
+	it("rejects webcam-only export when the scene has no webcam recording", () => {
+		const config = createConfig({ webcamLayoutPreset: "only-webcam" });
+
+		expect(getNativeGpuExportBlockers(config, videoInfo)).toContain(
+			"Webcam-only layout requires a webcam recording",
+		);
+	});
+
 	it("supports blur effects and still fails loudly for unimplemented effects", () => {
 		const blockers = getNativeGpuExportBlockers(
 			createConfig({

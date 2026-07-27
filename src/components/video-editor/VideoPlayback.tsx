@@ -20,6 +20,7 @@ import {
 } from "react";
 import {
 	getWebcamLayoutCssBoxShadow,
+	getWebcamLayoutMediaBlocker,
 	reactiveWebcamScale,
 	type Size,
 	type StyledRenderRect,
@@ -1693,7 +1694,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				const outerWrapper = outerWrapperRef.current;
 				if (composite3D && outerWrapper) {
 					const effectiveRotation =
-						region && targetProgress > 0 && !shouldShowUnzoomedView
+						webcamLayoutPresetRef.current !== "only-webcam" &&
+						region &&
+						targetProgress > 0 &&
+						!shouldShowUnzoomedView
 							? lerpRotation3D(DEFAULT_ROTATION_3D, rotation3D, targetProgress)
 							: DEFAULT_ROTATION_3D;
 					const isIdentity = isRotation3DIdentity(effectiveRotation);
@@ -1792,6 +1796,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			() => getWebcamLayoutCssBoxShadow(webcamLayoutPreset),
 			[webcamLayoutPreset],
 		);
+
+		useEffect(() => {
+			const webcamLayoutMediaBlocker = getWebcamLayoutMediaBlocker(
+				webcamLayoutPreset,
+				webcamVideoPath,
+			);
+			if (webcamLayoutMediaBlocker) onError(webcamLayoutMediaBlocker);
+		}, [onError, webcamLayoutPreset, webcamVideoPath]);
 
 		useEffect(() => {
 			const webcamVideo = webcamVideoRef.current;
@@ -1921,6 +1933,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						ref={containerRef}
 						className="absolute inset-0"
 						style={{
+							opacity: webcamLayoutPreset === "only-webcam" ? 0 : 1,
 							filter:
 								showShadow && shadowIntensity > 0
 									? `drop-shadow(0 ${shadowIntensity * 12}px ${shadowIntensity * 48}px rgba(0,0,0,${shadowIntensity * 0.7})) drop-shadow(0 ${shadowIntensity * 4}px ${shadowIntensity * 16}px rgba(0,0,0,${shadowIntensity * 0.5})) drop-shadow(0 ${shadowIntensity * 2}px ${shadowIntensity * 8}px rgba(0,0,0,${shadowIntensity * 0.3}))`
@@ -1963,6 +1976,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										onPointerMove={handleWebcamPointerMove}
 										onPointerUp={handleWebcamPointerUp}
 										onPointerLeave={handleWebcamPointerUp}
+										onError={() => onError("Failed to load webcam video")}
 										muted
 										preload="metadata"
 										playsInline

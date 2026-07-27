@@ -45,6 +45,7 @@
 		"webcamShape": "Kamera Şekli",
 		"dualFrame": "Çift Kare",
 		"webcamSize": "Webcam Boyutu",
+		"onlyWebcam": "Yalnızca web kamerası",
 		"noWebcam": "Web kamerası yok",
 		"mirrorWebcam": "Web kamerasını aynala",
 		"reactiveWebcam": "Yakınlaştırınca küçült",

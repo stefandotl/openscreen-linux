@@ -33,6 +33,7 @@ export type WebcamLayoutPreset =
 	| "picture-in-picture"
 	| "vertical-stack"
 	| "dual-frame"
+	| "only-webcam"
 	| "no-webcam";
 /** Webcam size as a percentage of the canvas reference dimension (10–50). */
 export type WebcamSizePreset = number;
@@ -144,6 +145,21 @@ const WEBCAM_LAYOUT_PRESET_MAP: Record<WebcamLayoutPreset, WebcamLayoutPresetDef
 		},
 		shadow: null,
 	},
+	"only-webcam": {
+		label: "Only Webcam",
+		transform: {
+			type: "overlay",
+			marginFraction: 0,
+			minMargin: 0,
+			minSize: 0,
+		},
+		borderRadius: {
+			max: 0,
+			min: 0,
+			fraction: 0,
+		},
+		shadow: null,
+	},
 	"no-webcam": {
 		label: "No Webcam",
 		transform: {
@@ -181,6 +197,19 @@ export function getWebcamLayoutCssBoxShadow(
 	return shadow
 		? `${shadow.offsetX}px ${shadow.offsetY}px ${shadow.blur}px ${shadow.color}`
 		: "none";
+}
+
+export function isFullBleedWebcamLayout(preset?: WebcamLayoutPreset) {
+	return preset === "vertical-stack" || preset === "only-webcam";
+}
+
+export function getWebcamLayoutMediaBlocker(
+	preset: WebcamLayoutPreset | undefined,
+	webcamVideoUrl: string | undefined,
+) {
+	return preset === "only-webcam" && !webcamVideoUrl
+		? "Webcam-only layout requires a webcam recording"
+		: null;
 }
 
 export function computeCompositeLayout(params: {
@@ -224,6 +253,22 @@ export function computeCompositeLayout(params: {
 
 	if (canvasWidth <= 0 || canvasHeight <= 0 || screenWidth <= 0 || screenHeight <= 0) {
 		return null;
+	}
+
+	if (layoutPreset === "only-webcam") {
+		const fullCanvasRect = { x: 0, y: 0, width: canvasWidth, height: canvasHeight };
+		return {
+			screenRect: fullCanvasRect,
+			webcamRect:
+				webcamWidth && webcamHeight && webcamWidth > 0 && webcamHeight > 0
+					? {
+							...fullCanvasRect,
+							borderRadius: 0,
+							maskShape: "rectangle",
+						}
+					: null,
+			screenCover: true,
+		};
 	}
 
 	if (preset.transform.type === "stack") {

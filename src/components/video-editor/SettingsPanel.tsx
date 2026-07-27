@@ -43,7 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useScopedT } from "@/contexts/I18nContext";
 import { getAssetPath } from "@/lib/assetPath";
-import { WEBCAM_LAYOUT_PRESETS } from "@/lib/compositeLayout";
+import { isFullBleedWebcamLayout, WEBCAM_LAYOUT_PRESETS } from "@/lib/compositeLayout";
 import { CURSOR_THEMES, DEFAULT_CURSOR_THEME_ID } from "@/lib/cursor/cursorThemes";
 import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
 import {
@@ -1266,6 +1266,7 @@ export function SettingsPanel({
 												<SelectContent>
 													{WEBCAM_LAYOUT_PRESETS.filter((preset) => {
 														if (preset.value === "picture-in-picture") return true;
+														if (preset.value === "only-webcam") return true;
 														if (preset.value === "no-webcam") return true;
 														if (preset.value === "vertical-stack") return isPortraitCanvas;
 														return !isPortraitCanvas;
@@ -1275,9 +1276,11 @@ export function SettingsPanel({
 																? t("layout.pictureInPicture")
 																: preset.value === "vertical-stack"
 																	? t("layout.verticalStack")
-																	: preset.value === "no-webcam"
-																		? t("layout.noWebcam")
-																		: t("layout.dualFrame")}
+																	: preset.value === "only-webcam"
+																		? t("layout.onlyWebcam")
+																		: preset.value === "no-webcam"
+																			? t("layout.noWebcam")
+																			: t("layout.dualFrame")}
 														</SelectItem>
 													))}
 												</SelectContent>
@@ -1516,24 +1519,24 @@ export function SettingsPanel({
 														/>
 													</div>
 													<div
-														className={`p-2 rounded-lg editor-control-surface ${webcamLayoutPreset === "vertical-stack" ? "opacity-40 pointer-events-none" : ""}`}
+														className={`p-2 rounded-lg editor-control-surface ${isFullBleedWebcamLayout(webcamLayoutPreset) ? "opacity-40 pointer-events-none" : ""}`}
 													>
 														<div className="flex items-center justify-between mb-1">
 															<div className="text-[10px] font-medium text-slate-300">
 																{t("effects.padding")}
 															</div>
 															<span className="text-[10px] text-slate-500 font-mono">
-																{webcamLayoutPreset === "vertical-stack" ? "—" : `${padding}%`}
+																{isFullBleedWebcamLayout(webcamLayoutPreset) ? "—" : `${padding}%`}
 															</span>
 														</div>
 														<Slider
-															value={[webcamLayoutPreset === "vertical-stack" ? 0 : padding]}
+															value={[isFullBleedWebcamLayout(webcamLayoutPreset) ? 0 : padding]}
 															onValueChange={(values) => onPaddingChange?.(values[0])}
 															onValueCommit={() => onPaddingCommit?.()}
 															min={0}
 															max={100}
 															step={1}
-															disabled={webcamLayoutPreset === "vertical-stack"}
+															disabled={isFullBleedWebcamLayout(webcamLayoutPreset)}
 															className="w-full [&_[role=slider]]:bg-[#34B27B] [&_[role=slider]]:border-[#34B27B] [&_[role=slider]]:h-3 [&_[role=slider]]:w-3"
 														/>
 													</div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeCompositeLayout } from "./compositeLayout";
+import { computeCompositeLayout, getWebcamLayoutMediaBlocker } from "./compositeLayout";
 
 describe("computeCompositeLayout", () => {
 	it("anchors the overlay in the lower-right corner", () => {
@@ -197,6 +197,31 @@ describe("computeCompositeLayout", () => {
 		expect(layout?.screenCover).toBe(true);
 	});
 
+	it("covers the entire canvas with a rectangular webcam in only-webcam mode", () => {
+		const layout = computeCompositeLayout({
+			canvasSize: { width: 1080, height: 1920 },
+			maxContentSize: { width: 756, height: 1344 },
+			screenSize: { width: 1920, height: 1080 },
+			webcamSize: { width: 1280, height: 720 },
+			layoutPreset: "only-webcam",
+			webcamMaskShape: "circle",
+			webcamSizePreset: 10,
+		});
+
+		expect(layout).toEqual({
+			screenRect: { x: 0, y: 0, width: 1080, height: 1920 },
+			webcamRect: {
+				x: 0,
+				y: 0,
+				width: 1080,
+				height: 1920,
+				borderRadius: 0,
+				maskShape: "rectangle",
+			},
+			screenCover: true,
+		});
+	});
+
 	it("uses a 2:1 split layout in dual frame mode", () => {
 		const layout = computeCompositeLayout({
 			canvasSize: { width: 1920, height: 1080 },
@@ -262,5 +287,15 @@ describe("computeCompositeLayout", () => {
 			rectangleLayout?.webcamRect?.borderRadius ?? 0,
 		);
 		expect(roundedLayout?.webcamRect?.maskShape).toBe("rounded");
+	});
+});
+
+describe("getWebcamLayoutMediaBlocker", () => {
+	it("requires a webcam recording only for webcam-only layout", () => {
+		expect(getWebcamLayoutMediaBlocker("only-webcam", undefined)).toBe(
+			"Webcam-only layout requires a webcam recording",
+		);
+		expect(getWebcamLayoutMediaBlocker("only-webcam", "/tmp/webcam.webm")).toBeNull();
+		expect(getWebcamLayoutMediaBlocker("picture-in-picture", undefined)).toBeNull();
 	});
 });

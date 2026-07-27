@@ -45,6 +45,7 @@
 		"dualFrame": "Двойной кадр",
 		"webcamShape": "Форма камеры",
 		"webcamSize": "Размер веб-камеры",
+		"onlyWebcam": "Только веб-камера",
 		"noWebcam": "Без веб-камеры",
 		"mirrorWebcam": "Зеркалить веб-камеру",
 		"reactiveWebcam": "Уменьшать при зуме",

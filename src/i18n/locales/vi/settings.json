@@ -45,6 +45,7 @@
 		"dualFrame": "Khung kép",
 		"webcamShape": "Hình dạng máy ảnh",
 		"webcamSize": "Kích thước Webcam",
+		"onlyWebcam": "Chỉ webcam",
 		"noWebcam": "Không có webcam",
 		"mirrorWebcam": "Lật webcam",
 		"reactiveWebcam": "Thu nhỏ khi phóng to",

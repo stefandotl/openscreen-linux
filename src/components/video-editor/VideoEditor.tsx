@@ -346,8 +346,9 @@ export default function VideoEditor() {
 		hasRenderableNativeCursorRecordingData(cursorRecordingData, {
 			currentPlatform: nativePlatform,
 		});
-	const effectiveShowCursor = showCursor && hasEditableCursorRecording;
-	const showCursorSettings = hasEditableCursorRecording;
+	const effectiveShowCursor =
+		showCursor && hasEditableCursorRecording && webcamLayoutPreset !== "only-webcam";
+	const showCursorSettings = hasEditableCursorRecording && webcamLayoutPreset !== "only-webcam";
 	const { locale, setLocale, t: rawT } = useI18n();
 	const t = useScopedT("editor");
 	const ts = useScopedT("settings");

@@ -42,6 +42,7 @@
 		"pictureInPicture": "Picture in Picture",
 		"verticalStack": "Empilhamento Vertical",
 		"dualFrame": "Quadro Duplo",
+		"onlyWebcam": "Somente Webcam",
 		"noWebcam": "Sem Webcam",
 		"webcamShape": "Formato da Câmera",
 		"webcamSize": "Tamanho da Webcam",

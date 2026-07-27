@@ -45,6 +45,7 @@
 		"webcamShape": "카메라 모양",
 		"webcamSize": "웹캠 크기",
 		"dualFrame": "듀얼 프레임",
+		"onlyWebcam": "웹캠만",
 		"noWebcam": "웹캠 없음",
 		"mirrorWebcam": "웹캠 미러링",
 		"reactiveWebcam": "확대 시 축소",
