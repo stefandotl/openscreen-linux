@@ -273,17 +273,23 @@ export class VideoExporter {
 		this.cancelled = false;
 		const metadataDecoder = new StreamingVideoDecoder();
 		this.streamingDecoder = metadataDecoder;
+		let webcamMetadataDecoder: StreamingVideoDecoder | null = null;
 		let removeProgressListener: (() => void) | null = null;
 		try {
 			const videoInfo = await metadataDecoder.loadMetadata(this.config.videoUrl);
-			const blockers = getNativeGpuExportBlockers(this.config, videoInfo);
+			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
+			if (this.config.webcamVideoUrl && this.config.webcamLayoutPreset !== "no-webcam") {
+				webcamMetadataDecoder = new StreamingVideoDecoder();
+				webcamInfo = await webcamMetadataDecoder.loadMetadata(this.config.webcamVideoUrl);
+			}
+			const blockers = getNativeGpuExportBlockers(this.config, videoInfo, webcamInfo);
 			if (blockers.length > 0) {
 				return {
 					success: false,
 					error: `Required native GPU export does not support this project: ${blockers.join("; ")}`,
 				};
 			}
-			const plan = createNativeGpuExportPlan(this.config, videoInfo);
+			const plan = createNativeGpuExportPlan(this.config, videoInfo, webcamInfo);
 			const assets = await createNativeGpuExportAssets(this.config);
 			plan.overlays = assets.overlays;
 			this.reportProgress({
@@ -366,6 +372,7 @@ export class VideoExporter {
 			};
 		} finally {
 			removeProgressListener?.();
+			webcamMetadataDecoder?.destroy();
 			metadataDecoder.destroy();
 			if (this.streamingDecoder === metadataDecoder) this.streamingDecoder = null;
 		}

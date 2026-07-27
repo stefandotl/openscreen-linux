@@ -153,6 +153,63 @@ describe("native GPU export plan", () => {
 		expect(plan.screenRect.width).toBeGreaterThan(plan.screenRect.height);
 	});
 
+	it("plans a synchronized webcam overlay with editor geometry and reactive zoom", () => {
+		const config = createConfig({
+			webcamVideoUrl: "/tmp/webcam.webm",
+			webcamLayoutPreset: "picture-in-picture",
+			webcamMaskShape: "circle",
+			webcamMirrored: true,
+			webcamReactiveZoom: true,
+			webcamSizePreset: 30,
+			webcamPosition: { cx: 0.2, cy: 0.8 },
+			zoomRegions: [
+				{
+					id: "zoom",
+					startMs: 0,
+					endMs: 1_000,
+					depth: 2,
+					focus: { cx: 0.5, cy: 0.5 },
+					focusMode: "manual",
+				},
+			],
+		});
+		const webcamInfo = { width: 640, height: 480, duration: 1 };
+
+		expect(getNativeGpuExportBlockers(config, videoInfo)).toEqual([
+			"webcam metadata is unavailable",
+		]);
+		expect(getNativeGpuExportBlockers(config, videoInfo, webcamInfo)).toEqual([]);
+
+		const plan = createNativeGpuExportPlan(config, videoInfo, webcamInfo);
+		expect(plan.webcam).toMatchObject({
+			inputPath: "/tmp/webcam.webm",
+			sourceWidth: 640,
+			sourceHeight: 480,
+			maskShape: "circle",
+			mirrored: true,
+			anchorRight: false,
+			anchorBottom: true,
+		});
+		expect(plan.webcam?.rect.width).toBe(plan.webcam?.rect.height);
+		expect(plan.webcam?.shadow).not.toBeNull();
+		expect(plan.frames.some((frame) => frame.webcamScale < 1)).toBe(true);
+	});
+
+	it("supports cover-mode webcam layouts in the native plan", () => {
+		const plan = createNativeGpuExportPlan(
+			createConfig({
+				webcamVideoUrl: "/tmp/webcam.webm",
+				webcamLayoutPreset: "vertical-stack",
+			}),
+			videoInfo,
+			{ width: 640, height: 480, duration: 1 },
+		);
+
+		expect(plan.screenCover).toBe(true);
+		expect(plan.webcam?.rect.y).toBe(plan.screenRect.height);
+		expect(plan.frames.every((frame) => frame.webcamScale === 1)).toBe(true);
+	});
+
 	it("supports blur effects and still fails loudly for unimplemented effects", () => {
 		const blockers = getNativeGpuExportBlockers(
 			createConfig({

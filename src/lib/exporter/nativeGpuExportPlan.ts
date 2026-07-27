@@ -24,7 +24,11 @@ import {
 	computeZoomTransform,
 } from "@/components/video-editor/videoPlayback/zoomTransform";
 import { getCaptionDisplayWords } from "@/lib/captionWordHighlight";
-import { computeCompositeLayout } from "@/lib/compositeLayout";
+import {
+	computeCompositeLayout,
+	getWebcamLayoutPresetDefinition,
+	reactiveWebcamScale,
+} from "@/lib/compositeLayout";
 import { renderAnnotations } from "./annotationRenderer";
 import { getContinuousExportSourceTimestampsMs } from "./exportTimeline";
 import {
@@ -48,6 +52,12 @@ export interface NativeGpuExportVideoInfo {
 	width: number;
 	height: number;
 	duration: number;
+}
+
+export type NativeGpuExportWebcamInfo = NativeGpuExportVideoInfo;
+
+function hasVisibleWebcam(config: VideoExporterConfig) {
+	return Boolean(config.webcamVideoUrl && config.webcamLayoutPreset !== "no-webcam");
 }
 
 function isDefaultCrop(config: VideoExporterConfig) {
@@ -95,6 +105,7 @@ function annotationPixelBounds(
 export function getNativeGpuExportBlockers(
 	config: VideoExporterConfig,
 	videoInfo: NativeGpuExportVideoInfo,
+	webcamInfo?: NativeGpuExportWebcamInfo | null,
 ): string[] {
 	const blockers: string[] = [];
 	if (
@@ -132,7 +143,24 @@ export function getNativeGpuExportBlockers(
 	if (!Number.isFinite(videoInfo.duration) || videoInfo.duration <= 0) {
 		blockers.push("source duration is invalid");
 	}
-	if (config.webcamVideoUrl) blockers.push("webcam composition is not implemented");
+	if (hasVisibleWebcam(config)) {
+		if (!webcamInfo) {
+			blockers.push("webcam metadata is unavailable");
+		} else if (
+			!Number.isInteger(webcamInfo.width) ||
+			!Number.isInteger(webcamInfo.height) ||
+			webcamInfo.width <= 0 ||
+			webcamInfo.height <= 0 ||
+			webcamInfo.width % 2 !== 0 ||
+			webcamInfo.height % 2 !== 0
+		) {
+			blockers.push(
+				`webcam dimensions must be positive and even, got ${webcamInfo.width}x${webcamInfo.height}`,
+			);
+		} else if (!Number.isFinite(webcamInfo.duration) || webcamInfo.duration <= 0) {
+			blockers.push("webcam duration is invalid");
+		}
+	}
 	if (!isDefaultCrop(config)) blockers.push("cropping is not implemented");
 	if (config.showShadow || config.shadowIntensity > EPSILON) {
 		blockers.push("recording shadow is not implemented");
@@ -143,13 +171,6 @@ export function getNativeGpuExportBlockers(
 		Boolean(config.cursorRecordingData?.samples.some((sample) => sample.visible !== false))
 	) {
 		blockers.push("editable cursor composition is not implemented");
-	}
-	if (
-		config.webcamLayoutPreset &&
-		config.webcamLayoutPreset !== "picture-in-picture" &&
-		config.webcamLayoutPreset !== "no-webcam"
-	) {
-		blockers.push(`layout ${config.webcamLayoutPreset} is not implemented without a webcam`);
 	}
 	if (config.zoomRegions.some((region) => region.focusMode === "auto")) {
 		blockers.push("automatic cursor-follow zoom is not implemented");
@@ -309,6 +330,12 @@ function createFrameTransforms(
 			cameraY: applied.y,
 			motionBlurX,
 			motionBlurY,
+			webcamScale:
+				config.webcamReactiveZoom &&
+				config.webcamLayoutPreset === "picture-in-picture" &&
+				hasVisibleWebcam(config)
+					? reactiveWebcamScale(applied.scale)
+					: 1,
 		};
 	});
 }
@@ -327,12 +354,16 @@ function blurWallpaperCanvas(source: HTMLCanvasElement): HTMLCanvasElement {
 export function createNativeGpuExportPlan(
 	config: VideoExporterConfig,
 	videoInfo: NativeGpuExportVideoInfo,
+	webcamInfo?: NativeGpuExportWebcamInfo | null,
 ): NativeGpuExportPlan {
-	const blockers = getNativeGpuExportBlockers(config, videoInfo);
+	const blockers = getNativeGpuExportBlockers(config, videoInfo, webcamInfo);
 	if (blockers.length > 0) {
 		throw new Error(`Native GPU export does not support this project: ${blockers.join("; ")}`);
 	}
-	const paddingScale = 1 - ((config.padding ?? 0) / 100) * 0.4;
+	const effectivePadding =
+		config.webcamLayoutPreset === "vertical-stack" ? 0 : (config.padding ?? 0);
+	const paddingScale = 1 - (effectivePadding / 100) * 0.4;
+	const visibleWebcam = hasVisibleWebcam(config) && webcamInfo ? webcamInfo : null;
 	const layout = computeCompositeLayout({
 		canvasSize: { width: config.width, height: config.height },
 		maxContentSize: {
@@ -340,9 +371,13 @@ export function createNativeGpuExportPlan(
 			height: config.height * paddingScale,
 		},
 		screenSize: { width: videoInfo.width, height: videoInfo.height },
+		webcamSize: visibleWebcam ? { width: visibleWebcam.width, height: visibleWebcam.height } : null,
 		layoutPreset: config.webcamLayoutPreset,
+		webcamSizePreset: config.webcamSizePreset,
+		webcamPosition: config.webcamPosition,
+		webcamMaskShape: config.webcamMaskShape,
 	});
-	if (!layout || layout.screenCover) {
+	if (!layout) {
 		throw new Error("Native GPU export could not create a supported recording layout");
 	}
 	const sourceTimestampsMs = getContinuousExportSourceTimestampsMs(
@@ -360,6 +395,7 @@ export function createNativeGpuExportPlan(
 		...annotationPixelBounds(annotation, config),
 		zIndex: annotation.zIndex,
 	}));
+	const webcamPreset = getWebcamLayoutPresetDefinition(config.webcamLayoutPreset);
 	return {
 		version: NATIVE_GPU_EXPORT_PROTOCOL_VERSION,
 		inputPath: config.videoUrl,
@@ -370,7 +406,30 @@ export function createNativeGpuExportPlan(
 		sourceWidth: videoInfo.width,
 		sourceHeight: videoInfo.height,
 		screenRect: layout.screenRect,
+		screenCover: layout.screenCover === true,
+		screenBorderRadius: layout.screenBorderRadius ?? 0,
 		cropRegion: config.cropRegion,
+		...(visibleWebcam && layout.webcamRect
+			? {
+					webcam: {
+						inputPath: config.webcamVideoUrl!,
+						sourceWidth: visibleWebcam.width,
+						sourceHeight: visibleWebcam.height,
+						rect: {
+							x: layout.webcamRect.x,
+							y: layout.webcamRect.y,
+							width: layout.webcamRect.width,
+							height: layout.webcamRect.height,
+						},
+						borderRadius: layout.webcamRect.borderRadius,
+						maskShape: layout.webcamRect.maskShape ?? config.webcamMaskShape ?? "rectangle",
+						mirrored: config.webcamMirrored === true,
+						anchorRight: config.webcamPosition ? config.webcamPosition.cx >= 0.5 : true,
+						anchorBottom: config.webcamPosition ? config.webcamPosition.cy >= 0.5 : true,
+						shadow: webcamPreset.shadow,
+					},
+				}
+			: {}),
 		frames: createFrameTransforms(config, layout.screenRect, sourceTimestampsMs),
 		overlays,
 	};

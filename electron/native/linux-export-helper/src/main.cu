@@ -153,6 +153,8 @@ struct SceneTransform {
 	float top;
 	float width;
 	float height;
+	float borderRadius;
+	bool cover;
 };
 
 struct PlannedFrame {
@@ -162,6 +164,34 @@ struct PlannedFrame {
 	float cameraY;
 	float motionBlurX;
 	float motionBlurY;
+	float webcamScale;
+};
+
+enum class WebcamMaskShape {
+	Rectangle,
+	Rounded,
+	Circle,
+	Square,
+};
+
+struct WebcamPlan {
+	bool enabled = false;
+	std::string inputPath;
+	int sourceWidth = 0;
+	int sourceHeight = 0;
+	float x = 0.0f;
+	float y = 0.0f;
+	float width = 0.0f;
+	float height = 0.0f;
+	float borderRadius = 0.0f;
+	WebcamMaskShape maskShape = WebcamMaskShape::Rectangle;
+	bool mirrored = false;
+	bool anchorRight = true;
+	bool anchorBottom = true;
+	bool shadowEnabled = false;
+	float shadowBlur = 0.0f;
+	float shadowOffsetX = 0.0f;
+	float shadowOffsetY = 0.0f;
 };
 
 struct PlannedOverlay {
@@ -185,9 +215,12 @@ struct ExportPlan {
 	float screenY = 0.0f;
 	float screenWidth = 0.0f;
 	float screenHeight = 0.0f;
+	bool screenCover = false;
+	float screenBorderRadius = 0.0f;
 	int sourceWidth = 0;
 	int sourceHeight = 0;
 	int64_t bitrate = 0;
+	WebcamPlan webcam;
 	std::vector<PlannedFrame> frames;
 	std::vector<PlannedOverlay> overlays;
 };
@@ -213,7 +246,30 @@ SceneTransform plannedSceneTransform(const ExportPlan &plan, const PlannedFrame 
 	transform.top = frame.cameraY + frame.cameraScale * plan.screenY;
 	transform.width = frame.cameraScale * plan.screenWidth;
 	transform.height = frame.cameraScale * plan.screenHeight;
+	transform.borderRadius = frame.cameraScale * plan.screenBorderRadius;
+	transform.cover = plan.screenCover;
 	return transform;
+}
+
+__device__ bool insideRoundedRect(
+	float outputX,
+	float outputY,
+	const SceneTransform &transform) {
+	if (outputX < transform.left || outputY < transform.top ||
+		outputX > transform.left + transform.width ||
+		outputY > transform.top + transform.height) {
+		return false;
+	}
+	const float radius =
+		clampFloat(transform.borderRadius, 0.0f, fminf(transform.width, transform.height) * 0.5f);
+	if (radius <= 0.0f) return true;
+	const float nearestX =
+		clampFloat(outputX, transform.left + radius, transform.left + transform.width - radius);
+	const float nearestY =
+		clampFloat(outputY, transform.top + radius, transform.top + transform.height - radius);
+	const float dx = outputX - nearestX;
+	const float dy = outputY - nearestY;
+	return dx * dx + dy * dy <= radius * radius;
 }
 
 __device__ bool mapOutputToSource(
@@ -224,16 +280,25 @@ __device__ bool mapOutputToSource(
 	int sourceHeight,
 	float *sourceX,
 	float *sourceY) {
-	if (outputX < transform.left || outputY < transform.top ||
-		outputX > transform.left + transform.width ||
-		outputY > transform.top + transform.height) {
-		return false;
-	}
+	if (!insideRoundedRect(outputX, outputY, transform)) return false;
 
 	const float localX = (outputX - transform.left) / transform.width;
 	const float localY = (outputY - transform.top) / transform.height;
-	*sourceX = clampFloat(localX, 0.0f, 1.0f) * static_cast<float>(sourceWidth - 1);
-	*sourceY = clampFloat(localY, 0.0f, 1.0f) * static_cast<float>(sourceHeight - 1);
+	const float sourceAspect = static_cast<float>(sourceWidth) / static_cast<float>(sourceHeight);
+	const float targetAspect = transform.width / transform.height;
+	float cropX = 0.0f;
+	float cropY = 0.0f;
+	float cropWidth = static_cast<float>(sourceWidth);
+	float cropHeight = static_cast<float>(sourceHeight);
+	if (transform.cover && sourceAspect > targetAspect) {
+		cropWidth = static_cast<float>(sourceHeight) * targetAspect;
+		cropX = (static_cast<float>(sourceWidth) - cropWidth) * 0.5f;
+	} else if (transform.cover && sourceAspect < targetAspect) {
+		cropHeight = static_cast<float>(sourceWidth) / targetAspect;
+		cropY = (static_cast<float>(sourceHeight) - cropHeight) * 0.5f;
+	}
+	*sourceX = cropX + clampFloat(localX, 0.0f, 1.0f) * fmaxf(0.0f, cropWidth - 1.0f);
+	*sourceY = cropY + clampFloat(localY, 0.0f, 1.0f) * fmaxf(0.0f, cropHeight - 1.0f);
 	return true;
 }
 
@@ -371,6 +436,205 @@ __global__ void compositeChroma(
 		static_cast<uint8_t>(clampFloat(v, 16.0f, 240.0f));
 }
 
+__global__ void compositeWebcamLuma(
+	const uint8_t *sourceY,
+	int sourcePitch,
+	int sourceWidth,
+	int sourceHeight,
+	uint8_t *outputY,
+	int outputPitch,
+	SceneTransform transform,
+	bool mirrored) {
+	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (localX >= static_cast<int>(ceilf(transform.width)) ||
+		localY >= static_cast<int>(ceilf(transform.height))) {
+		return;
+	}
+	const int outputX = static_cast<int>(floorf(transform.left)) + localX;
+	const int outputYCoordinate = static_cast<int>(floorf(transform.top)) + localY;
+	const float sampleOutputX = static_cast<float>(outputX) + 0.5f;
+	const float sampleOutputY = static_cast<float>(outputYCoordinate) + 0.5f;
+	float sourceX = 0.0f;
+	float sourceYCoordinate = 0.0f;
+	if (!mapOutputToSource(
+			sampleOutputX,
+			sampleOutputY,
+			transform,
+			sourceWidth,
+			sourceHeight,
+			&sourceX,
+			&sourceYCoordinate)) {
+		return;
+	}
+	if (mirrored) sourceX = static_cast<float>(sourceWidth - 1) - sourceX;
+	outputY[outputYCoordinate * outputPitch + outputX] = static_cast<uint8_t>(
+		clampFloat(
+			samplePlane(
+				sourceY,
+				sourcePitch,
+				sourceWidth,
+				sourceHeight,
+				sourceX,
+				sourceYCoordinate),
+			16.0f,
+			235.0f));
+}
+
+__global__ void compositeWebcamChroma(
+	const uint8_t *sourceUv,
+	int sourcePitch,
+	int sourceWidth,
+	int sourceHeight,
+	uint8_t *outputUv,
+	int outputPitch,
+	int outputWidth,
+	int outputHeight,
+	SceneTransform transform,
+	bool mirrored) {
+	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	const int startX = static_cast<int>(floorf(transform.left * 0.5f));
+	const int startY = static_cast<int>(floorf(transform.top * 0.5f));
+	const int endX = static_cast<int>(ceilf((transform.left + transform.width) * 0.5f));
+	const int endY = static_cast<int>(ceilf((transform.top + transform.height) * 0.5f));
+	const int chromaX = startX + localX;
+	const int chromaY = startY + localY;
+	if (chromaX >= endX || chromaY >= endY || chromaX < 0 || chromaY < 0 ||
+		chromaX >= outputWidth / 2 || chromaY >= outputHeight / 2) {
+		return;
+	}
+	const float sampleOutputX = static_cast<float>(chromaX * 2) + 1.0f;
+	const float sampleOutputY = static_cast<float>(chromaY * 2) + 1.0f;
+	float sourceX = 0.0f;
+	float sourceYCoordinate = 0.0f;
+	if (!mapOutputToSource(
+			sampleOutputX,
+			sampleOutputY,
+			transform,
+			sourceWidth,
+			sourceHeight,
+			&sourceX,
+			&sourceYCoordinate)) {
+		return;
+	}
+	if (mirrored) sourceX = static_cast<float>(sourceWidth - 1) - sourceX;
+	const float sourceChromaX = sourceX * 0.5f;
+	const float sourceChromaY = sourceYCoordinate * 0.5f;
+	const int outputOffset = chromaY * outputPitch + chromaX * 2;
+	outputUv[outputOffset] = static_cast<uint8_t>(
+		clampFloat(
+			sampleInterleavedPlane(
+				sourceUv,
+				sourcePitch,
+				sourceWidth / 2,
+				sourceHeight / 2,
+				sourceChromaX,
+				sourceChromaY,
+				0),
+			16.0f,
+			240.0f));
+	outputUv[outputOffset + 1] = static_cast<uint8_t>(
+		clampFloat(
+			sampleInterleavedPlane(
+				sourceUv,
+				sourcePitch,
+				sourceWidth / 2,
+				sourceHeight / 2,
+				sourceChromaX,
+				sourceChromaY,
+				1),
+			16.0f,
+			240.0f));
+}
+
+__device__ float webcamShadowAlpha(
+	float outputX,
+	float outputY,
+	const SceneTransform &transform,
+	float blur,
+	float offsetX,
+	float offsetY) {
+	const float shiftedX = outputX - offsetX;
+	const float shiftedY = outputY - offsetY;
+	const float radius =
+		clampFloat(transform.borderRadius, 0.0f, fminf(transform.width, transform.height) * 0.5f);
+	const float nearestX =
+		clampFloat(shiftedX, transform.left + radius, transform.left + transform.width - radius);
+	const float nearestY =
+		clampFloat(shiftedY, transform.top + radius, transform.top + transform.height - radius);
+	const float dx = shiftedX - nearestX;
+	const float dy = shiftedY - nearestY;
+	const float distance = sqrtf(dx * dx + dy * dy);
+	if (distance <= radius) return 0.35f;
+	const float outsideDistance = distance - radius;
+	const float sigma = fmaxf(1.0f, blur * 0.5f);
+	return 0.35f * expf(-(outsideDistance * outsideDistance) / (2.0f * sigma * sigma));
+}
+
+__global__ void compositeWebcamShadowLuma(
+	uint8_t *outputY,
+	int outputPitch,
+	int startX,
+	int startY,
+	int width,
+	int height,
+	SceneTransform transform,
+	float blur,
+	float offsetX,
+	float offsetY) {
+	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (localX >= width || localY >= height) return;
+	const int outputX = startX + localX;
+	const int outputYCoordinate = startY + localY;
+	const float alpha = webcamShadowAlpha(
+		static_cast<float>(outputX) + 0.5f,
+		static_cast<float>(outputYCoordinate) + 0.5f,
+		transform,
+		blur,
+		offsetX,
+		offsetY);
+	if (alpha <= 0.001f) return;
+	const int offset = outputYCoordinate * outputPitch + outputX;
+	outputY[offset] = static_cast<uint8_t>(
+		clampFloat(static_cast<float>(outputY[offset]) * (1.0f - alpha) + 16.0f * alpha, 16.0f, 235.0f));
+}
+
+__global__ void compositeWebcamShadowChroma(
+	uint8_t *outputUv,
+	int outputPitch,
+	int startX,
+	int startY,
+	int width,
+	int height,
+	SceneTransform transform,
+	float blur,
+	float offsetX,
+	float offsetY) {
+	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (localX >= width || localY >= height) return;
+	const int chromaX = startX + localX;
+	const int chromaY = startY + localY;
+	const float alpha = webcamShadowAlpha(
+		static_cast<float>(chromaX * 2) + 1.0f,
+		static_cast<float>(chromaY * 2) + 1.0f,
+		transform,
+		blur,
+		offsetX,
+		offsetY);
+	if (alpha <= 0.001f) return;
+	const int offset = chromaY * outputPitch + chromaX * 2;
+	outputUv[offset] = static_cast<uint8_t>(
+		clampFloat(static_cast<float>(outputUv[offset]) * (1.0f - alpha) + 128.0f * alpha, 16.0f, 240.0f));
+	outputUv[offset + 1] = static_cast<uint8_t>(
+		clampFloat(
+			static_cast<float>(outputUv[offset + 1]) * (1.0f - alpha) + 128.0f * alpha,
+			16.0f,
+			240.0f));
+}
+
 __global__ void compositeOverlayLuma(
 	uint8_t *outputY,
 	int outputPitch,
@@ -455,6 +719,10 @@ struct ExportState {
 	AVFormatContext *inputFormat = nullptr;
 	AVFormatContext *outputFormat = nullptr;
 	AVCodecContext *decoder = nullptr;
+	AVFormatContext *webcamInputFormat = nullptr;
+	AVCodecContext *webcamDecoder = nullptr;
+	AVStream *webcamInputStream = nullptr;
+	int webcamInputStreamIndex = -1;
 	AVCodecContext *encoder = nullptr;
 	AVStream *inputStream = nullptr;
 	AVStream *outputStream = nullptr;
@@ -469,7 +737,9 @@ struct ExportState {
 		if (outputIoOpen && outputFormat) avio_closep(&outputFormat->pb);
 		avcodec_free_context(&encoder);
 		avcodec_free_context(&decoder);
+		avcodec_free_context(&webcamDecoder);
 		avformat_close_input(&inputFormat);
+		avformat_close_input(&webcamInputFormat);
 		avformat_free_context(outputFormat);
 		av_buffer_unref(&outputFramesRef);
 		av_buffer_unref(&deviceRef);
@@ -501,6 +771,39 @@ void initializeInput(ExportState &state, const std::string &inputPath) {
 	if (!state.decoder->hw_device_ctx) fail("Could not reference CUDA device for decoder");
 	state.decoder->extra_hw_frames = 8;
 	requireAv(avcodec_open2(state.decoder, decoder, nullptr), "open CUDA decoder");
+}
+
+void initializeWebcamInput(ExportState &state, const WebcamPlan &webcam) {
+	requireAv(
+		avformat_open_input(&state.webcamInputFormat, webcam.inputPath.c_str(), nullptr, nullptr),
+		"open webcam input");
+	requireAv(
+		avformat_find_stream_info(state.webcamInputFormat, nullptr),
+		"read webcam input stream info");
+	state.webcamInputStreamIndex = av_find_best_stream(
+		state.webcamInputFormat,
+		AVMEDIA_TYPE_VIDEO,
+		-1,
+		-1,
+		nullptr,
+		0);
+	requireAv(state.webcamInputStreamIndex, "find webcam video stream");
+	state.webcamInputStream = state.webcamInputFormat->streams[state.webcamInputStreamIndex];
+
+	const AVCodec *decoder = avcodec_find_decoder(state.webcamInputStream->codecpar->codec_id);
+	if (!decoder) fail("No decoder found for webcam codec");
+	state.webcamDecoder = avcodec_alloc_context3(decoder);
+	if (!state.webcamDecoder) fail("Could not allocate webcam decoder context");
+	requireAv(
+		avcodec_parameters_to_context(state.webcamDecoder, state.webcamInputStream->codecpar),
+		"copy webcam decoder parameters");
+	state.webcamDecoder->get_format = selectCudaFormat;
+	state.webcamDecoder->hw_device_ctx = av_buffer_ref(state.deviceRef);
+	if (!state.webcamDecoder->hw_device_ctx) {
+		fail("Could not reference CUDA device for webcam decoder");
+	}
+	state.webcamDecoder->extra_hw_frames = 8;
+	requireAv(avcodec_open2(state.webcamDecoder, decoder, nullptr), "open CUDA webcam decoder");
 }
 
 void initializeOutput(ExportState &state, const std::string &outputPath, const ExportPlan &plan) {
@@ -589,11 +892,29 @@ void verifyDecodedFrame(const AVFrame *frame) {
 	if (!frame->data[0] || !frame->data[1]) fail("Decoded CUDA frame has missing NV12 planes");
 }
 
+SceneTransform plannedWebcamTransform(const ExportPlan &plan, const PlannedFrame &frame) {
+	const WebcamPlan &webcam = plan.webcam;
+	const float scale = frame.webcamScale;
+	SceneTransform transform{};
+	transform.left =
+		webcam.x + (webcam.anchorRight ? webcam.width * (1.0f - scale) : 0.0f);
+	transform.top =
+		webcam.y + (webcam.anchorBottom ? webcam.height * (1.0f - scale) : 0.0f);
+	transform.width = webcam.width * scale;
+	transform.height = webcam.height * scale;
+	transform.borderRadius = webcam.borderRadius * scale;
+	transform.cover = true;
+	return transform;
+}
+
 double compositeFrame(
 	ExportState &state,
+	const ExportPlan &plan,
 	const AVFrame *source,
+	const AVFrame *webcamSource,
 	AVFrame *output,
 	const SceneTransform &transform,
+	const SceneTransform *webcamTransform,
 	float motionBlurX,
 	float motionBlurY,
 	const GpuAssets &assets,
@@ -648,6 +969,121 @@ double compositeFrame(
 		motionBlurY,
 		assets.wallpaper + static_cast<std::size_t>(outputWidth) * outputHeight);
 	requireRuntime(cudaGetLastError(), "compositeChroma launch");
+
+	if (webcamSource && webcamTransform) {
+		verifyDecodedFrame(webcamSource);
+		const WebcamPlan &webcam = plan.webcam;
+		if (webcamSource->width != webcam.sourceWidth ||
+			webcamSource->height != webcam.sourceHeight) {
+			fail(
+				"Decoded webcam dimensions " + std::to_string(webcamSource->width) + "x" +
+				std::to_string(webcamSource->height) + " do not match plan " +
+				std::to_string(webcam.sourceWidth) + "x" +
+				std::to_string(webcam.sourceHeight));
+		}
+		if (webcam.shadowEnabled) {
+			const float expansion = webcam.shadowBlur * 3.0f;
+			const int shadowStartX = std::max(
+				0,
+				static_cast<int>(floorf(
+					webcamTransform->left + webcam.shadowOffsetX - expansion)));
+			const int shadowStartY = std::max(
+				0,
+				static_cast<int>(floorf(
+					webcamTransform->top + webcam.shadowOffsetY - expansion)));
+			const int shadowEndX = std::min(
+				outputWidth,
+				static_cast<int>(ceilf(
+					webcamTransform->left + webcamTransform->width +
+					webcam.shadowOffsetX + expansion)));
+			const int shadowEndY = std::min(
+				outputHeight,
+				static_cast<int>(ceilf(
+					webcamTransform->top + webcamTransform->height +
+					webcam.shadowOffsetY + expansion)));
+			const int shadowWidth = std::max(0, shadowEndX - shadowStartX);
+			const int shadowHeight = std::max(0, shadowEndY - shadowStartY);
+			if (shadowWidth > 0 && shadowHeight > 0) {
+				const dim3 shadowLumaGrid(
+					(shadowWidth + block.x - 1) / block.x,
+					(shadowHeight + block.y - 1) / block.y);
+				compositeWebcamShadowLuma<<<shadowLumaGrid, block, 0, stream>>>(
+					output->data[0],
+					output->linesize[0],
+					shadowStartX,
+					shadowStartY,
+					shadowWidth,
+					shadowHeight,
+					*webcamTransform,
+					webcam.shadowBlur,
+					webcam.shadowOffsetX,
+					webcam.shadowOffsetY);
+				requireRuntime(cudaGetLastError(), "compositeWebcamShadowLuma launch");
+
+				const int shadowChromaStartX = shadowStartX / 2;
+				const int shadowChromaStartY = shadowStartY / 2;
+				const int shadowChromaEndX = (shadowEndX + 1) / 2;
+				const int shadowChromaEndY = (shadowEndY + 1) / 2;
+				const int shadowChromaWidth = shadowChromaEndX - shadowChromaStartX;
+				const int shadowChromaHeight = shadowChromaEndY - shadowChromaStartY;
+				const dim3 shadowChromaGrid(
+					(shadowChromaWidth + block.x - 1) / block.x,
+					(shadowChromaHeight + block.y - 1) / block.y);
+				compositeWebcamShadowChroma<<<shadowChromaGrid, block, 0, stream>>>(
+					output->data[1],
+					output->linesize[1],
+					shadowChromaStartX,
+					shadowChromaStartY,
+					shadowChromaWidth,
+					shadowChromaHeight,
+					*webcamTransform,
+					webcam.shadowBlur,
+					webcam.shadowOffsetX,
+					webcam.shadowOffsetY);
+				requireRuntime(cudaGetLastError(), "compositeWebcamShadowChroma launch");
+			}
+		}
+
+		const int webcamWidth = static_cast<int>(ceilf(webcamTransform->width));
+		const int webcamHeight = static_cast<int>(ceilf(webcamTransform->height));
+		const dim3 webcamLumaGrid(
+			(webcamWidth + block.x - 1) / block.x,
+			(webcamHeight + block.y - 1) / block.y);
+		compositeWebcamLuma<<<webcamLumaGrid, block, 0, stream>>>(
+			webcamSource->data[0],
+			webcamSource->linesize[0],
+			webcamSource->width,
+			webcamSource->height,
+			output->data[0],
+			output->linesize[0],
+			*webcamTransform,
+			webcam.mirrored);
+		requireRuntime(cudaGetLastError(), "compositeWebcamLuma launch");
+
+		const int webcamChromaStartX = static_cast<int>(floorf(webcamTransform->left * 0.5f));
+		const int webcamChromaStartY = static_cast<int>(floorf(webcamTransform->top * 0.5f));
+		const int webcamChromaEndX =
+			static_cast<int>(ceilf((webcamTransform->left + webcamTransform->width) * 0.5f));
+		const int webcamChromaEndY =
+			static_cast<int>(ceilf((webcamTransform->top + webcamTransform->height) * 0.5f));
+		const int webcamChromaWidth = webcamChromaEndX - webcamChromaStartX;
+		const int webcamChromaHeight = webcamChromaEndY - webcamChromaStartY;
+		const dim3 webcamChromaGrid(
+			(webcamChromaWidth + block.x - 1) / block.x,
+			(webcamChromaHeight + block.y - 1) / block.y);
+		compositeWebcamChroma<<<webcamChromaGrid, block, 0, stream>>>(
+			webcamSource->data[1],
+			webcamSource->linesize[1],
+			webcamSource->width,
+			webcamSource->height,
+			output->data[1],
+			output->linesize[1],
+			outputWidth,
+			outputHeight,
+			*webcamTransform,
+			webcam.mirrored);
+		requireRuntime(cudaGetLastError(), "compositeWebcamChroma launch");
+	}
 
 	for (const auto &overlay : assets.overlays) {
 		if (sourceTimestampMs < overlay.startMs || sourceTimestampMs >= overlay.endMs) continue;
@@ -721,7 +1157,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 3) fail("Unsupported native GPU export plan version");
+	if (plan.version != 4) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
@@ -731,6 +1167,8 @@ ExportPlan loadPlan(const std::string &planPath) {
 	plan.screenY = screenRect.at("y").get<float>();
 	plan.screenWidth = screenRect.at("width").get<float>();
 	plan.screenHeight = screenRect.at("height").get<float>();
+	plan.screenCover = document.at("screenCover").get<bool>();
+	plan.screenBorderRadius = document.at("screenBorderRadius").get<float>();
 	plan.sourceWidth = document.at("sourceWidth").get<int>();
 	plan.sourceHeight = document.at("sourceHeight").get<int>();
 	plan.bitrate = document.at("bitrate").get<int64_t>();
@@ -756,18 +1194,89 @@ ExportPlan loadPlan(const std::string &planPath) {
 	for (const auto &item : document.at("frames")) {
 		const float motionBlurX = item.at("motionBlurX").get<float>();
 		const float motionBlurY = item.at("motionBlurY").get<float>();
+		const double sourceTimestampMs = item.at("sourceTimestampMs").get<double>();
+		const float cameraScale = item.at("cameraScale").get<float>();
+		const float cameraX = item.at("cameraX").get<float>();
+		const float cameraY = item.at("cameraY").get<float>();
+		const float webcamScale = item.at("webcamScale").get<float>();
 		if (!std::isfinite(motionBlurX) || !std::isfinite(motionBlurY) ||
-			fabs(motionBlurX) > 128.0f || fabs(motionBlurY) > 128.0f) {
-			fail("Native GPU export motion blur vector is invalid");
+			!std::isfinite(sourceTimestampMs) || !std::isfinite(cameraScale) ||
+			!std::isfinite(cameraX) || !std::isfinite(cameraY) ||
+			!std::isfinite(webcamScale) || sourceTimestampMs < 0.0 ||
+			cameraScale <= 0.0f || cameraScale > 10.0f || webcamScale < 0.35f ||
+			webcamScale > 1.0f || fabs(motionBlurX) > 128.0f ||
+			fabs(motionBlurY) > 128.0f) {
+			fail("Native GPU export frame transform is invalid");
 		}
 		plan.frames.push_back({
-			item.at("sourceTimestampMs").get<double>(),
-			item.at("cameraScale").get<float>(),
-			item.at("cameraX").get<float>(),
-			item.at("cameraY").get<float>(),
+			sourceTimestampMs,
+			cameraScale,
+			cameraX,
+			cameraY,
 			motionBlurX,
 			motionBlurY,
+			webcamScale,
 		});
+	}
+	if (!std::isfinite(plan.screenX) || !std::isfinite(plan.screenY) ||
+		!std::isfinite(plan.screenWidth) || !std::isfinite(plan.screenHeight) ||
+		!std::isfinite(plan.screenBorderRadius) || plan.screenWidth <= 0.0f ||
+		plan.screenHeight <= 0.0f || plan.screenX < 0.0f || plan.screenY < 0.0f ||
+		plan.screenX + plan.screenWidth > static_cast<float>(plan.width) + 0.001f ||
+		plan.screenY + plan.screenHeight > static_cast<float>(plan.height) + 0.001f ||
+		plan.screenBorderRadius < 0.0f) {
+		fail("Native GPU export screen layout is invalid");
+	}
+	if (document.contains("webcam")) {
+		const auto &item = document.at("webcam");
+		plan.webcam.enabled = true;
+		plan.webcam.inputPath = item.at("inputPath").get<std::string>();
+		plan.webcam.sourceWidth = item.at("sourceWidth").get<int>();
+		plan.webcam.sourceHeight = item.at("sourceHeight").get<int>();
+		const auto &rect = item.at("rect");
+		plan.webcam.x = rect.at("x").get<float>();
+		plan.webcam.y = rect.at("y").get<float>();
+		plan.webcam.width = rect.at("width").get<float>();
+		plan.webcam.height = rect.at("height").get<float>();
+		plan.webcam.borderRadius = item.at("borderRadius").get<float>();
+		const std::string maskShape = item.at("maskShape").get<std::string>();
+		if (maskShape == "rectangle") {
+			plan.webcam.maskShape = WebcamMaskShape::Rectangle;
+		} else if (maskShape == "rounded") {
+			plan.webcam.maskShape = WebcamMaskShape::Rounded;
+		} else if (maskShape == "circle") {
+			plan.webcam.maskShape = WebcamMaskShape::Circle;
+			plan.webcam.borderRadius =
+				std::min(plan.webcam.width, plan.webcam.height) * 0.5f;
+		} else if (maskShape == "square") {
+			plan.webcam.maskShape = WebcamMaskShape::Square;
+		} else {
+			fail("Native GPU export webcam mask shape is invalid");
+		}
+		plan.webcam.mirrored = item.at("mirrored").get<bool>();
+		plan.webcam.anchorRight = item.at("anchorRight").get<bool>();
+		plan.webcam.anchorBottom = item.at("anchorBottom").get<bool>();
+		if (!item.at("shadow").is_null()) {
+			const auto &shadow = item.at("shadow");
+			plan.webcam.shadowEnabled = true;
+			plan.webcam.shadowBlur = shadow.at("blur").get<float>();
+			plan.webcam.shadowOffsetX = shadow.at("offsetX").get<float>();
+			plan.webcam.shadowOffsetY = shadow.at("offsetY").get<float>();
+		}
+		if (plan.webcam.inputPath.empty() || plan.webcam.sourceWidth <= 0 ||
+			plan.webcam.sourceHeight <= 0 || plan.webcam.sourceWidth % 2 != 0 ||
+			plan.webcam.sourceHeight % 2 != 0 || !std::isfinite(plan.webcam.x) ||
+			!std::isfinite(plan.webcam.y) || !std::isfinite(plan.webcam.width) ||
+			!std::isfinite(plan.webcam.height) || !std::isfinite(plan.webcam.borderRadius) ||
+			plan.webcam.x < 0.0f || plan.webcam.y < 0.0f || plan.webcam.width <= 0.0f ||
+			plan.webcam.height <= 0.0f ||
+			plan.webcam.x + plan.webcam.width > static_cast<float>(plan.width) + 0.001f ||
+			plan.webcam.y + plan.webcam.height > static_cast<float>(plan.height) + 0.001f ||
+			plan.webcam.borderRadius < 0.0f || !std::isfinite(plan.webcam.shadowBlur) ||
+			!std::isfinite(plan.webcam.shadowOffsetX) ||
+			!std::isfinite(plan.webcam.shadowOffsetY) || plan.webcam.shadowBlur < 0.0f) {
+			fail("Native GPU export webcam layout is invalid");
+		}
 	}
 	for (const auto &item : document.at("overlays")) {
 		PlannedOverlay overlay;
@@ -871,12 +1380,115 @@ void releaseGpuAssets(ExportState &state, GpuAssets *assets) {
 	requireCuda(cuCtxPopCurrent(&poppedContext), "cuCtxPopCurrent after asset release");
 }
 
+struct WebcamSelectionState {
+	FramePtr previousFrame{nullptr};
+	FramePtr currentFrame{nullptr};
+	FramePtr decodedFrame{av_frame_alloc()};
+	PacketPtr inputPacket{av_packet_alloc()};
+	double previousTimestampMs = 0.0;
+	double currentTimestampMs = 0.0;
+	bool inputEnded = false;
+	bool flushSent = false;
+	bool decoderEnded = false;
+};
+
+double webcamDecodedTimestampMs(const ExportState &state, const AVFrame *frame) {
+	const int64_t timestamp =
+		frame->best_effort_timestamp != AV_NOPTS_VALUE ? frame->best_effort_timestamp : frame->pts;
+	if (timestamp == AV_NOPTS_VALUE) fail("Decoded webcam frame has no timestamp");
+	const int64_t startTimestamp =
+		state.webcamInputStream->start_time == AV_NOPTS_VALUE
+			? 0
+			: state.webcamInputStream->start_time;
+	return static_cast<double>(timestamp - startTimestamp) *
+		av_q2d(state.webcamInputStream->time_base) * 1000.0;
+}
+
+bool decodeNextWebcamFrame(ExportState &state, WebcamSelectionState *selection) {
+	if (selection->decoderEnded) return false;
+	if (!selection->decodedFrame || !selection->inputPacket) {
+		fail("Could not allocate webcam decoder frame or packet");
+	}
+	while (true) {
+		const int receiveResult =
+			avcodec_receive_frame(state.webcamDecoder, selection->decodedFrame.get());
+		if (receiveResult == 0) {
+			verifyDecodedFrame(selection->decodedFrame.get());
+			FramePtr nextFrame(av_frame_clone(selection->decodedFrame.get()));
+			if (!nextFrame) fail("Could not retain decoded webcam CUDA frame");
+			const double nextTimestampMs =
+				webcamDecodedTimestampMs(state, selection->decodedFrame.get());
+			av_frame_unref(selection->decodedFrame.get());
+			selection->previousFrame = std::move(selection->currentFrame);
+			selection->previousTimestampMs = selection->currentTimestampMs;
+			selection->currentFrame = std::move(nextFrame);
+			selection->currentTimestampMs = nextTimestampMs;
+			return true;
+		}
+		if (receiveResult == AVERROR_EOF) {
+			selection->decoderEnded = true;
+			return false;
+		}
+		if (receiveResult != AVERROR(EAGAIN)) {
+			requireAv(receiveResult, "receive CUDA webcam frame");
+		}
+
+		if (selection->inputEnded) {
+			if (!selection->flushSent) {
+				requireAv(
+					avcodec_send_packet(state.webcamDecoder, nullptr),
+					"flush CUDA webcam decoder");
+				selection->flushSent = true;
+				continue;
+			}
+			fail("CUDA webcam decoder requested more packets after flush");
+		}
+
+		while (true) {
+			const int readResult =
+				av_read_frame(state.webcamInputFormat, selection->inputPacket.get());
+			if (readResult == AVERROR_EOF) {
+				selection->inputEnded = true;
+				break;
+			}
+			requireAv(readResult, "read webcam input packet");
+			if (selection->inputPacket->stream_index == state.webcamInputStreamIndex) {
+				requireAv(
+					avcodec_send_packet(state.webcamDecoder, selection->inputPacket.get()),
+					"send packet to CUDA webcam decoder");
+				av_packet_unref(selection->inputPacket.get());
+				break;
+			}
+			av_packet_unref(selection->inputPacket.get());
+		}
+	}
+}
+
+const AVFrame *selectWebcamFrameAt(
+	ExportState &state,
+	WebcamSelectionState *selection,
+	double targetTimestampMs) {
+	if (!selection->currentFrame && !decodeNextWebcamFrame(state, selection)) {
+		fail("Webcam input contains no decodable video frames");
+	}
+	while (selection->currentTimestampMs + 0.001 < targetTimestampMs &&
+		decodeNextWebcamFrame(state, selection)) {
+	}
+	if (selection->previousFrame &&
+		fabs(selection->previousTimestampMs - targetTimestampMs) <
+			fabs(selection->currentTimestampMs - targetTimestampMs)) {
+		return selection->previousFrame.get();
+	}
+	return selection->currentFrame.get();
+}
+
 void renderOutputFrame(
 	ExportState &state,
 	const AVFrame *sourceFrame,
 	AVPacket *encodedPacket,
 	const ExportPlan &plan,
 	const GpuAssets &assets,
+	WebcamSelectionState *webcamSelection,
 	int *frameCount,
 	double *compositorMs) {
 	if (sourceFrame->width != plan.sourceWidth || sourceFrame->height != plan.sourceHeight) {
@@ -898,11 +1510,24 @@ void renderOutputFrame(
 
 	const PlannedFrame &plannedFrame = plan.frames.at(*frameCount);
 	const SceneTransform transform = plannedSceneTransform(plan, plannedFrame);
+	const AVFrame *webcamFrame = nullptr;
+	SceneTransform webcamTransform{};
+	if (plan.webcam.enabled) {
+		if (!webcamSelection) fail("Webcam export plan has no decoder state");
+		webcamFrame = selectWebcamFrameAt(
+			state,
+			webcamSelection,
+			plannedFrame.sourceTimestampMs);
+		webcamTransform = plannedWebcamTransform(plan, plannedFrame);
+	}
 	*compositorMs += compositeFrame(
 		state,
+		plan,
 		sourceFrame,
+		webcamFrame,
 		outputFrame.get(),
 		transform,
+		webcamFrame ? &webcamTransform : nullptr,
 		plannedFrame.motionBlurX,
 		plannedFrame.motionBlurY,
 		assets,
@@ -943,6 +1568,7 @@ void processDecodedFrames(
 	const ExportPlan &plan,
 	const GpuAssets &assets,
 	TimelineSelectionState *selection,
+	WebcamSelectionState *webcamSelection,
 	int *frameCount,
 	double *compositorMs) {
 	while (*frameCount < frameLimit) {
@@ -967,6 +1593,7 @@ void processDecodedFrames(
 				encodedPacket,
 				plan,
 				assets,
+				webcamSelection,
 				frameCount,
 				compositorMs);
 		}
@@ -989,12 +1616,16 @@ int main(int argc, char **argv) {
 	const std::string outputPath = argv[3];
 	const int frameLimit = static_cast<int>(plan.frames.size());
 	if (!std::filesystem::is_regular_file(inputPath)) fail("Input file does not exist: " + inputPath);
+	if (plan.webcam.enabled && !std::filesystem::is_regular_file(plan.webcam.inputPath)) {
+		fail("Webcam input file does not exist: " + plan.webcam.inputPath);
+	}
 
 	ExportState state;
 	requireAv(
 		av_hwdevice_ctx_create(&state.deviceRef, AV_HWDEVICE_TYPE_CUDA, "0", nullptr, 0),
 		"create FFmpeg CUDA device");
 	initializeInput(state, inputPath);
+	if (plan.webcam.enabled) initializeWebcamInput(state, plan.webcam);
 	initializeOutput(state, outputPath, plan);
 	GpuAssets assets = uploadGpuAssets(state, plan);
 
@@ -1009,6 +1640,9 @@ int main(int argc, char **argv) {
 	int frameCount = 0;
 	double compositorMs = 0.0;
 	TimelineSelectionState selection;
+	WebcamSelectionState webcamSelection;
+	WebcamSelectionState *webcamSelectionPtr =
+		plan.webcam.enabled ? &webcamSelection : nullptr;
 	while (frameCount < frameLimit && av_read_frame(state.inputFormat, inputPacket.get()) >= 0) {
 		if (inputPacket->stream_index == state.inputStreamIndex) {
 			requireAv(avcodec_send_packet(state.decoder, inputPacket.get()), "send packet to CUDA decoder");
@@ -1020,6 +1654,7 @@ int main(int argc, char **argv) {
 				plan,
 				assets,
 				&selection,
+				webcamSelectionPtr,
 				&frameCount,
 				&compositorMs);
 		}
@@ -1035,6 +1670,7 @@ int main(int argc, char **argv) {
 			plan,
 			assets,
 			&selection,
+			webcamSelectionPtr,
 			&frameCount,
 			&compositorMs);
 	}
@@ -1045,6 +1681,7 @@ int main(int argc, char **argv) {
 			encodedPacket.get(),
 			plan,
 			assets,
+			webcamSelectionPtr,
 			&frameCount,
 			&compositorMs);
 	}

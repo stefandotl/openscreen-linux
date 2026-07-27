@@ -172,9 +172,14 @@ function validateRequest(payload: NativeGpuExportRequest) {
 			!finiteNumber(frame.cameraScale) ||
 			!finiteNumber(frame.cameraX) ||
 			!finiteNumber(frame.cameraY) ||
+			!finiteNumber(frame.motionBlurX) ||
+			!finiteNumber(frame.motionBlurY) ||
+			!finiteNumber(frame.webcamScale) ||
 			frame.sourceTimestampMs < previousTimestamp ||
 			frame.cameraScale <= 0 ||
-			frame.cameraScale > 10
+			frame.cameraScale > 10 ||
+			frame.webcamScale < 0.35 ||
+			frame.webcamScale > 1
 		) {
 			throw new Error("Native GPU export frame plan is invalid or non-monotonic");
 		}
@@ -191,6 +196,55 @@ function validateRequest(payload: NativeGpuExportRequest) {
 		rect.height <= 0
 	) {
 		throw new Error("Native GPU export screen rectangle is invalid");
+	}
+	if (
+		typeof plan.screenCover !== "boolean" ||
+		!finiteNumber(plan.screenBorderRadius) ||
+		plan.screenBorderRadius < 0
+	) {
+		throw new Error("Native GPU export screen layout is invalid");
+	}
+	if (plan.webcam) {
+		const webcam = plan.webcam;
+		const webcamRect = webcam.rect;
+		if (
+			typeof webcam.inputPath !== "string" ||
+			!Number.isInteger(webcam.sourceWidth) ||
+			!Number.isInteger(webcam.sourceHeight) ||
+			webcam.sourceWidth <= 0 ||
+			webcam.sourceHeight <= 0 ||
+			webcam.sourceWidth % 2 !== 0 ||
+			webcam.sourceHeight % 2 !== 0 ||
+			!webcamRect ||
+			!finiteNumber(webcamRect.x) ||
+			!finiteNumber(webcamRect.y) ||
+			!finiteNumber(webcamRect.width) ||
+			!finiteNumber(webcamRect.height) ||
+			webcamRect.x < 0 ||
+			webcamRect.y < 0 ||
+			webcamRect.width <= 0 ||
+			webcamRect.height <= 0 ||
+			webcamRect.x + webcamRect.width > plan.width ||
+			webcamRect.y + webcamRect.height > plan.height ||
+			!finiteNumber(webcam.borderRadius) ||
+			webcam.borderRadius < 0 ||
+			!["rectangle", "rounded", "circle", "square"].includes(webcam.maskShape) ||
+			typeof webcam.mirrored !== "boolean" ||
+			typeof webcam.anchorRight !== "boolean" ||
+			typeof webcam.anchorBottom !== "boolean"
+		) {
+			throw new Error("Native GPU export webcam layout is invalid");
+		}
+		if (
+			webcam.shadow &&
+			(typeof webcam.shadow.color !== "string" ||
+				!finiteNumber(webcam.shadow.blur) ||
+				!finiteNumber(webcam.shadow.offsetX) ||
+				!finiteNumber(webcam.shadow.offsetY) ||
+				webcam.shadow.blur < 0)
+		) {
+			throw new Error("Native GPU export webcam shadow is invalid");
+		}
 	}
 	const crop = plan.cropRegion;
 	if (
@@ -415,6 +469,14 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 				if (!inputPath) {
 					throw new Error("Native GPU export input path is invalid or unapproved");
 				}
+				let webcamInputPath: string | undefined;
+				if (payload.plan.webcam) {
+					webcamInputPath =
+						dependencies.resolveApprovedVideoPath(payload.plan.webcam.inputPath) ?? undefined;
+					if (!webcamInputPath) {
+						throw new Error("Native GPU export webcam path is invalid or unapproved");
+					}
+				}
 				let audioPath: string | undefined;
 				if (payload.audioPath) {
 					audioPath = dependencies.resolveApprovedVideoPath(payload.audioPath) ?? undefined;
@@ -437,6 +499,9 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 					JSON.stringify({
 						...payload.plan,
 						inputPath,
+						...(payload.plan.webcam && webcamInputPath
+							? { webcam: { ...payload.plan.webcam, inputPath: webcamInputPath } }
+							: {}),
 						wallpaperNv12Path: assets.wallpaperNv12Path,
 						overlays: assets.overlays,
 					}),
@@ -474,6 +539,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 				console.info("[native-gpu-export] Started zero-copy export", {
 					helperPath,
 					inputPath,
+					webcamInputPath,
 					outputPath,
 					frames: session.totalFrames,
 					audio: Boolean(audioPath),
