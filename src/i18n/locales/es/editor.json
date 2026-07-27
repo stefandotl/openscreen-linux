@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "No hay proyecto abierto",
 		"description": "Importa un video para empezar a editar o carga un proyecto de OpenScreen existente.",
+		"sceneTitle": "Esta escena está vacía",
+		"sceneDescription": "Graba un video nuevo para esta escena o importa un archivo de video existente.",
+		"recordSceneButton": "Grabar escena",
 		"importVideoButton": "Importar archivo de video…",
 		"loadProjectButton": "Cargar proyecto…",
 		"supportedFormats": "Formatos compatibles: MP4, MOV, WebM, MKV, AVI, M4V, WMV",

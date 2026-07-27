@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { createScenePlaybackKey, reorderScenes } from "./sceneModel";
+import {
+	createSceneName,
+	createScenePlaybackKey,
+	MAX_SCENE_NAME_LENGTH,
+	normalizeSceneName,
+	reorderScenes,
+	shouldPersistScenes,
+} from "./sceneModel";
 
 const scenes = [{ id: "one" }, { id: "two" }, { id: "three" }, { id: "four" }];
 
@@ -33,5 +40,27 @@ describe("createScenePlaybackKey", () => {
 		const secondKey = createScenePlaybackKey("scene-2", "file:///recording.webm", null);
 
 		expect(secondKey).not.toBe(firstKey);
+	});
+});
+
+describe("scene names", () => {
+	it("creates the first unused default name after scenes are deleted or renamed", () => {
+		expect(createSceneName([{ name: "Scene 1" }, { name: "Intro" }, { name: "Scene 3" }])).toBe(
+			"Scene 2",
+		);
+	});
+
+	it("normalizes user-entered names without accepting blank values", () => {
+		expect(normalizeSceneName("  Product demo  ")).toBe("Product demo");
+		expect(normalizeSceneName("   ")).toBeNull();
+		expect(normalizeSceneName("x".repeat(MAX_SCENE_NAME_LENGTH + 10))).toHaveLength(
+			MAX_SCENE_NAME_LENGTH,
+		);
+	});
+
+	it("persists a single scene only when its stable name carries project information", () => {
+		expect(shouldPersistScenes([{ name: "Scene 1" }])).toBe(false);
+		expect(shouldPersistScenes([{ name: "Introduction" }])).toBe(true);
+		expect(shouldPersistScenes([{ name: "Scene 1" }, { name: "Scene 2" }])).toBe(true);
 	});
 });

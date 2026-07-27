@@ -5,6 +5,11 @@
 		"cancel": "Cancelar",
 		"confirm": "Confirmar"
 	},
+	"emptyState": {
+		"sceneTitle": "Esta cena está vazia",
+		"sceneDescription": "Grave um novo vídeo para esta cena ou importe um arquivo de vídeo existente.",
+		"recordSceneButton": "Gravar cena"
+	},
 	"loadingVideo": "Carregando vídeo...",
 	"errors": {
 		"noVideoLoaded": "Nenhum vídeo carregado",

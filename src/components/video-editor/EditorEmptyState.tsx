@@ -11,6 +11,7 @@ interface EditorEmptyStateProps {
 	onProjectOpened: (project: unknown, path: string | null) => void;
 	onStartRecording?: () => void;
 	recordVideoLabel?: string;
+	mode?: "project" | "scene";
 }
 
 type DropError = "unsupported-format" | "load-failed" | null;
@@ -20,9 +21,11 @@ export function EditorEmptyState({
 	onProjectOpened,
 	onStartRecording,
 	recordVideoLabel,
+	mode = "project",
 }: EditorEmptyStateProps) {
 	const te = useScopedT("editor");
 	const tc = useScopedT("common");
+	const isSceneMode = mode === "scene";
 	const [isDraggingOver, setIsDraggingOver] = useState(false);
 	const [dropError, setDropError] = useState<DropError>(null);
 	// Freeze the last non-null error type so dialog content doesn't snap to the else-branch
@@ -114,12 +117,12 @@ export function EditorEmptyState({
 	return (
 		<div
 			className="flex h-full w-full flex-col items-center justify-center bg-[#09090b]"
-			onDragOver={handleDragOver}
-			onDragLeave={handleDragLeave}
-			onDrop={handleDrop}
+			onDragOver={isSceneMode ? undefined : handleDragOver}
+			onDragLeave={isSceneMode ? undefined : handleDragLeave}
+			onDrop={isSceneMode ? undefined : handleDrop}
 		>
 			{/* Drop overlay */}
-			{isDraggingOver && (
+			{!isSceneMode && isDraggingOver && (
 				<div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#34B27B] bg-[#34B27B]/10">
 					<Upload className="mb-3 h-10 w-10 text-[#34B27B]" />
 					<p className="text-base font-semibold text-[#34B27B]">{te("emptyState.dropOverlay")}</p>
@@ -177,23 +180,39 @@ export function EditorEmptyState({
 				/>
 
 				<div className="flex flex-col gap-2">
-					<h2 className="text-xl font-semibold text-slate-200">{te("emptyState.title")}</h2>
+					<h2 className="text-xl font-semibold text-slate-200">
+						{te(isSceneMode ? "emptyState.sceneTitle" : "emptyState.title")}
+					</h2>
 					<p className="max-w-sm text-sm leading-relaxed text-slate-500">
-						{te("emptyState.description")}
+						{te(isSceneMode ? "emptyState.sceneDescription" : "emptyState.description")}
 					</p>
 				</div>
 
 				{/* Actions */}
 				<div className="flex flex-col gap-3 w-full max-w-xs">
+					{isSceneMode && onStartRecording && (
+						<button
+							type="button"
+							onClick={onStartRecording}
+							className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-[#34B27B] hover:bg-[#2d9e6c] active:bg-[#27885c] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#34B27B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+						>
+							<Video className="h-4 w-4" />
+							{recordVideoLabel ?? te("emptyState.recordSceneButton")}
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={handleImportVideo}
-						className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-[#34B27B] hover:bg-[#2d9e6c] active:bg-[#27885c] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#34B27B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+						className={`flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b] ${
+							isSceneMode
+								? "bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 focus-visible:ring-white/30"
+								: "bg-[#34B27B] hover:bg-[#2d9e6c] active:bg-[#27885c] text-white focus-visible:ring-[#34B27B]"
+						}`}
 					>
 						<Film className="h-4 w-4" />
 						{te("emptyState.importVideoButton")}
 					</button>
-					{onStartRecording && (
+					{!isSceneMode && onStartRecording && (
 						<button
 							type="button"
 							onClick={onStartRecording}
@@ -203,23 +222,27 @@ export function EditorEmptyState({
 							{recordVideoLabel ?? te("newRecording.title")}
 						</button>
 					)}
-					<button
-						type="button"
-						onClick={handleLoadProject}
-						className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
-					>
-						<FolderOpen className="h-4 w-4" />
-						{te("emptyState.loadProjectButton")}
-					</button>
+					{!isSceneMode && (
+						<button
+							type="button"
+							onClick={handleLoadProject}
+							className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+						>
+							<FolderOpen className="h-4 w-4" />
+							{te("emptyState.loadProjectButton")}
+						</button>
+					)}
 				</div>
 
-				<div className="flex flex-col items-center gap-2">
-					<p className="text-xs text-slate-600">{te("emptyState.supportedFormats")}</p>
-					<div className="flex items-center gap-1.5 text-xs text-slate-700 mt-4">
-						<Upload className="h-3 w-3" />
-						<span>{te("emptyState.dragDropHint")}</span>
+				{!isSceneMode && (
+					<div className="flex flex-col items-center gap-2">
+						<p className="text-xs text-slate-600">{te("emptyState.supportedFormats")}</p>
+						<div className="flex items-center gap-1.5 text-xs text-slate-700 mt-4">
+							<Upload className="h-3 w-3" />
+							<span>{te("emptyState.dragDropHint")}</span>
+						</div>
 					</div>
-				</div>
+				)}
 			</div>
 		</div>
 	);

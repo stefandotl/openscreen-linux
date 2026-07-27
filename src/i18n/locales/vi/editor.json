@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "Không có dự án nào được mở",
 		"description": "Nhập video để bắt đầu chỉnh sửa hoặc tải một dự án OpenScreen hiện có.",
+		"sceneTitle": "Cảnh này đang trống",
+		"sceneDescription": "Quay video mới cho cảnh này hoặc nhập một tệp video hiện có.",
+		"recordSceneButton": "Quay cảnh",
 		"importVideoButton": "Nhập tệp video…",
 		"loadProjectButton": "Tải dự án…",
 		"supportedFormats": "Định dạng được hỗ trợ: MP4, MOV, WebM, MKV, AVI, M4V, WMV",

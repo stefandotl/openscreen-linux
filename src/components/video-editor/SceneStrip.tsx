@@ -1,5 +1,5 @@
-import { Film, GripVertical, PanelLeftClose, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Film, GripVertical, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -8,7 +8,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import type { EditorScene } from "./sceneModel";
+import { type EditorScene, MAX_SCENE_NAME_LENGTH, normalizeSceneName } from "./sceneModel";
 
 interface SceneStripProps {
 	scenes: EditorScene[];
@@ -17,20 +17,23 @@ interface SceneStripProps {
 	onAdd: () => void;
 	onDelete: (sceneId: string) => void;
 	onReorder: (sceneId: string, targetIndex: number) => void;
+	onRename: (sceneId: string, name: string) => void;
 	onCollapse: () => void;
 	addLabel: string;
 	deleteLabel: string;
 	cancelLabel: string;
 	collapseLabel: string;
 	reorderLabel: string;
+	renameLabel?: string;
+	emptyLabel?: string;
 }
 
-function sceneLabel(scene: EditorScene) {
+function sceneMediaLabel(scene: EditorScene) {
 	if (scene.media?.screenVideoPath) {
 		const fileName = scene.media.screenVideoPath.split(/[\\/]/).pop();
 		if (fileName) return fileName.replace(/\.[^.]+$/, "");
 	}
-	return scene.name;
+	return null;
 }
 
 export default function SceneStrip({
@@ -40,16 +43,22 @@ export default function SceneStrip({
 	onAdd,
 	onDelete,
 	onReorder,
+	onRename,
 	onCollapse,
 	addLabel,
 	deleteLabel,
 	cancelLabel,
 	collapseLabel,
 	reorderLabel,
+	renameLabel = "Rename scene",
+	emptyLabel = "Empty scene",
 }: SceneStripProps) {
 	const [pendingDeleteSceneId, setPendingDeleteSceneId] = useState<string | null>(null);
 	const [draggedSceneId, setDraggedSceneId] = useState<string | null>(null);
 	const [dropIndex, setDropIndex] = useState<number | null>(null);
+	const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
+	const [draftName, setDraftName] = useState("");
+	const cancelRenameRef = useRef(false);
 	const pendingDeleteScene = scenes.find((scene) => scene.id === pendingDeleteSceneId) ?? null;
 
 	const confirmDelete = () => {
@@ -61,6 +70,20 @@ export default function SceneStrip({
 	const finishDrag = () => {
 		setDraggedSceneId(null);
 		setDropIndex(null);
+	};
+
+	const beginRename = (scene: EditorScene) => {
+		cancelRenameRef.current = false;
+		setDraftName(scene.name);
+		setEditingSceneId(scene.id);
+	};
+
+	const commitRename = (scene: EditorScene) => {
+		const name = normalizeSceneName(draftName);
+		if (name && name !== scene.name) {
+			onRename(scene.id, name);
+		}
+		setEditingSceneId(null);
 	};
 
 	const dropScene = (event: React.DragEvent) => {
@@ -94,6 +117,7 @@ export default function SceneStrip({
 			>
 				{scenes.map((scene, index) => {
 					const isActive = scene.id === activeSceneId;
+					const isEditing = scene.id === editingSceneId;
 					return (
 						<div key={scene.id} className="relative min-w-0">
 							<div
@@ -102,7 +126,7 @@ export default function SceneStrip({
 								}`}
 							/>
 							<div
-								draggable
+								draggable={!isEditing}
 								onDragStart={(event) => {
 									event.dataTransfer.effectAllowed = "move";
 									event.dataTransfer.setData("text/plain", scene.id);
@@ -130,35 +154,87 @@ export default function SceneStrip({
 									className="ml-1 flex-shrink-0 cursor-grab text-white/20 group-hover:text-white/45 active:cursor-grabbing"
 									aria-hidden="true"
 								/>
-								<button
-									type="button"
-									onClick={() => onSelect(scene.id)}
-									className="flex min-h-[58px] min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left"
-									aria-label={`${scene.name}: ${sceneLabel(scene)}`}
-								>
-									<div
-										className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${
-											isActive ? "bg-[#34B27B]/20 text-[#6ee7ad]" : "bg-black/35 text-white/35"
-										}`}
-									>
-										<Film size={14} />
+								{isEditing ? (
+									<div className="flex min-h-[58px] min-w-0 flex-1 items-center gap-2 px-1.5 py-2">
+										<div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-[#34B27B]/20 text-[#6ee7ad]">
+											<Film size={14} />
+										</div>
+										<input
+											type="text"
+											value={draftName}
+											maxLength={MAX_SCENE_NAME_LENGTH}
+											autoFocus
+											onFocus={(event) => event.currentTarget.select()}
+											onChange={(event) => setDraftName(event.target.value)}
+											onBlur={() => {
+												if (cancelRenameRef.current) {
+													cancelRenameRef.current = false;
+													return;
+												}
+												commitRename(scene);
+											}}
+											onKeyDown={(event) => {
+												event.stopPropagation();
+												if (event.key === "Enter") {
+													event.preventDefault();
+													event.currentTarget.blur();
+												} else if (event.key === "Escape") {
+													event.preventDefault();
+													cancelRenameRef.current = true;
+													setEditingSceneId(null);
+												}
+											}}
+											aria-label={`${renameLabel}: ${scene.name}`}
+											className="h-7 min-w-0 flex-1 rounded-md border border-[#34B27B]/60 bg-black/30 px-2 text-[10px] font-medium text-white outline-none focus:border-[#6ee7ad]"
+										/>
 									</div>
-									<span className="flex min-w-0 flex-1 flex-col gap-0.5">
-										<span
-											className={`truncate text-[10px] font-medium ${
-												isActive ? "text-white/90" : "text-white/55"
+								) : (
+									<button
+										type="button"
+										onClick={() => onSelect(scene.id)}
+										onDoubleClick={() => beginRename(scene)}
+										className="flex min-h-[58px] min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left"
+										aria-label={`${scene.name}: ${sceneMediaLabel(scene) ?? emptyLabel}`}
+									>
+										<div
+											className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${
+												isActive ? "bg-[#34B27B]/20 text-[#6ee7ad]" : "bg-black/35 text-white/35"
 											}`}
-										>{`Scene ${index + 1}`}</span>
-										<span className="truncate text-[9px] text-white/30">
-											{scene.media ? sceneLabel(scene) : "Empty"}
+										>
+											<Film size={14} />
+										</div>
+										<span className="flex min-w-0 flex-1 flex-col gap-0.5">
+											<span
+												className={`truncate text-[10px] font-medium ${
+													isActive ? "text-white/90" : "text-white/55"
+												}`}
+											>
+												{scene.name}
+											</span>
+											<span className="truncate text-[9px] text-white/30">
+												{sceneMediaLabel(scene) ?? emptyLabel}
+											</span>
 										</span>
-									</span>
-								</button>
+									</button>
+								)}
+								{!isEditing && (
+									<button
+										type="button"
+										onClick={() => beginRename(scene)}
+										className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-white/30 opacity-0 transition-opacity hover:bg-white/[0.08] hover:text-white group-hover:opacity-100 focus-visible:opacity-100 ${
+											isActive ? "opacity-60" : ""
+										}`}
+										aria-label={`${renameLabel}: ${scene.name}`}
+										title={renameLabel}
+									>
+										<Pencil size={11} />
+									</button>
+								)}
 								{scenes.length > 1 && (
 									<button
 										type="button"
 										onClick={() => setPendingDeleteSceneId(scene.id)}
-										className="mr-1.5 hidden h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-white/30 hover:bg-red-500/10 hover:text-red-300 group-hover:flex"
+										className="mr-1 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-white/30 opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-300 group-hover:opacity-100 focus-visible:opacity-100"
 										aria-label={`${deleteLabel}: ${scene.name}`}
 										title={deleteLabel}
 									>

@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "プロジェクトが開かれていません",
 		"description": "動画をインポートして編集を開始するか、既存の OpenScreen プロジェクトを読み込んでください。",
+		"sceneTitle": "このシーンは空です",
+		"sceneDescription": "このシーン用に新しい動画を録画するか、既存の動画ファイルをインポートします。",
+		"recordSceneButton": "シーンを録画",
 		"importVideoButton": "動画ファイルをインポート…",
 		"loadProjectButton": "プロジェクトを読み込む…",
 		"supportedFormats": "対応フォーマット：MP4、MOV、WebM、MKV、AVI、M4V、WMV",

@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "Açık proje yok",
 		"description": "Düzenlemeye başlamak için bir video içe aktarın veya mevcut bir OpenScreen projesi yükleyin.",
+		"sceneTitle": "Bu sahne boş",
+		"sceneDescription": "Bu sahne için yeni bir video kaydedin veya mevcut bir video dosyasını içe aktarın.",
+		"recordSceneButton": "Sahneyi Kaydet",
 		"importVideoButton": "Video Dosyası İçe Aktar…",
 		"loadProjectButton": "Proje Yükle…",
 		"supportedFormats": "Desteklenen formatlar: MP4, MOV, WebM, MKV, AVI, M4V, WMV",

@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "لا يوجد مشروع مفتوح",
 		"description": "استورد مقطع فيديو للبدء في التحرير، أو حمّل مشروع OpenScreen موجود.",
+		"sceneTitle": "هذا المشهد فارغ",
+		"sceneDescription": "سجّل فيديو جديدًا لهذا المشهد أو استورد ملف فيديو موجودًا.",
+		"recordSceneButton": "تسجيل المشهد",
 		"importVideoButton": "استيراد ملف فيديو...",
 		"loadProjectButton": "تحميل مشروع...",
 		"supportedFormats": "الصيغ المدعومة: MP4، MOV، WebM، MKV، AVI، M4V، WMV",

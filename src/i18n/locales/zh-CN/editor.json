@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "未打开任何项目",
 		"description": "导入视频开始编辑，或加载已有的 OpenScreen 项目。",
+		"sceneTitle": "此场景为空",
+		"sceneDescription": "为此场景录制新视频，或导入现有视频文件。",
+		"recordSceneButton": "录制场景",
 		"importVideoButton": "导入视频文件…",
 		"loadProjectButton": "加载项目…",
 		"supportedFormats": "支持的格式：MP4、MOV、WebM、MKV、AVI、M4V、WMV",

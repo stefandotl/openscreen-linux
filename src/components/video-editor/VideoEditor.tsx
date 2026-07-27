@@ -109,7 +109,9 @@ import {
 	createSceneName,
 	createScenePlaybackKey,
 	type EditorScene,
+	normalizeSceneName,
 	reorderScenes,
+	shouldPersistScenes,
 } from "./sceneModel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
@@ -449,7 +451,7 @@ export default function VideoEditor() {
 	const createSceneFromMedia = useCallback(
 		(media: ProjectMedia | null, sceneEditor: EditorState = INITIAL_EDITOR_STATE): EditorScene => ({
 			id: createSceneId(),
-			name: createSceneName(scenesRef.current.length),
+			name: createSceneName(scenesRef.current),
 			media,
 			editor: editorStateForScene(sceneEditor),
 		}),
@@ -541,6 +543,20 @@ export default function VideoEditor() {
 		},
 		[updateActiveSceneSnapshot],
 	);
+
+	const handleRenameScene = useCallback((sceneId: string, value: string) => {
+		const name = normalizeSceneName(value);
+		if (!name) return;
+
+		const currentScene = scenesRef.current.find((scene) => scene.id === sceneId);
+		if (!currentScene || currentScene.name === name) return;
+
+		const nextScenes = scenesRef.current.map((scene) =>
+			scene.id === sceneId ? { ...scene, name } : scene,
+		);
+		scenesRef.current = nextScenes;
+		setScenes(nextScenes);
+	}, []);
 
 	const handleSceneVideoImported = useCallback(
 		(sourcePath: string) => {
@@ -794,23 +810,22 @@ export default function VideoEditor() {
 					0,
 				) + 1;
 
-			const savedSnapshotScenes =
-				savedScenes.length > 1
-					? loadedSceneList.map((scene) => ({
-							id: scene.id,
-							name: scene.name,
-							media: scene.media,
-							editor: {
-								...scene.editor,
-								exportQuality: normalizedEditor.exportQuality,
-								exportFormat: normalizedEditor.exportFormat,
-								gifFrameRate: normalizedEditor.gifFrameRate,
-								gifLoop: normalizedEditor.gifLoop,
-								gifSizePreset: normalizedEditor.gifSizePreset,
-								cursorTheme: normalizedEditor.cursorTheme,
-							},
-						}))
-					: undefined;
+			const savedSnapshotScenes = shouldPersistScenes(loadedSceneList)
+				? loadedSceneList.map((scene) => ({
+						id: scene.id,
+						name: scene.name,
+						media: scene.media,
+						editor: {
+							...scene.editor,
+							exportQuality: normalizedEditor.exportQuality,
+							exportFormat: normalizedEditor.exportFormat,
+							gifFrameRate: normalizedEditor.gifFrameRate,
+							gifLoop: normalizedEditor.gifLoop,
+							gifSizePreset: normalizedEditor.gifSizePreset,
+							cursorTheme: normalizedEditor.cursorTheme,
+						},
+					}))
+				: undefined;
 			setLastSavedSnapshot(
 				createProjectSnapshot(
 					fallbackProjectMedia,
@@ -829,7 +844,7 @@ export default function VideoEditor() {
 		if (!snapshotMedia) {
 			return null;
 		}
-		const persistedScenes = scenes.length > 1 ? projectScenes : undefined;
+		const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
 		return createProjectSnapshot(
 			snapshotMedia,
 			{
@@ -1056,7 +1071,7 @@ export default function VideoEditor() {
 				projectScenes,
 				activeSceneId,
 			);
-			const persistedScenes = scenes.length > 1 ? projectScenes : undefined;
+			const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
 
 			const fileNameBase =
 				mediaForProject.screenVideoPath
@@ -3090,6 +3105,7 @@ export default function VideoEditor() {
 						onAdd={handleAddScene}
 						onDelete={handleDeleteScene}
 						onReorder={handleReorderScene}
+						onRename={handleRenameScene}
 						onCollapse={() => setIsSceneStripOpen(false)}
 						addLabel={t("emptyState.importVideoButton")}
 						deleteLabel={rawT("common.actions.delete")}
@@ -3127,7 +3143,11 @@ export default function VideoEditor() {
 					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
 				>
 					<DialogHeader>
-						<DialogTitle>{t("newRecording.title")}</DialogTitle>
+						<DialogTitle>
+							{pendingRecordingSceneIdRef.current
+								? t("emptyState.recordSceneButton")
+								: t("newRecording.title")}
+						</DialogTitle>
 						<DialogDescription>{t("newRecording.description")}</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
@@ -3394,9 +3414,12 @@ export default function VideoEditor() {
 					{sceneSidebar}
 					<div className="min-w-0 flex-1">
 						<EditorEmptyState
+							mode={scenes.length > 0 ? "scene" : "project"}
 							onVideoImported={handleSceneVideoImported}
 							onStartRecording={handleStartSceneRecording}
-							recordVideoLabel={t("newRecording.title")}
+							recordVideoLabel={
+								scenes.length > 0 ? t("emptyState.recordSceneButton") : t("newRecording.title")
+							}
 							onProjectOpened={async (project, path) => {
 								const restored = await applyLoadedProject(project, path);
 								if (!restored) {

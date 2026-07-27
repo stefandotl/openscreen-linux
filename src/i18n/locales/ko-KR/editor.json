@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "열린 프로젝트 없음",
 		"description": "동영상을 가져와 편집을 시작하거나 기존 OpenScreen 프로젝트를 불러오세요.",
+		"sceneTitle": "이 장면은 비어 있습니다",
+		"sceneDescription": "이 장면을 위한 새 동영상을 녹화하거나 기존 동영상 파일을 가져오세요.",
+		"recordSceneButton": "장면 녹화",
 		"importVideoButton": "동영상 파일 가져오기…",
 		"loadProjectButton": "프로젝트 불러오기…",
 		"supportedFormats": "지원 형식: MP4, MOV, WebM, MKV, AVI, M4V, WMV",

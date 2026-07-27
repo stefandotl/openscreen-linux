@@ -87,6 +87,9 @@
 	"emptyState": {
 		"title": "Нет открытых проектов",
 		"description": "Импортируйте видео для начала редактирования или загрузите существующий проект OpenScreen.",
+		"sceneTitle": "Эта сцена пуста",
+		"sceneDescription": "Запишите новое видео для этой сцены или импортируйте существующий видеофайл.",
+		"recordSceneButton": "Записать сцену",
 		"importVideoButton": "Импортировать видеофайл…",
 		"loadProjectButton": "Загрузить проект…",
 		"supportedFormats": "Поддерживаемые форматы: MP4, MOV, WebM, MKV, AVI, M4V, WMV",

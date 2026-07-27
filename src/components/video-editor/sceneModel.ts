@@ -8,12 +8,30 @@ export interface EditorScene {
 	editor: EditorState;
 }
 
+export const MAX_SCENE_NAME_LENGTH = 80;
+
 export function createSceneId() {
 	return `scene-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function createSceneName(index: number) {
-	return `Scene ${index + 1}`;
+export function createSceneName(existingScenes: readonly Pick<EditorScene, "name">[]) {
+	const existingNames = new Set(
+		existingScenes.map((scene) => scene.name.trim().toLocaleLowerCase()),
+	);
+	let sceneNumber = 1;
+	while (existingNames.has(`scene ${sceneNumber}`)) {
+		sceneNumber += 1;
+	}
+	return `Scene ${sceneNumber}`;
+}
+
+export function normalizeSceneName(value: string) {
+	const trimmedName = value.trim();
+	return trimmedName ? trimmedName.slice(0, MAX_SCENE_NAME_LENGTH) : null;
+}
+
+export function shouldPersistScenes(scenes: readonly Pick<EditorScene, "name">[]) {
+	return scenes.length > 1 || (scenes.length === 1 && scenes[0].name !== "Scene 1");
 }
 
 export function createScenePlaybackKey(
