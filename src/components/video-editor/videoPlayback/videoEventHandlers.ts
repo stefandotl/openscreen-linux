@@ -15,6 +15,7 @@ interface VideoEventHandlersParams {
 	onPlayStateChange: (playing: boolean) => void;
 	onTimeUpdate: (time: number) => void;
 	onTerminalTrim?: () => void;
+	onPlaybackError?: (message: string) => void;
 	trimRegionsRef: React.MutableRefObject<TrimRegion[]>;
 	speedRegionsRef: React.MutableRefObject<SpeedRegion[]>;
 	isScrubbingRef?: React.MutableRefObject<boolean>;
@@ -33,12 +34,14 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		onPlayStateChange,
 		onTimeUpdate,
 		onTerminalTrim,
+		onPlaybackError,
 		trimRegionsRef,
 		speedRegionsRef,
 		isScrubbingRef,
 		scrubEndTimerRef,
 		onScrubChange,
 	} = params;
+	let pendingTrimSkipEndSeconds: number | null = null;
 
 	const clearScrubEndTimer = () => {
 		if (scrubEndTimerRef && scrubEndTimerRef.current !== null) {
@@ -69,6 +72,33 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		);
 	};
 
+	const seekPastTrim = (trimRegion: TrimRegion) => {
+		const skipToTime = trimRegion.endMs / 1000;
+		pendingTrimSkipEndSeconds =
+			allowPlaybackRef.current && isPlayingRef.current ? skipToTime : null;
+		video.currentTime = skipToTime;
+		emitTime(skipToTime);
+	};
+
+	const resumeAfterTrimSeek = () => {
+		if (pendingTrimSkipEndSeconds === null) {
+			return;
+		}
+
+		pendingTrimSkipEndSeconds = null;
+		if (!allowPlaybackRef.current || !video.paused) {
+			return;
+		}
+
+		void video.play().catch((error) => {
+			allowPlaybackRef.current = false;
+			isPlayingRef.current = false;
+			onPlayStateChange(false);
+			const detail = error instanceof Error ? error.message : String(error);
+			onPlaybackError?.(`Video playback failed after skipping a trim: ${detail}`);
+		});
+	};
+
 	function updateTime() {
 		if (!video) return;
 
@@ -84,8 +114,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 				onTerminalTrim?.();
 				video.pause();
 			} else {
-				video.currentTime = skipToTime;
-				emitTime(skipToTime);
+				seekPastTrim(activeTrimRegion);
 			}
 		} else {
 			const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
@@ -118,6 +147,12 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	};
 
 	const handlePause = () => {
+		if (pendingTrimSkipEndSeconds !== null && allowPlaybackRef.current) {
+			emitTime(video.currentTime);
+			return;
+		}
+		pendingTrimSkipEndSeconds = null;
+
 		isPlayingRef.current = false;
 		onPlayStateChange(false);
 		if (timeUpdateAnimationRef.current) {
@@ -140,7 +175,9 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		}
 
 		const currentTimeMs = video.currentTime * 1000;
-		const activeTrimRegion = findActiveTrimRegion(currentTimeMs);
+		const completedTrimSkip =
+			pendingTrimSkipEndSeconds !== null && video.currentTime >= pendingTrimSkipEndSeconds - 0.05;
+		const activeTrimRegion = completedTrimSkip ? null : findActiveTrimRegion(currentTimeMs);
 
 		// Seeked into a trim region while playing: skip to the end
 		if (activeTrimRegion && isPlayingRef.current && !video.paused) {
@@ -150,14 +187,16 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 				onTerminalTrim?.();
 				video.pause();
 			} else {
-				video.currentTime = skipToTime;
-				emitTime(skipToTime);
+				seekPastTrim(activeTrimRegion);
 			}
 		} else {
 			if (!isPlayingRef.current && !video.paused) {
 				video.pause();
 			}
 			emitTime(video.currentTime);
+			if (completedTrimSkip) {
+				resumeAfterTrimSeek();
+			}
 		}
 	};
 

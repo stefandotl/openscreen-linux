@@ -758,6 +758,7 @@ function Timeline({
 	return (
 		<div
 			ref={setRefs}
+			data-testid="editor-scene-timeline"
 			style={{ ...style, touchAction: "none" }}
 			className="select-none bg-[#0b0c0f] min-h-[190px] relative cursor-pointer group"
 			onClick={handleTimelineClick}

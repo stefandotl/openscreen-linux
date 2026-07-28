@@ -364,6 +364,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const onTimeUpdateRef = useRef(onTimeUpdate);
 		const onPlayStateChangeRef = useRef(onPlayStateChange);
 		const onEndedRef = useRef(onEnded);
+		const onErrorRef = useRef(onError);
 		const videoReadyRafRef = useRef<number | null>(null);
 		const smoothedAutoFocusRef = useRef<ZoomFocus | null>(null);
 		const prevTargetProgressRef = useRef(0);
@@ -899,6 +900,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, [onEnded]);
 
 		useEffect(() => {
+			onErrorRef.current = onError;
+		}, [onError]);
+
+		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
 			const el = overlayRef.current;
 			if (!el) return;
@@ -1241,6 +1246,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				onPlayStateChange: (playing) => onPlayStateChangeRef.current(playing),
 				onTimeUpdate: (time) => onTimeUpdateRef.current(time),
 				onTerminalTrim: () => onEndedRef.current?.(),
+				onPlaybackError: (message) => onErrorRef.current(message),
 				trimRegionsRef,
 				speedRegionsRef,
 				isScrubbingRef,

@@ -195,6 +195,7 @@ export default function SceneStrip({
 										onDoubleClick={() => beginRename(scene)}
 										className="flex min-h-[58px] min-w-0 flex-1 items-center gap-2 px-1.5 py-2 text-left"
 										aria-label={`${scene.name}: ${sceneMediaLabel(scene) ?? emptyLabel}`}
+										aria-current={isActive ? "true" : undefined}
 									>
 										<div
 											className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${

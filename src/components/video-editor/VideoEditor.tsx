@@ -107,6 +107,8 @@ import {
 	buildProjectPlaybackPlan,
 	getNextProjectPlaybackSegment,
 	getProjectPlaybackDuration,
+	hasProjectPlaybackIntent,
+	type ProjectPlaybackControllerState,
 	type ProjectPlaybackPosition,
 	type ProjectPlaybackSegment,
 	projectTimeToSceneSource,
@@ -155,8 +157,6 @@ import VideoPlayback, { VideoPlaybackRef } from "./VideoPlayback";
 const AUTO_CAPTION_PROGRESS_TOAST_ID = "auto-caption-progress";
 const SILENCE_DETECTION_PROGRESS_TOAST_ID = "silence-detection-progress";
 const MP4_EXPORT_FRAME_RATE = 30;
-
-type ProjectPlaybackControllerState = "scene" | "playing" | "switching" | "paused" | "completed";
 
 interface SceneDurationRecord {
 	sourcePath: string;
@@ -1883,14 +1883,23 @@ export default function VideoEditor() {
 			return;
 		}
 
-		if (
-			projectPlaybackStateRef.current === "playing" ||
-			projectPlaybackStateRef.current === "switching"
-		) {
+		const pending = pendingProjectPlaybackPositionRef.current;
+		if (hasProjectPlaybackIntent(projectPlaybackStateRef.current, pending?.shouldPlay)) {
 			playback?.pause();
-			const pending = pendingProjectPlaybackPositionRef.current;
 			if (pending) pending.shouldPlay = false;
 			setProjectControllerState("paused");
+			return;
+		}
+
+		if (projectPlaybackStateRef.current === "switching" && pending) {
+			moveProjectPlaybackTo(
+				{
+					sceneId: pending.sceneId,
+					sourceTimeSeconds: pending.sourceTimeSeconds,
+					projectTimeSeconds: pending.projectTimeSeconds,
+				},
+				true,
+			);
 			return;
 		}
 
@@ -1932,7 +1941,7 @@ export default function VideoEditor() {
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [isFullscreen]);
 
-	const handleSeek = useCallback(
+	const handlePlaybackSeek = useCallback(
 		(time: number) => {
 			if (playbackScopeRef.current === "scene") {
 				const video = videoPlaybackRef.current?.video;
@@ -1942,10 +1951,44 @@ export default function VideoEditor() {
 
 			const position = projectTimeToSceneSource(projectPlaybackPlanRef.current, time);
 			if (!position) return;
-			const shouldPlay =
-				projectPlaybackStateRef.current === "playing" ||
-				projectPlaybackStateRef.current === "switching";
+			const shouldPlay = hasProjectPlaybackIntent(
+				projectPlaybackStateRef.current,
+				pendingProjectPlaybackPositionRef.current?.shouldPlay,
+			);
 			moveProjectPlaybackTo(position, shouldPlay);
+		},
+		[moveProjectPlaybackTo],
+	);
+
+	const handleSceneTimelineSeek = useCallback(
+		(sourceTimeSeconds: number) => {
+			if (playbackScopeRef.current === "scene") {
+				const video = videoPlaybackRef.current?.video;
+				if (video) video.currentTime = sourceTimeSeconds;
+				return;
+			}
+
+			const sceneId = activeSceneIdRef.current;
+			if (!sceneId) return;
+			const projectTimeSeconds = sceneSourceTimeToProjectTime(
+				projectPlaybackPlanRef.current,
+				sceneId,
+				sourceTimeSeconds,
+			);
+			if (projectTimeSeconds === null) return;
+
+			const shouldPlay = hasProjectPlaybackIntent(
+				projectPlaybackStateRef.current,
+				pendingProjectPlaybackPositionRef.current?.shouldPlay,
+			);
+			moveProjectPlaybackTo(
+				{
+					sceneId,
+					sourceTimeSeconds,
+					projectTimeSeconds,
+				},
+				shouldPlay,
+			);
 		},
 		[moveProjectPlaybackTo],
 	);
@@ -2671,7 +2714,7 @@ export default function VideoEditor() {
 						projectPlaybackDuration,
 						direction,
 					);
-					handleSeek(newTime);
+					handlePlaybackSeek(newTime);
 					return;
 				}
 				const video = videoPlaybackRef.current?.video;
@@ -2705,7 +2748,7 @@ export default function VideoEditor() {
 		window.addEventListener("keydown", handleKeyDown, { capture: true });
 		return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
 	}, [
-		handleSeek,
+		handlePlaybackSeek,
 		isMac,
 		projectPlaybackDuration,
 		projectPlaybackTime,
@@ -4081,9 +4124,10 @@ export default function VideoEditor() {
 												<PlaybackControls
 													isPlaying={
 														playbackScope === "project"
-															? projectPlaybackState === "playing" ||
-																(projectPlaybackState === "switching" &&
-																	pendingProjectPlaybackPositionRef.current?.shouldPlay === true)
+															? hasProjectPlaybackIntent(
+																	projectPlaybackState,
+																	pendingProjectPlaybackPositionRef.current?.shouldPlay,
+																)
 															: isPlaying
 													}
 													currentTime={
@@ -4100,7 +4144,7 @@ export default function VideoEditor() {
 													isFullscreen={isFullscreen}
 													onToggleFullscreen={toggleFullscreen}
 													onTogglePlayPause={togglePlayPause}
-													onSeek={handleSeek}
+													onSeek={handlePlaybackSeek}
 												/>
 											</div>
 										</div>
@@ -4295,7 +4339,7 @@ export default function VideoEditor() {
 								<TimelineEditor
 									videoDuration={duration}
 									currentTime={currentTime}
-									onSeek={handleSeek}
+									onSeek={handleSceneTimelineSeek}
 									zoomRegions={zoomRegions}
 									onZoomAdded={handleZoomAdded}
 									autoZoomEnabled={autoZoomEnabled}

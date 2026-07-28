@@ -1,6 +1,20 @@
 import { buildExportTimelineSegments } from "@/lib/exporter/exportTimeline";
 import type { SpeedRegion, TrimRegion } from "./types";
 
+export type ProjectPlaybackControllerState =
+	| "scene"
+	| "playing"
+	| "switching"
+	| "paused"
+	| "completed";
+
+export function hasProjectPlaybackIntent(
+	state: ProjectPlaybackControllerState,
+	pendingShouldPlay: boolean | undefined,
+) {
+	return state === "playing" || (state === "switching" && pendingShouldPlay === true);
+}
+
 export interface ProjectPlaybackSourceSegment {
 	sourceStartSeconds: number;
 	sourceEndSeconds: number;

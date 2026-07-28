@@ -12,13 +12,20 @@ function createHandlers(
 	} = {},
 ) {
 	const video = document.createElement("video");
-	Object.defineProperty(video, "paused", { configurable: true, value: false });
+	let paused = false;
+	Object.defineProperty(video, "paused", { configurable: true, get: () => paused });
 	Object.defineProperty(video, "duration", {
 		configurable: true,
 		value: options.duration ?? 10,
 	});
 	video.currentTime = options.currentTime ?? 0;
-	const pause = vi.spyOn(video, "pause").mockImplementation(() => undefined);
+	const pause = vi.spyOn(video, "pause").mockImplementation(() => {
+		paused = true;
+	});
+	const play = vi.spyOn(video, "play").mockImplementation(() => {
+		paused = false;
+		return Promise.resolve();
+	});
 	const handlers = createVideoEventHandlers({
 		video,
 		isSeekingRef: { current: false },
@@ -32,7 +39,14 @@ function createHandlers(
 		trimRegionsRef: { current: options.trimRegions ?? [] },
 		speedRegionsRef: { current: [] },
 	});
-	return { handlers, pause };
+	return {
+		handlers,
+		pause,
+		play,
+		setPaused: (value: boolean) => {
+			paused = value;
+		},
+	};
 }
 
 describe("video seeking playback intent", () => {
@@ -96,6 +110,30 @@ describe("video seeking playback intent", () => {
 		expect(onTerminalTrim.mock.invocationCallOrder[0]).toBeLessThan(
 			pause.mock.invocationCallOrder[0],
 		);
+		requestFrame.mockRestore();
+	});
+
+	it("resumes playback when the media pauses during a middle-trim seek", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const { handlers, play, setPaused } = createHandlers(true, {
+			currentTime: 2,
+			duration: 10,
+			trimRegions: [{ id: "middle", startMs: 2000, endMs: 4000 }],
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+		setPaused(true);
+		handlers.handlePause();
+		handlers.handleSeeked();
+
+		expect(play).toHaveBeenCalledOnce();
 		requestFrame.mockRestore();
 	});
 });

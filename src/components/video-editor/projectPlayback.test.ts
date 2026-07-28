@@ -4,6 +4,7 @@ import {
 	getEffectiveSceneDuration,
 	getNextProjectPlaybackSegment,
 	getProjectPlaybackDuration,
+	hasProjectPlaybackIntent,
 	type ProjectPlaybackScene,
 	projectTimeToSceneSource,
 	sceneSourceTimeToProjectTime,
@@ -25,6 +26,13 @@ function scene(
 }
 
 describe("project playback plan", () => {
+	it("does not treat a paused scene switch as active playback", () => {
+		expect(hasProjectPlaybackIntent("switching", false)).toBe(false);
+		expect(hasProjectPlaybackIntent("switching", undefined)).toBe(false);
+		expect(hasProjectPlaybackIntent("switching", true)).toBe(true);
+		expect(hasProjectPlaybackIntent("playing", false)).toBe(true);
+	});
+
 	it("uses effective durations after trims and speed changes", () => {
 		const trimRegions = [{ id: "trim", startMs: 2000, endMs: 4000 }];
 		const speedRegions = [{ id: "speed", startMs: 5000, endMs: 7000, speed: 2 as const }];
