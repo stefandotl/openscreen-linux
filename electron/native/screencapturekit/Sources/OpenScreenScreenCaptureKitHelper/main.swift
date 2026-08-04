@@ -160,7 +160,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let target = try makeCaptureTarget(from: content)
 		outputWidth = target.width
 		outputHeight = target.height
-		let configuration = makeStreamConfiguration()
+		let configuration = try makeStreamConfiguration()
 		let stream = SCStream(filter: target.filter, configuration: configuration, delegate: self)
 
 		try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
@@ -376,7 +376,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 	}
 
-	private func makeStreamConfiguration() -> SCStreamConfiguration {
+	private func makeStreamConfiguration() throws -> SCStreamConfiguration {
 		let configuration = SCStreamConfiguration()
 		configuration.width = outputWidth
 		configuration.height = outputHeight
@@ -391,20 +391,15 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 		if request.audio.microphone.enabled {
 			guard supportsNativeMicrophoneCapture(streamConfig: configuration) else {
-				nativeMicrophoneEnabled = false
-				emit([
-					"event": "warning",
-					"code": "microphone-unavailable",
-					"message": "Native microphone capture requires ScreenCaptureKit microphone support on this macOS version.",
-				])
-				return configuration
+				throw HelperError.unsupportedFeature(
+					"Native microphone capture requires ScreenCaptureKit microphone support on this macOS version."
+				)
 			}
+			let microphoneDeviceId = try resolveMicrophoneCaptureDeviceID()
 			nativeMicrophoneEnabled = true
 			configuration.capturesAudio = true
 			configuration.setValue(true, forKey: "captureMicrophone")
-			if let deviceId = resolveMicrophoneCaptureDeviceID() {
-				configuration.setValue(deviceId, forKey: "microphoneCaptureDeviceID")
-			}
+			configuration.setValue(microphoneDeviceId, forKey: "microphoneCaptureDeviceID")
 		} else {
 			nativeMicrophoneEnabled = false
 		}
@@ -606,24 +601,36 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			SCStreamOutputType(rawValue: microphoneOutputTypeRawValue) != nil
 	}
 
-	private func resolveMicrophoneCaptureDeviceID() -> String? {
+	private func resolveMicrophoneCaptureDeviceID() throws -> String {
 		let devices = AVCaptureDevice.devices(for: .audio)
-
-		if let deviceName = request.audio.microphone.deviceName?.trimmingCharacters(in: .whitespacesAndNewlines),
-			!deviceName.isEmpty,
-			let device = devices.first(where: { $0.localizedName == deviceName })
-		{
-			return device.uniqueID
-		}
 
 		if let deviceId = request.audio.microphone.deviceId?.trimmingCharacters(in: .whitespacesAndNewlines),
 			!deviceId.isEmpty,
+			deviceId != "default",
+			deviceId != "communications",
 			devices.contains(where: { $0.uniqueID == deviceId })
 		{
 			return deviceId
 		}
 
-		return nil
+		if let deviceName = request.audio.microphone.deviceName?.trimmingCharacters(in: .whitespacesAndNewlines),
+			!deviceName.isEmpty
+		{
+			let matches = devices.filter { $0.localizedName == deviceName }
+			if matches.count == 1, let device = matches.first {
+				return device.uniqueID
+			}
+			if matches.count > 1 {
+				throw HelperError.sourceNotFound(
+					"Multiple microphones match the selected device name \"\(deviceName)\". Select a uniquely named input device."
+				)
+			}
+		}
+
+		let description = request.audio.microphone.deviceName ?? request.audio.microphone.deviceId ?? "unknown microphone"
+		throw HelperError.sourceNotFound(
+			"Selected microphone \"\(description)\" could not be resolved. Recording was not started."
+		)
 	}
 }
 

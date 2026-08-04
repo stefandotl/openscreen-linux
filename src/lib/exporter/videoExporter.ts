@@ -26,6 +26,14 @@ import type { ExportConfig, ExportProgress, ExportResult } from "./types";
 const ENCODER_STALL_TIMEOUT_MS = 15_000;
 const ENCODER_FLUSH_TIMEOUT_MS = 20_000;
 
+function roundPerfMs(value: number) {
+	return Math.round(value * 10) / 10;
+}
+
+function logNativeNvencPerf(details: Record<string, unknown>) {
+	console.info(`[native-nvenc-perf] ${JSON.stringify(details)}`);
+}
+
 export type LinuxExportFrameSource = "auto" | "canvas" | "readback";
 
 export interface VideoExporterConfig extends ExportConfig {
@@ -264,6 +272,7 @@ export class VideoExporter {
 
 	private async tryNativeGpuExport(): Promise<ExportResult | null> {
 		if (!this.config.preferNativeNvenc) return null;
+		const preparationStartedAt = performance.now();
 		const platform = await getPlatform();
 		if (
 			!shouldAttemptNativeNvencExport({
@@ -285,11 +294,37 @@ export class VideoExporter {
 		let webcamMetadataDecoder: StreamingVideoDecoder | null = null;
 		let removeProgressListener: (() => void) | null = null;
 		try {
-			const videoInfo = await metadataDecoder.loadMetadata(this.config.videoUrl);
+			logNativeNvencPerf({ phase: "preparation-start" });
+			const videoInfo = await metadataDecoder.loadMetadata(this.config.videoUrl, (timing) => {
+				logNativeNvencPerf({
+					phase: "metadata",
+					source: "screen",
+					sourceBytes: timing.sourceBytes,
+					fileLoadMs: roundPerfMs(timing.fileLoadMs),
+					demuxerLoadMs: roundPerfMs(timing.demuxerLoadMs),
+					mediaInfoMs: roundPerfMs(timing.mediaInfoMs),
+					packetScanMs: roundPerfMs(timing.packetScanMs),
+					totalMs: roundPerfMs(timing.totalMs),
+				});
+			});
 			let webcamInfo: Awaited<ReturnType<StreamingVideoDecoder["loadMetadata"]>> | null = null;
 			if (this.config.webcamVideoUrl && this.config.webcamLayoutPreset !== "no-webcam") {
 				webcamMetadataDecoder = new StreamingVideoDecoder();
-				webcamInfo = await webcamMetadataDecoder.loadMetadata(this.config.webcamVideoUrl);
+				webcamInfo = await webcamMetadataDecoder.loadMetadata(
+					this.config.webcamVideoUrl,
+					(timing) => {
+						logNativeNvencPerf({
+							phase: "metadata",
+							source: "webcam",
+							sourceBytes: timing.sourceBytes,
+							fileLoadMs: roundPerfMs(timing.fileLoadMs),
+							demuxerLoadMs: roundPerfMs(timing.demuxerLoadMs),
+							mediaInfoMs: roundPerfMs(timing.mediaInfoMs),
+							packetScanMs: roundPerfMs(timing.packetScanMs),
+							totalMs: roundPerfMs(timing.totalMs),
+						});
+					},
+				);
 			}
 			const blockers = getNativeGpuExportBlockers(this.config, videoInfo, webcamInfo);
 			if (blockers.length > 0) {
@@ -298,9 +333,27 @@ export class VideoExporter {
 					error: `Required native GPU export does not support this project: ${blockers.join("; ")}`,
 				};
 			}
+			const planStartedAt = performance.now();
 			const plan = createNativeGpuExportPlan(this.config, videoInfo, webcamInfo);
+			logNativeNvencPerf({
+				phase: "frame-plan",
+				durationMs: roundPerfMs(performance.now() - planStartedAt),
+				frames: plan.frames.length,
+				zoomRegions: this.config.zoomRegions.length,
+				trimRegions: this.config.trimRegions?.length ?? 0,
+				speedRegions: this.config.speedRegions?.length ?? 0,
+			});
+			const assetsStartedAt = performance.now();
 			const assets = await createNativeGpuExportAssets(this.config);
 			plan.overlays = assets.overlays;
+			logNativeNvencPerf({
+				phase: "renderer-assets",
+				durationMs: roundPerfMs(performance.now() - assetsStartedAt),
+				annotations: this.config.annotationRegions?.length ?? 0,
+				overlays: assets.overlays.length,
+				wallpaperBytes: assets.wallpaperPng.byteLength,
+				overlayBytes: assets.overlayPngs.reduce((total, png) => total + png.byteLength, 0),
+			});
 			this.reportProgress({
 				currentFrame: 0,
 				totalFrames: plan.frames.length,
@@ -323,6 +376,7 @@ export class VideoExporter {
 				});
 			});
 
+			const startIpcStartedAt = performance.now();
 			const startResult = await window.electronAPI.startNativeGpuExport({
 				plan,
 				outputPath: this.config.nativeOutputPath!,
@@ -333,6 +387,14 @@ export class VideoExporter {
 				speedRegions: this.config.speedRegions,
 				wallpaperPng: assets.wallpaperPng,
 				overlayPngs: assets.overlayPngs,
+			});
+			logNativeNvencPerf({
+				phase: "start-ipc",
+				durationMs: roundPerfMs(performance.now() - startIpcStartedAt),
+				preparationTotalMs: roundPerfMs(performance.now() - preparationStartedAt),
+				success: startResult.success,
+				frames: plan.frames.length,
+				overlays: plan.overlays.length,
 			});
 			if (!startResult.success || !startResult.sessionId) {
 				return {
@@ -368,6 +430,11 @@ export class VideoExporter {
 			});
 			return { success: true, path: finishResult.path };
 		} catch (error) {
+			logNativeNvencPerf({
+				phase: "preparation-failed",
+				durationMs: roundPerfMs(performance.now() - preparationStartedAt),
+				error: error instanceof Error ? error.message : String(error),
+			});
 			const sessionId = this.nativeGpuSessionId;
 			this.nativeGpuSessionId = null;
 			if (sessionId) {

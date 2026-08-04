@@ -222,6 +222,16 @@ if (process.platform !== "win32") {
 	process.exit(0);
 }
 
+if (
+	WITH_MICROPHONE &&
+	(!process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID ||
+		!process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME)
+) {
+	throw new Error(
+		"Microphone capture requires OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID and OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME; default-device fallback is disabled.",
+	);
+}
+
 if (!fs.existsSync(HELPER_PATH)) {
 	throw new Error(`WGC helper not found at ${HELPER_PATH}. Run npm run build:native:win first.`);
 }
@@ -252,7 +262,7 @@ const config = {
 	captureSystemAudio: WITH_SYSTEM_AUDIO,
 	captureMic: WITH_MICROPHONE,
 	captureCursor: CAPTURE_CURSOR,
-	microphoneDeviceId: process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID ?? "default",
+	microphoneDeviceId: process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID ?? "",
 	microphoneDeviceName: process.env.OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME ?? "",
 	microphoneGain: 1.4,
 	webcamEnabled: WITH_WEBCAM,

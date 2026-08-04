@@ -3,6 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useScopedT } from "@/contexts/I18nContext";
 import {
+	acquireSelectedMicrophone,
+	assertSelectedMicrophoneAvailable,
+} from "@/lib/microphoneCapture";
+import {
 	type NativeMacRecordingRequest,
 	parseMacDisplayIdFromSourceId,
 	parseMacWindowIdFromSourceId,
@@ -45,10 +49,10 @@ const RECORDING_FILE_PREFIX = "recording-";
 const VIDEO_FILE_EXTENSION = ".webm";
 const WEBCAM_FILE_SUFFIX = "-webcam";
 
-const AUDIO_BITRATE_VOICE = 128_000;
-const AUDIO_BITRATE_SYSTEM = 192_000;
+const AUDIO_BITRATE_VOICE = 256_000;
+const AUDIO_BITRATE_SYSTEM = 320_000;
 
-const MIC_GAIN_BOOST = 1.4;
+const MIC_GAIN = 1;
 const WEBCAM_TARGET_FRAME_RATE = 30;
 
 type UseScreenRecorderReturn = {
@@ -1043,7 +1047,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						enabled: microphoneEnabled,
 						deviceId: microphoneDeviceId,
 						deviceName: microphoneDeviceName,
-						gain: MIC_GAIN_BOOST,
+						gain: MIC_GAIN,
 					},
 				},
 				webcam: {
@@ -1181,7 +1185,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						enabled: microphoneEnabled,
 						deviceId: microphoneDeviceId,
 						deviceName: microphoneDeviceName,
-						gain: MIC_GAIN_BOOST,
+						gain: MIC_GAIN,
 					},
 				},
 				webcam: {
@@ -1340,6 +1344,13 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				teardownMedia();
 				return;
 			}
+			if (microphoneEnabled) {
+				await assertSelectedMicrophoneAvailable(
+					navigator.mediaDevices,
+					microphoneDeviceId,
+					microphoneDeviceName,
+				);
+			}
 
 			if (await startNativeWindowsRecordingIfAvailable(selectedSource, countdownRunToken)) {
 				return;
@@ -1411,27 +1422,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			}
 
 			if (microphoneEnabled) {
-				try {
-					microphoneStream.current = await navigator.mediaDevices.getUserMedia({
-						audio: microphoneDeviceId
-							? {
-									deviceId: { exact: microphoneDeviceId },
-									echoCancellation: true,
-									noiseSuppression: true,
-									autoGainControl: true,
-								}
-							: {
-									echoCancellation: true,
-									noiseSuppression: true,
-									autoGainControl: true,
-								},
-						video: false,
-					});
-				} catch (audioError) {
-					console.warn("Failed to get microphone access:", audioError);
-					toast.error(t("recording.microphoneDenied"));
-					setMicrophoneEnabled(false);
-				}
+				microphoneStream.current = await acquireSelectedMicrophone(
+					navigator.mediaDevices,
+					microphoneDeviceId,
+					microphoneDeviceName,
+				);
 			}
 
 			if (!isCountdownRunActive(countdownRunToken)) {
@@ -1480,11 +1475,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				mixingContext.current = ctx;
 				const systemSource = ctx.createMediaStreamSource(new MediaStream([systemAudioTrack]));
 				const micSource = ctx.createMediaStreamSource(new MediaStream([micAudioTrack]));
-				const micGain = ctx.createGain();
-				micGain.gain.value = MIC_GAIN_BOOST;
 				const destination = ctx.createMediaStreamDestination();
 				systemSource.connect(destination);
-				micSource.connect(micGain).connect(destination);
+				micSource.connect(destination);
 				stream.current.addTrack(destination.stream.getAudioTracks()[0]);
 			} else if (systemAudioTrack) {
 				stream.current.addTrack(systemAudioTrack);

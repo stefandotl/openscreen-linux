@@ -20,6 +20,14 @@ const MAX_OVERLAYS = 10_000;
 const MAX_PLAN_FRAMES = 20_736_000;
 const MAX_OUTPUT_DIMENSION = 4096;
 
+function roundPerfMs(value: number) {
+	return Math.round(value * 10) / 10;
+}
+
+function logNativeNvencMainPerf(details: Record<string, unknown>) {
+	console.info(`[native-nvenc-main-perf] ${JSON.stringify(details)}`);
+}
+
 interface NativeGpuExportDependencies {
 	getFfmpegBinary: () => string;
 	resolveApprovedVideoPath: (filePath?: string | null) => string | null;
@@ -56,6 +64,9 @@ interface NativeGpuExportSession {
 	stderr: string;
 	stdoutBuffer: string;
 	cancelled: boolean;
+	startupStartedAt: number;
+	helperSpawnedAt: number;
+	firstProgressLogged: boolean;
 }
 
 const sessions = new Map<string, NativeGpuExportSession>();
@@ -333,6 +344,16 @@ function consumeHelperLine(session: NativeGpuExportSession, line: string) {
 				finiteNumber(progress.totalFrames) &&
 				finiteNumber(progress.fps)
 			) {
+				if (!session.firstProgressLogged) {
+					session.firstProgressLogged = true;
+					logNativeNvencMainPerf({
+						startupId: session.id,
+						phase: "first-helper-progress",
+						sinceRequestMs: roundPerfMs(performance.now() - session.startupStartedAt),
+						sinceHelperSpawnMs: roundPerfMs(performance.now() - session.helperSpawnedAt),
+						currentFrame: progress.frames,
+					});
+				}
 				emitProgress(session, {
 					phase: "rendering",
 					currentFrame: progress.frames,
@@ -366,8 +387,10 @@ async function prepareStaticAssets(
 	tempDir: string,
 	payload: NativeGpuExportRequest,
 ) {
+	const totalStartedAt = performance.now();
 	const wallpaperPngPath = path.join(tempDir, "wallpaper.png");
 	const wallpaperNv12Path = path.join(tempDir, "wallpaper.nv12");
+	const wallpaperStartedAt = performance.now();
 	await fs.writeFile(wallpaperPngPath, Buffer.from(payload.wallpaperPng));
 	await runCapturedProcess(
 		ffmpeg,
@@ -388,8 +411,10 @@ async function prepareStaticAssets(
 		],
 		"Wallpaper conversion",
 	);
+	const wallpaperFinishedAt = performance.now();
 
 	const overlays = [];
+	const overlaysStartedAt = performance.now();
 	for (let index = 0; index < payload.plan.overlays.length; index++) {
 		const overlay = payload.plan.overlays[index];
 		const overlayPngPath = path.join(tempDir, `overlay-${index}.png`);
@@ -416,7 +441,15 @@ async function prepareStaticAssets(
 		);
 		overlays.push({ ...overlay, rgbaPath: overlayRgbaPath });
 	}
-	return { wallpaperNv12Path, overlays };
+	return {
+		wallpaperNv12Path,
+		overlays,
+		performance: {
+			wallpaperMs: wallpaperFinishedAt - wallpaperStartedAt,
+			overlaysMs: performance.now() - overlaysStartedAt,
+			totalMs: performance.now() - totalStartedAt,
+		},
+	};
 }
 
 async function runMux(session: NativeGpuExportSession, command: string, args: string[]) {
@@ -451,6 +484,8 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 	ipcMain.handle(
 		NATIVE_GPU_EXPORT_CHANNELS.start,
 		async (event, payload: NativeGpuExportRequest) => {
+			const requestStartedAt = performance.now();
+			const startupId = randomUUID();
 			let tempDir: string | null = null;
 			try {
 				if (process.platform !== "linux") {
@@ -458,7 +493,15 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 						`Native GPU export requires Linux; current platform is ${process.platform}`,
 					);
 				}
+				const validationStartedAt = performance.now();
 				validateRequest(payload);
+				logNativeNvencMainPerf({
+					startupId,
+					phase: "validate-request",
+					durationMs: roundPerfMs(performance.now() - validationStartedAt),
+					frames: payload.plan.frames.length,
+					overlays: payload.plan.overlays.length,
+				});
 				const helperPath = findLinuxExportHelperPath();
 				if (!helperPath) {
 					throw new Error(
@@ -492,24 +535,40 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 				await fs.mkdir(path.dirname(outputPath), { recursive: true });
 				tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openscreen-native-gpu-export-"));
 				const assets = await prepareStaticAssets(dependencies.getFfmpegBinary(), tempDir, payload);
+				logNativeNvencMainPerf({
+					startupId,
+					phase: "prepare-static-assets",
+					durationMs: roundPerfMs(assets.performance.totalMs),
+					wallpaperMs: roundPerfMs(assets.performance.wallpaperMs),
+					overlaysMs: roundPerfMs(assets.performance.overlaysMs),
+					overlays: payload.plan.overlays.length,
+				});
 				const planPath = path.join(tempDir, "plan.json");
 				const videoOnlyPath = path.join(tempDir, "video.mp4");
-				await fs.writeFile(
-					planPath,
-					JSON.stringify({
-						...payload.plan,
-						inputPath,
-						...(payload.plan.webcam && webcamInputPath
-							? { webcam: { ...payload.plan.webcam, inputPath: webcamInputPath } }
-							: {}),
-						wallpaperNv12Path: assets.wallpaperNv12Path,
-						overlays: assets.overlays,
-					}),
-				);
+				const planSerializationStartedAt = performance.now();
+				const serializedPlan = JSON.stringify({
+					...payload.plan,
+					inputPath,
+					...(payload.plan.webcam && webcamInputPath
+						? { webcam: { ...payload.plan.webcam, inputPath: webcamInputPath } }
+						: {}),
+					wallpaperNv12Path: assets.wallpaperNv12Path,
+					overlays: assets.overlays,
+				});
+				const planSerializedAt = performance.now();
+				await fs.writeFile(planPath, serializedPlan);
+				logNativeNvencMainPerf({
+					startupId,
+					phase: "write-plan",
+					serializeMs: roundPerfMs(planSerializedAt - planSerializationStartedAt),
+					writeMs: roundPerfMs(performance.now() - planSerializedAt),
+					bytes: Buffer.byteLength(serializedPlan),
+				});
+				const helperSpawnedAt = performance.now();
 				const child = spawn(helperPath, ["--plan", planPath, videoOnlyPath], {
 					stdio: ["ignore", "pipe", "pipe"],
 				});
-				const sessionId = randomUUID();
+				const sessionId = startupId;
 				const session: NativeGpuExportSession = {
 					id: sessionId,
 					helperProcess: child,
@@ -530,12 +589,22 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 					stderr: "",
 					stdoutBuffer: "",
 					cancelled: false,
+					startupStartedAt: requestStartedAt,
+					helperSpawnedAt,
+					firstProgressLogged: false,
 				};
 				child.stdout?.on("data", (chunk: Buffer) => consumeHelperStdout(session, chunk));
 				child.stderr?.on("data", (chunk: Buffer) => {
 					session.stderr = tailText(session.stderr + chunk.toString("utf-8"));
 				});
 				sessions.set(sessionId, session);
+				logNativeNvencMainPerf({
+					startupId,
+					phase: "startup-total",
+					durationMs: roundPerfMs(performance.now() - requestStartedAt),
+					frames: session.totalFrames,
+					overlays: payload.plan.overlays.length,
+				});
 				console.info("[native-gpu-export] Started zero-copy export", {
 					helperPath,
 					inputPath,
@@ -546,6 +615,12 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 				});
 				return { success: true, sessionId };
 			} catch (error) {
+				logNativeNvencMainPerf({
+					startupId,
+					phase: "startup-failed",
+					durationMs: roundPerfMs(performance.now() - requestStartedAt),
+					error: error instanceof Error ? error.message : String(error),
+				});
 				if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
 				console.error("[native-gpu-export] Failed to start required export", error);
 				return {

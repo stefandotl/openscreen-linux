@@ -65,9 +65,8 @@ std::wstring normalizeDeviceName(const std::wstring& value) {
     return result;
 }
 
-int scoreDeviceName(const std::wstring& candidateName, const std::wstring& candidateId, const std::wstring& requestedName) {
+int scoreDeviceName(const std::wstring& candidateName, const std::wstring& requestedName) {
     const std::wstring candidate = normalizeDeviceName(candidateName);
-    const std::wstring id = normalizeDeviceName(candidateId);
     const std::wstring requested = normalizeDeviceName(requestedName);
     if (requested.empty()) {
         return 0;
@@ -78,28 +77,7 @@ int scoreDeviceName(const std::wstring& candidateName, const std::wstring& candi
     if (!candidate.empty() && (candidate.find(requested) != std::wstring::npos || requested.find(candidate) != std::wstring::npos)) {
         return 900;
     }
-    if (!id.empty() && (id.find(requested) != std::wstring::npos || requested.find(id) != std::wstring::npos)) {
-        return 800;
-    }
-
-    int score = 0;
-    size_t pos = 0;
-    while (pos < requested.size()) {
-        const size_t end = requested.find(L' ', pos);
-        const std::wstring word = requested.substr(pos, end == std::wstring::npos ? std::wstring::npos : end - pos);
-        if (word.size() > 1 && word != L"microphone" && word != L"mic" && word != L"audio" && word != L"input") {
-            if (candidate.find(word) != std::wstring::npos) {
-                score += 100;
-            } else if (id.find(word) != std::wstring::npos) {
-                score += 50;
-            }
-        }
-        if (end == std::wstring::npos) {
-            break;
-        }
-        pos = end + 1;
-    }
-    return score;
+    return 0;
 }
 
 std::wstring getDeviceFriendlyName(IMMDevice* device) {
@@ -152,27 +130,33 @@ bool WasapiLoopbackCapture::initialize(WasapiCaptureEndpoint endpoint, const std
         return false;
     }
 
-    if (endpoint == WasapiCaptureEndpoint::Microphone && !deviceId.empty() && deviceId != L"default") {
+    if (endpoint == WasapiCaptureEndpoint::Microphone) {
+        if (deviceId.empty() || deviceId == L"default" || deviceId == L"communications") {
+            std::wcerr << L"ERROR: Native microphone capture requires a concrete selected device id"
+                       << std::endl;
+            return false;
+        }
+
         hr = deviceEnumerator_->GetDevice(deviceId.c_str(), &device_);
         if (FAILED(hr)) {
-            std::wcerr << L"WARNING: Could not resolve microphone device id directly"
-                       << std::endl;
             device_.Reset();
         }
-    }
 
-    if (endpoint == WasapiCaptureEndpoint::Microphone && !device_ && !deviceName.empty()) {
-        if (!resolveMicrophoneByName(deviceName)) {
-            std::wcerr << L"WARNING: Could not resolve microphone by name; using default capture endpoint"
-                       << std::endl;
+        // Chromium device IDs are origin-specific and commonly do not equal WASAPI
+        // endpoint IDs. A unique name match is therefore an explicit mapping of the
+        // selected device, not permission to choose another endpoint.
+        if (!device_ && !deviceName.empty()) {
+            resolveMicrophoneByName(deviceName);
         }
-    }
 
-    if (!device_) {
-        const EDataFlow flow =
-            endpoint == WasapiCaptureEndpoint::SystemLoopback ? eRender : eCapture;
-        hr = deviceEnumerator_->GetDefaultAudioEndpoint(flow, eConsole, &device_);
-        if (!succeeded(hr, "GetDefaultAudioEndpoint")) {
+        if (!device_) {
+            std::wcerr << L"ERROR: Selected microphone could not be resolved exactly: "
+                       << deviceName << L" (id=" << deviceId << L")" << std::endl;
+            return false;
+        }
+    } else {
+        hr = deviceEnumerator_->GetDefaultAudioEndpoint(eRender, eConsole, &device_);
+        if (!succeeded(hr, "GetDefaultAudioEndpoint(system loopback)")) {
             return false;
         }
     }
@@ -236,6 +220,7 @@ bool WasapiLoopbackCapture::resolveMicrophoneByName(const std::wstring& deviceNa
     std::wstring bestId;
     std::wstring bestName;
     int bestScore = 0;
+    bool bestMatchIsAmbiguous = false;
     for (UINT i = 0; i < count; ++i) {
         Microsoft::WRL::ComPtr<IMMDevice> candidate;
         hr = devices->Item(i, &candidate);
@@ -251,17 +236,27 @@ bool WasapiLoopbackCapture::resolveMicrophoneByName(const std::wstring& deviceNa
         }
 
         const std::wstring candidateName = getDeviceFriendlyName(candidate.Get());
-        const int score = scoreDeviceName(candidateName, candidateId, deviceName);
+        const int score = scoreDeviceName(candidateName, deviceName);
         std::wcerr << L"Native microphone candidate: " << candidateName << L" score=" << score << std::endl;
         if (score > bestScore) {
             bestScore = score;
             bestDevice = candidate;
             bestId = candidateId;
             bestName = candidateName;
+            bestMatchIsAmbiguous = false;
+        } else if (score > 0 && score == bestScore) {
+            bestMatchIsAmbiguous = true;
         }
     }
 
-    if (!bestDevice || bestScore <= 0) {
+    if (!bestDevice) {
+        std::wcerr << L"ERROR: No sufficiently exact native microphone matches selected device name: "
+                   << deviceName << std::endl;
+        return false;
+    }
+    if (bestMatchIsAmbiguous) {
+        std::wcerr << L"ERROR: Multiple native microphones match selected device name: "
+                   << deviceName << std::endl;
         return false;
     }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isConcreteMicrophoneDeviceId } from "@/lib/microphoneCapture";
 
 export interface MicrophoneDevice {
 	deviceId: string;
@@ -29,7 +30,10 @@ export function useMicrophoneDevices(enabled: boolean = true) {
 
 				const allDevices = await navigator.mediaDevices.enumerateDevices();
 				const audioInputs = allDevices
-					.filter((device) => device.kind === "audioinput")
+					.filter(
+						(device) =>
+							device.kind === "audioinput" && isConcreteMicrophoneDeviceId(device.deviceId),
+					)
 					.map((device) => ({
 						deviceId: device.deviceId,
 						label: device.label || `Microphone ${device.deviceId.slice(0, 8)}`,

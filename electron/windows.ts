@@ -218,6 +218,14 @@ export function createEditorWindow(): BrowserWindow {
 		});
 	});
 
+	// Keep native export preparation timings visible beside the main-process timings.
+	// Filtering here avoids duplicating unrelated renderer console output.
+	win.webContents.on("console-message", (details) => {
+		if (details.message.startsWith("[native-nvenc-perf]")) {
+			console.info(details.message);
+		}
+	});
+
 	win.webContents.on("did-finish-load", () => {
 		win?.webContents.send("main-process-message", new Date().toLocaleString());
 	});

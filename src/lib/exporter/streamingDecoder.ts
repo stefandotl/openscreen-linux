@@ -63,6 +63,15 @@ export interface DecodedVideoInfo {
 	audioCodec?: string;
 }
 
+export interface StreamingVideoMetadataTiming {
+	sourceBytes: number;
+	fileLoadMs: number;
+	demuxerLoadMs: number;
+	mediaInfoMs: number;
+	packetScanMs: number;
+	totalMs: number;
+}
+
 type EarlyDecodeEndCheck = {
 	cancelled: boolean;
 	lastDecodedFrameSec: number | null;
@@ -222,23 +231,33 @@ export class StreamingVideoDecoder {
 		};
 	}
 
-	async loadMetadata(videoUrl: string): Promise<DecodedVideoInfo> {
+	async loadMetadata(
+		videoUrl: string,
+		onTiming?: (timing: StreamingVideoMetadataTiming) => void,
+	): Promise<DecodedVideoInfo> {
+		const totalStartedAt = performance.now();
+		const fileLoadStartedAt = performance.now();
 		const { file } = await this.loadSourceFile(videoUrl);
+		const fileLoadedAt = performance.now();
 
 		// Relative URL so it resolves in both dev (http) and packaged (file://) builds
 		const wasmUrl = new URL("./wasm/web-demuxer.wasm", window.location.href).href;
 		this.demuxer = new WebDemuxer({ wasmFilePath: wasmUrl });
+		const demuxerLoadStartedAt = performance.now();
 		await this.withTimeout(
 			this.demuxer.load(file),
 			SOURCE_LOAD_TIMEOUT_MS,
 			"Timed out while parsing the source video.",
 		);
+		const demuxerLoadedAt = performance.now();
 
+		const mediaInfoStartedAt = performance.now();
 		const mediaInfo = await this.withTimeout(
 			this.demuxer.getMediaInfo(),
 			SOURCE_LOAD_TIMEOUT_MS,
 			"Timed out while reading video metadata.",
 		);
+		const mediaInfoLoadedAt = performance.now();
 		const videoStream = mediaInfo.streams.find((s) => s.codec_type_string === "video");
 
 		let frameRate = 60;
@@ -267,6 +286,7 @@ export class StreamingVideoDecoder {
 		const scanEndSec =
 			hintedDurationSec > 0 ? hintedDurationSec + 0.5 : SCAN_UNBOUNDED_FALLBACK_SEC;
 		let maxPacketEndUs = 0;
+		const packetScanStartedAt = performance.now();
 		const scanReader = this.demuxer.read("video", 0, scanEndSec).getReader();
 		try {
 			while (true) {
@@ -282,6 +302,7 @@ export class StreamingVideoDecoder {
 				/* already closed */
 			}
 		}
+		const packetScanFinishedAt = performance.now();
 		const scannedDuration = maxPacketEndUs / 1_000_000;
 		const validatedDuration = validateDuration(mediaInfo.duration, scannedDuration);
 
@@ -298,6 +319,14 @@ export class StreamingVideoDecoder {
 			hasAudio: !!audioStream,
 			audioCodec: audioStream?.codec_string,
 		};
+		onTiming?.({
+			sourceBytes: file.size,
+			fileLoadMs: fileLoadedAt - fileLoadStartedAt,
+			demuxerLoadMs: demuxerLoadedAt - demuxerLoadStartedAt,
+			mediaInfoMs: mediaInfoLoadedAt - mediaInfoStartedAt,
+			packetScanMs: packetScanFinishedAt - packetScanStartedAt,
+			totalMs: performance.now() - totalStartedAt,
+		});
 
 		return this.metadata;
 	}
