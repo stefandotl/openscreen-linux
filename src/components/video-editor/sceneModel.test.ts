@@ -7,6 +7,7 @@ import {
 	createSceneName,
 	createScenePlaybackKey,
 	MAX_SCENE_NAME_LENGTH,
+	mergeScenesAtCut,
 	normalizeSceneName,
 	reorderScenes,
 	shouldPersistScenes,
@@ -215,5 +216,68 @@ describe("splitSceneAtSourceTime", () => {
 
 		result.secondScene.editor.zoomRegions[0].focus.cx = 0.9;
 		expect(result.firstScene.editor.zoomRegions[1].focus.cx).toBe(0.5);
+	});
+
+	it("removes a split cut without removing the media on either side", () => {
+		const split = splitSceneAtSourceTime({
+			scene,
+			splitTimeMs: 4000,
+			durationMs: 8000,
+			secondSceneId: "scene-2",
+			secondSceneName: "Scene 2",
+		});
+		if (!split) throw new Error("Expected a split result");
+
+		const result = mergeScenesAtCut(split.firstScene, split.secondScene);
+
+		expect(result).not.toBeNull();
+		expect(result?.boundaryMs).toBe(4000);
+		expect(result?.hasEditorConflicts).toBe(false);
+		expect(result?.mergedScene.id).toBe(scene.id);
+		expect(result?.mergedScene.media).toEqual(scene.media);
+		expect(result?.mergedScene.editor.trimRegions).toEqual([
+			{ id: "trim-merge-scene-1-1", startMs: 2000, endMs: 2500 },
+		]);
+		expect(result?.mergedScene.editor.zoomRegions.map((region) => region.id)).toEqual([
+			"left-zoom",
+			"crossing-zoom",
+			"right-zoom",
+		]);
+		expect(result?.mergedScene.editor.annotationRegions.map((region) => region.id)).toEqual([
+			"crossing-caption",
+			"right-caption",
+		]);
+	});
+
+	it("reports independently edited split scenes and keeps the left appearance", () => {
+		const split = splitSceneAtSourceTime({
+			scene,
+			splitTimeMs: 4000,
+			durationMs: 8000,
+			secondSceneId: "scene-2",
+			secondSceneName: "Scene 2",
+		});
+		if (!split) throw new Error("Expected a split result");
+		split.secondScene.editor.wallpaper = "linear-gradient(red, blue)";
+		split.secondScene.editor.zoomRegions[0].depth = 5;
+
+		const result = mergeScenesAtCut(split.firstScene, split.secondScene);
+
+		expect(result?.hasEditorConflicts).toBe(true);
+		expect(result?.mergedScene.editor.wallpaper).toBe(split.firstScene.editor.wallpaper);
+		expect(
+			result?.mergedScene.editor.zoomRegions.find((region) => region.id === "crossing-zoom")?.depth,
+		).toBe(split.firstScene.editor.zoomRegions[1].depth);
+	});
+
+	it("does not merge adjacent scenes that do not share a generated cut", () => {
+		expect(mergeScenesAtCut(scene, { ...scene, id: "scene-2" })).toBeNull();
+		expect(
+			mergeScenesAtCut(scene, {
+				...scene,
+				id: "scene-2",
+				media: { screenVideoPath: "/tmp/other.webm" },
+			}),
+		).toBeNull();
 	});
 });

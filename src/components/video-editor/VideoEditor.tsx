@@ -122,6 +122,7 @@ import {
 	createSceneName,
 	createScenePlaybackKey,
 	type EditorScene,
+	mergeScenesAtCut,
 	normalizeSceneName,
 	reorderScenes,
 	shouldPersistScenes,
@@ -705,6 +706,58 @@ export default function VideoEditor() {
 		exitProjectPlayback,
 		resetState,
 	]);
+
+	const handleMergeSceneCut = useCallback(
+		(rightSceneId: string) => {
+			exitProjectPlayback();
+			updateActiveSceneSnapshot();
+			const rightSceneIndex = scenesRef.current.findIndex((scene) => scene.id === rightSceneId);
+			if (rightSceneIndex <= 0) {
+				toast.error("This scene cut can no longer be removed.");
+				return;
+			}
+
+			const leftScene = scenesRef.current[rightSceneIndex - 1];
+			const rightScene = scenesRef.current[rightSceneIndex];
+			const result = mergeScenesAtCut(leftScene, rightScene);
+			if (!result) {
+				toast.error("These scenes no longer share a removable cut.");
+				return;
+			}
+
+			const keptActiveScene = activeSceneIdRef.current === leftScene.id;
+			const nextScenes = [...scenesRef.current];
+			nextScenes.splice(rightSceneIndex - 1, 2, result.mergedScene);
+			scenesRef.current = nextScenes;
+			setScenes(nextScenes);
+			activeSceneIdRef.current = result.mergedScene.id;
+			setActiveSceneId(result.mergedScene.id);
+			applySceneMedia(result.mergedScene.media);
+			resetState(result.mergedScene.editor);
+			const boundarySeconds = result.boundaryMs / 1000;
+			setCurrentTime(boundarySeconds);
+			setIsPlaying(false);
+			setSelectedZoomId(null);
+			setSelectedTrimId(null);
+			setSelectedSpeedId(null);
+			setSelectedAnnotationId(null);
+			setSelectedBlurId(null);
+
+			if (keptActiveScene && videoPlaybackRef.current?.video) {
+				void videoPlaybackRef.current.seek(boundarySeconds).catch((seekError) => {
+					console.error("Failed to seek after removing the scene cut:", seekError);
+					toast.error("The cut was removed, but preview seeking failed.");
+				});
+			} else {
+				pendingSceneSplitSeekRef.current = {
+					sceneId: result.mergedScene.id,
+					sourceTimeSeconds: boundarySeconds,
+				};
+			}
+			toast.success("Scene cut removed");
+		},
+		[applySceneMedia, exitProjectPlayback, resetState, updateActiveSceneSnapshot],
+	);
 
 	const handleSceneVideoImported = useCallback(
 		(sourcePath: string) => {
@@ -3737,6 +3790,27 @@ export default function VideoEditor() {
 		}
 	}, [exportError, editorState]);
 
+	const sceneCutOptions = useMemo(
+		() =>
+			scenes.flatMap((rightScene, index) => {
+				if (index === 0) return [];
+				const leftScene = scenes[index - 1];
+				const effectiveLeftScene =
+					leftScene.id === activeSceneId
+						? { ...leftScene, media: currentProjectMedia, editor: editorState }
+						: leftScene;
+				const effectiveRightScene =
+					rightScene.id === activeSceneId
+						? { ...rightScene, media: currentProjectMedia, editor: editorState }
+						: rightScene;
+				const mergeResult = mergeScenesAtCut(effectiveLeftScene, effectiveRightScene);
+				return mergeResult
+					? [{ rightSceneId: rightScene.id, hasEditorConflicts: mergeResult.hasEditorConflicts }]
+					: [];
+			}),
+		[activeSceneId, currentProjectMedia, editorState, scenes],
+	);
+
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center h-screen bg-background">
@@ -3771,6 +3845,7 @@ export default function VideoEditor() {
 						onSelect={handleSelectScene}
 						onAdd={handleAddScene}
 						onDelete={handleDeleteScene}
+						onMergeCut={handleMergeSceneCut}
 						onReorder={handleReorderScene}
 						onRename={handleRenameScene}
 						onCollapse={() => setIsSceneStripOpen(false)}
@@ -3779,6 +3854,7 @@ export default function VideoEditor() {
 						cancelLabel={rawT("common.actions.cancel")}
 						collapseLabel="Collapse scenes"
 						reorderLabel="Drag to reorder scene"
+						mergeCuts={sceneCutOptions}
 					/>
 				</div>
 			) : (

@@ -193,6 +193,134 @@ export interface SplitSceneResult {
 	secondScene: EditorScene;
 }
 
+export interface MergeSceneCutResult {
+	mergedScene: EditorScene;
+	boundaryMs: number;
+	hasEditorConflicts: boolean;
+}
+
+interface MatchingSceneCut {
+	leftTrim: TrimRegion;
+	rightTrim: TrimRegion;
+	boundaryMs: number;
+}
+
+function hasSameMedia(left: ProjectMedia | null, right: ProjectMedia | null) {
+	return (
+		left?.screenVideoPath === right?.screenVideoPath &&
+		left?.webcamVideoPath === right?.webcamVideoPath &&
+		left?.cursorCaptureMode === right?.cursorCaptureMode &&
+		Boolean(left?.screenVideoPath)
+	);
+}
+
+function findMatchingSceneCut(left: EditorScene, right: EditorScene): MatchingSceneCut | null {
+	if (!hasSameMedia(left.media, right.media)) return null;
+
+	for (const leftTrim of left.editor.trimRegions) {
+		if (leftTrim.source !== "scene-split") continue;
+		const rightTrim = right.editor.trimRegions.find(
+			(region) =>
+				region.source === "scene-split" &&
+				region.startMs === 0 &&
+				region.endMs === leftTrim.startMs,
+		);
+		if (rightTrim) {
+			return { leftTrim, rightTrim, boundaryMs: leftTrim.startMs };
+		}
+	}
+
+	return null;
+}
+
+function mergeRegionCollections<T extends { id: string }>(left: readonly T[], right: readonly T[]) {
+	const merged = structuredClone(left) as T[];
+	const byId = new Map(merged.map((region) => [region.id, region]));
+	let hasConflicts = false;
+
+	for (const region of right) {
+		const existing = byId.get(region.id);
+		if (!existing) {
+			const copy = structuredClone(region);
+			merged.push(copy);
+			byId.set(copy.id, copy);
+		} else if (JSON.stringify(existing) !== JSON.stringify(region)) {
+			hasConflicts = true;
+		}
+	}
+
+	return { regions: merged, hasConflicts };
+}
+
+function editorAppearance(editor: EditorState) {
+	return {
+		autoZoomEnabled: editor.autoZoomEnabled,
+		autoFocusAll: editor.autoFocusAll,
+		cropRegion: editor.cropRegion,
+		wallpaper: editor.wallpaper,
+		shadowIntensity: editor.shadowIntensity,
+		showBlur: editor.showBlur,
+		showTrimWaveform: editor.showTrimWaveform,
+		motionBlurAmount: editor.motionBlurAmount,
+		borderRadius: editor.borderRadius,
+		padding: editor.padding,
+		aspectRatio: editor.aspectRatio,
+		webcamLayoutPreset: editor.webcamLayoutPreset,
+		webcamMaskShape: editor.webcamMaskShape,
+		webcamMirrored: editor.webcamMirrored,
+		webcamRotation: editor.webcamRotation,
+		webcamReactiveZoom: editor.webcamReactiveZoom,
+		webcamSizePreset: editor.webcamSizePreset,
+		webcamPosition: editor.webcamPosition,
+	};
+}
+
+export function mergeScenesAtCut(
+	leftScene: EditorScene,
+	rightScene: EditorScene,
+): MergeSceneCutResult | null {
+	const cut = findMatchingSceneCut(leftScene, rightScene);
+	if (!cut) return null;
+
+	const zooms = mergeRegionCollections(leftScene.editor.zoomRegions, rightScene.editor.zoomRegions);
+	const speeds = mergeRegionCollections(
+		leftScene.editor.speedRegions,
+		rightScene.editor.speedRegions,
+	);
+	const annotations = mergeRegionCollections(
+		leftScene.editor.annotationRegions,
+		rightScene.editor.annotationRegions,
+	);
+	const remainingTrims = [
+		...leftScene.editor.trimRegions.filter((region) => region !== cut.leftTrim),
+		...rightScene.editor.trimRegions.filter((region) => region !== cut.rightTrim),
+	];
+
+	return {
+		mergedScene: {
+			...leftScene,
+			editor: {
+				...structuredClone(leftScene.editor),
+				zoomRegions: zooms.regions,
+				trimRegions: normalizeTrimRegions(
+					remainingTrims,
+					Number.MAX_SAFE_INTEGER,
+					`trim-merge-${leftScene.id}`,
+				),
+				speedRegions: speeds.regions,
+				annotationRegions: annotations.regions,
+			},
+		},
+		boundaryMs: cut.boundaryMs,
+		hasEditorConflicts:
+			JSON.stringify(editorAppearance(leftScene.editor)) !==
+				JSON.stringify(editorAppearance(rightScene.editor)) ||
+			zooms.hasConflicts ||
+			speeds.hasConflicts ||
+			annotations.hasConflicts,
+	};
+}
+
 export function splitSceneAtSourceTime({
 	scene,
 	splitTimeMs,

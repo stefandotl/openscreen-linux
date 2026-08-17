@@ -278,6 +278,19 @@ test("splits the active scene at the playhead without changing project duration"
 		await expect
 			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 10_000 })
 			.toBeCloseTo(sourceDurationSeconds, 2);
+
+		await editorWindow
+			.getByRole("button", { name: "Remove cut: Scene 1 + Scene 2", exact: true })
+			.click();
+		await expect(editorWindow.getByText("Remove this cut?", { exact: true })).toBeVisible();
+		await editorWindow.getByRole("button", { name: "Merge scenes", exact: true }).click();
+
+		await expect(secondSceneButton).not.toBeVisible();
+		await expect(editorWindow.getByTestId("scene-cut")).toHaveCount(0);
+		await expect(editorWindow.getByText("Outside scene", { exact: true })).not.toBeVisible();
+		await expect
+			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 10_000 })
+			.toBeCloseTo(sourceDurationSeconds, 2);
 	} finally {
 		await closeApp(app);
 	}

@@ -19,7 +19,11 @@ const scenes: EditorScene[] = [
 	},
 ];
 
-function renderSceneStrip(onRename = vi.fn()) {
+function renderSceneStrip(
+	onRename = vi.fn(),
+	onMergeCut = vi.fn(),
+	mergeCuts: Array<{ rightSceneId: string; hasEditorConflicts: boolean }> = [],
+) {
 	render(
 		<SceneStrip
 			scenes={scenes}
@@ -27,6 +31,7 @@ function renderSceneStrip(onRename = vi.fn()) {
 			onSelect={vi.fn()}
 			onAdd={vi.fn()}
 			onDelete={vi.fn()}
+			onMergeCut={onMergeCut}
 			onReorder={vi.fn()}
 			onRename={onRename}
 			onCollapse={vi.fn()}
@@ -35,6 +40,7 @@ function renderSceneStrip(onRename = vi.fn()) {
 			cancelLabel="Cancel"
 			collapseLabel="Collapse scenes"
 			reorderLabel="Drag to reorder scene"
+			mergeCuts={mergeCuts}
 		/>,
 	);
 }
@@ -72,5 +78,24 @@ describe("SceneStrip scene names", () => {
 
 		expect(onRename).not.toHaveBeenCalled();
 		expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+	});
+
+	it("shows a removable cut between split scenes and confirms the merge", () => {
+		const onMergeCut = vi.fn();
+		renderSceneStrip(vi.fn(), onMergeCut, [{ rightSceneId: "demo", hasEditorConflicts: false }]);
+
+		fireEvent.click(screen.getByRole("button", { name: "Remove cut: Opening + Product demo" }));
+		expect(screen.getByText("Remove this cut?")).toBeInTheDocument();
+		fireEvent.click(screen.getByRole("button", { name: "Merge scenes" }));
+
+		expect(onMergeCut).toHaveBeenCalledWith("demo");
+	});
+
+	it("warns when the split scenes have conflicting editor settings", () => {
+		renderSceneStrip(vi.fn(), vi.fn(), [{ rightSceneId: "demo", hasEditorConflicts: true }]);
+
+		fireEvent.click(screen.getByRole("button", { name: "Remove cut: Opening + Product demo" }));
+
+		expect(screen.getByText(/Both scenes were edited after the split/)).toBeInTheDocument();
 	});
 });

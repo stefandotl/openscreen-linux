@@ -1,4 +1,4 @@
-import { Film, GripVertical, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
+import { Film, GitMerge, GripVertical, PanelLeftClose, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import {
 	Dialog,
@@ -16,6 +16,7 @@ interface SceneStripProps {
 	onSelect: (sceneId: string) => void;
 	onAdd: () => void;
 	onDelete: (sceneId: string) => void;
+	onMergeCut: (rightSceneId: string) => void;
 	onReorder: (sceneId: string, targetIndex: number) => void;
 	onRename: (sceneId: string, name: string) => void;
 	onCollapse: () => void;
@@ -26,6 +27,9 @@ interface SceneStripProps {
 	reorderLabel: string;
 	renameLabel?: string;
 	emptyLabel?: string;
+	mergeCuts?: Array<{ rightSceneId: string; hasEditorConflicts: boolean }>;
+	removeCutLabel?: string;
+	mergeScenesLabel?: string;
 }
 
 function sceneMediaLabel(scene: EditorScene) {
@@ -42,6 +46,7 @@ export default function SceneStrip({
 	onSelect,
 	onAdd,
 	onDelete,
+	onMergeCut,
 	onReorder,
 	onRename,
 	onCollapse,
@@ -52,19 +57,33 @@ export default function SceneStrip({
 	reorderLabel,
 	renameLabel = "Rename scene",
 	emptyLabel = "Empty scene",
+	mergeCuts = [],
+	removeCutLabel = "Remove cut",
+	mergeScenesLabel = "Merge scenes",
 }: SceneStripProps) {
 	const [pendingDeleteSceneId, setPendingDeleteSceneId] = useState<string | null>(null);
+	const [pendingMergeSceneId, setPendingMergeSceneId] = useState<string | null>(null);
 	const [draggedSceneId, setDraggedSceneId] = useState<string | null>(null);
 	const [dropIndex, setDropIndex] = useState<number | null>(null);
 	const [editingSceneId, setEditingSceneId] = useState<string | null>(null);
 	const [draftName, setDraftName] = useState("");
 	const cancelRenameRef = useRef(false);
 	const pendingDeleteScene = scenes.find((scene) => scene.id === pendingDeleteSceneId) ?? null;
+	const pendingMergeIndex = scenes.findIndex((scene) => scene.id === pendingMergeSceneId);
+	const pendingMergeLeftScene = pendingMergeIndex > 0 ? scenes[pendingMergeIndex - 1] : null;
+	const pendingMergeRightScene = pendingMergeIndex > 0 ? scenes[pendingMergeIndex] : null;
+	const pendingMergeCut = mergeCuts.find((cut) => cut.rightSceneId === pendingMergeSceneId) ?? null;
 
 	const confirmDelete = () => {
 		if (!pendingDeleteSceneId) return;
 		onDelete(pendingDeleteSceneId);
 		setPendingDeleteSceneId(null);
+	};
+
+	const confirmMerge = () => {
+		if (!pendingMergeSceneId) return;
+		onMergeCut(pendingMergeSceneId);
+		setPendingMergeSceneId(null);
 	};
 
 	const finishDrag = () => {
@@ -118,6 +137,8 @@ export default function SceneStrip({
 				{scenes.map((scene, index) => {
 					const isActive = scene.id === activeSceneId;
 					const isEditing = scene.id === editingSceneId;
+					const mergeCut = mergeCuts.find((cut) => cut.rightSceneId === scene.id);
+					const previousScene = index > 0 ? scenes[index - 1] : null;
 					return (
 						<div key={scene.id} className="relative min-w-0">
 							<div
@@ -125,6 +146,24 @@ export default function SceneStrip({
 									dropIndex === index ? "my-1 opacity-100" : "opacity-0"
 								}`}
 							/>
+							{mergeCut && previousScene && (
+								<div
+									className="relative flex h-6 items-center justify-center"
+									data-testid="scene-cut"
+								>
+									<div className="absolute inset-x-1 h-px bg-sky-400/45" />
+									<button
+										type="button"
+										onClick={() => setPendingMergeSceneId(scene.id)}
+										className="relative flex h-5 items-center gap-1 rounded-full border border-sky-400/45 bg-[#0c0d0f] px-2 text-[8px] font-medium text-sky-200 transition-colors hover:border-sky-300/75 hover:bg-sky-400/15 hover:text-white"
+										aria-label={`${removeCutLabel}: ${previousScene.name} + ${scene.name}`}
+										title={removeCutLabel}
+									>
+										<GitMerge size={10} aria-hidden="true" />
+										<span>{removeCutLabel}</span>
+									</button>
+								</div>
+							)}
 							<div
 								draggable={!isEditing}
 								onDragStart={(event) => {
@@ -295,6 +334,37 @@ export default function SceneStrip({
 							className="rounded-md bg-red-500/85 px-4 py-2 text-sm font-medium text-white hover:bg-red-500"
 						>
 							{deleteLabel}
+						</button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+			<Dialog
+				open={pendingMergeCut !== null}
+				onOpenChange={(open) => !open && setPendingMergeSceneId(null)}
+			>
+				<DialogContent className="max-w-sm border-white/10 bg-[#09090b]">
+					<DialogHeader>
+						<DialogTitle>Remove this cut?</DialogTitle>
+						<DialogDescription className="text-white/60">
+							{pendingMergeCut?.hasEditorConflicts
+								? `Both scenes were edited after the split. ${pendingMergeLeftScene?.name ?? "The left scene"}'s appearance and overlapping item settings will be used; other timeline items from both scenes will be kept.`
+								: `${pendingMergeLeftScene?.name ?? "The left scene"} and ${pendingMergeRightScene?.name ?? "the right scene"} will become one continuous scene.`}
+						</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<button
+							type="button"
+							onClick={() => setPendingMergeSceneId(null)}
+							className="rounded-md bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+						>
+							{cancelLabel}
+						</button>
+						<button
+							type="button"
+							onClick={confirmMerge}
+							className="rounded-md bg-sky-500/85 px-4 py-2 text-sm font-medium text-white hover:bg-sky-500"
+						>
+							{mergeScenesLabel}
 						</button>
 					</DialogFooter>
 				</DialogContent>
