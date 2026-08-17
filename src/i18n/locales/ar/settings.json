@@ -48,6 +48,7 @@
 		"onlyWebcam": "الكاميرا فقط",
 		"noWebcam": "بدون كاميرا",
 		"mirrorWebcam": "عكس كاميرا الويب",
+		"rotateWebcam": "تدوير كاميرا الويب",
 		"reactiveWebcam": "تصغير عند التكبير",
 		"reactiveWebcamDescription": "تتقلص الكاميرا بسلاسة أثناء تكبير الفيديو حتى لا تعيق الرؤية."
 	},

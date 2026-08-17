@@ -47,6 +47,7 @@ describe("projectPersistence media compatibility", () => {
 				webcamLayoutPreset: "picture-in-picture",
 				webcamMaskShape: "circle",
 				webcamMirrored: true,
+				webcamRotation: 180,
 				webcamSizePreset: 25,
 				webcamPosition: null,
 				exportQuality: "good",
@@ -113,6 +114,14 @@ describe("projectPersistence media compatibility", () => {
 		expect(normalizeProjectEditor({ webcamMirrored: true }).webcamMirrored).toBe(true);
 		expect(normalizeProjectEditor({ webcamMirrored: false }).webcamMirrored).toBe(false);
 		expect(normalizeProjectEditor({ webcamMirrored: "yes" as never }).webcamMirrored).toBe(false);
+	});
+
+	it("normalizes webcam rotation to supported quarter turns", () => {
+		expect(normalizeProjectEditor({ webcamRotation: 0 }).webcamRotation).toBe(0);
+		expect(normalizeProjectEditor({ webcamRotation: 90 }).webcamRotation).toBe(90);
+		expect(normalizeProjectEditor({ webcamRotation: 180 }).webcamRotation).toBe(180);
+		expect(normalizeProjectEditor({ webcamRotation: 270 }).webcamRotation).toBe(270);
+		expect(normalizeProjectEditor({ webcamRotation: 45 as never }).webcamRotation).toBe(0);
 	});
 
 	it("preserves valid caption word timing and highlight styling", () => {

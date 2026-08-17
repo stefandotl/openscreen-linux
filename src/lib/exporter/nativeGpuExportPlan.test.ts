@@ -159,6 +159,7 @@ describe("native GPU export plan", () => {
 			webcamLayoutPreset: "picture-in-picture",
 			webcamMaskShape: "circle",
 			webcamMirrored: true,
+			webcamRotation: 270,
 			webcamReactiveZoom: true,
 			webcamSizePreset: 30,
 			webcamPosition: { cx: 0.2, cy: 0.8 },
@@ -187,6 +188,7 @@ describe("native GPU export plan", () => {
 			sourceHeight: 480,
 			maskShape: "circle",
 			mirrored: true,
+			rotation: 270,
 			anchorRight: false,
 			anchorBottom: true,
 		});

@@ -48,6 +48,7 @@
 		"onlyWebcam": "Chỉ webcam",
 		"noWebcam": "Không có webcam",
 		"mirrorWebcam": "Lật webcam",
+		"rotateWebcam": "Xoay webcam",
 		"reactiveWebcam": "Thu nhỏ khi phóng to",
 		"reactiveWebcamDescription": "Camera thu nhỏ mượt mà khi video được phóng to, để không che khuất."
 	},

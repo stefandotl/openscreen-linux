@@ -1,6 +1,6 @@
 import type { SpeedRegion, TrimRegion } from "@/components/video-editor/types";
 
-export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 4 as const;
+export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 5 as const;
 
 export const NATIVE_GPU_EXPORT_CHANNELS = {
 	start: "start-native-gpu-export",
@@ -50,6 +50,7 @@ export interface NativeGpuExportPlan {
 		borderRadius: number;
 		maskShape: "rectangle" | "rounded" | "circle" | "square";
 		mirrored: boolean;
+		rotation: import("@/components/video-editor/types").WebcamRotation;
 		anchorRight: boolean;
 		anchorBottom: boolean;
 		shadow: {

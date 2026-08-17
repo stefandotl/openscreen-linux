@@ -48,6 +48,7 @@
 		"onlyWebcam": "웹캠만",
 		"noWebcam": "웹캠 없음",
 		"mirrorWebcam": "웹캠 미러링",
+		"rotateWebcam": "웹캠 회전",
 		"reactiveWebcam": "확대 시 축소",
 		"reactiveWebcamDescription": "확대하는 동안 카메라가 부드럽게 작아져 방해되지 않습니다."
 	},

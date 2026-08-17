@@ -186,6 +186,7 @@ struct WebcamPlan {
 	float borderRadius = 0.0f;
 	WebcamMaskShape maskShape = WebcamMaskShape::Rectangle;
 	bool mirrored = false;
+	int rotation = 0;
 	bool anchorRight = true;
 	bool anchorBottom = true;
 	bool shadowEnabled = false;
@@ -299,6 +300,58 @@ __device__ bool mapOutputToSource(
 	}
 	*sourceX = cropX + clampFloat(localX, 0.0f, 1.0f) * fmaxf(0.0f, cropWidth - 1.0f);
 	*sourceY = cropY + clampFloat(localY, 0.0f, 1.0f) * fmaxf(0.0f, cropHeight - 1.0f);
+	return true;
+}
+
+__device__ bool mapWebcamOutputToSource(
+	float outputX,
+	float outputY,
+	const SceneTransform &transform,
+	int sourceWidth,
+	int sourceHeight,
+	int rotation,
+	bool mirrored,
+	float *sourceX,
+	float *sourceY) {
+	if (!insideRoundedRect(outputX, outputY, transform)) return false;
+
+	const float localX = (outputX - transform.left) / transform.width;
+	const float localY = (outputY - transform.top) / transform.height;
+	const bool swapsAxes = rotation == 90 || rotation == 270;
+	const float rotatedWidth = static_cast<float>(swapsAxes ? sourceHeight : sourceWidth);
+	const float rotatedHeight = static_cast<float>(swapsAxes ? sourceWidth : sourceHeight);
+	const float sourceAspect = rotatedWidth / rotatedHeight;
+	const float targetAspect = transform.width / transform.height;
+	float cropX = 0.0f;
+	float cropY = 0.0f;
+	float cropWidth = rotatedWidth;
+	float cropHeight = rotatedHeight;
+	if (transform.cover && sourceAspect > targetAspect) {
+		cropWidth = rotatedHeight * targetAspect;
+		cropX = (rotatedWidth - cropWidth) * 0.5f;
+	} else if (transform.cover && sourceAspect < targetAspect) {
+		cropHeight = rotatedWidth / targetAspect;
+		cropY = (rotatedHeight - cropHeight) * 0.5f;
+	}
+	const float rotatedX =
+		cropX + clampFloat(localX, 0.0f, 1.0f) * fmaxf(0.0f, cropWidth - 1.0f);
+	const float rotatedY =
+		cropY + clampFloat(localY, 0.0f, 1.0f) * fmaxf(0.0f, cropHeight - 1.0f);
+
+	if (rotation == 90) {
+		*sourceX = rotatedY;
+		*sourceY = static_cast<float>(sourceHeight - 1) - rotatedX;
+	} else if (rotation == 180) {
+		*sourceX = static_cast<float>(sourceWidth - 1) - rotatedX;
+		*sourceY = static_cast<float>(sourceHeight - 1) - rotatedY;
+	} else if (rotation == 270) {
+		*sourceX = static_cast<float>(sourceWidth - 1) - rotatedY;
+		*sourceY = rotatedX;
+	} else {
+		*sourceX = rotatedX;
+		*sourceY = rotatedY;
+	}
+	if (mirrored) *sourceX = static_cast<float>(sourceWidth - 1) - *sourceX;
 	return true;
 }
 
@@ -444,6 +497,7 @@ __global__ void compositeWebcamLuma(
 	uint8_t *outputY,
 	int outputPitch,
 	SceneTransform transform,
+	int rotation,
 	bool mirrored) {
 	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
 	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
@@ -457,17 +511,18 @@ __global__ void compositeWebcamLuma(
 	const float sampleOutputY = static_cast<float>(outputYCoordinate) + 0.5f;
 	float sourceX = 0.0f;
 	float sourceYCoordinate = 0.0f;
-	if (!mapOutputToSource(
+	if (!mapWebcamOutputToSource(
 			sampleOutputX,
 			sampleOutputY,
 			transform,
 			sourceWidth,
 			sourceHeight,
+			rotation,
+			mirrored,
 			&sourceX,
 			&sourceYCoordinate)) {
 		return;
 	}
-	if (mirrored) sourceX = static_cast<float>(sourceWidth - 1) - sourceX;
 	outputY[outputYCoordinate * outputPitch + outputX] = static_cast<uint8_t>(
 		clampFloat(
 			samplePlane(
@@ -491,6 +546,7 @@ __global__ void compositeWebcamChroma(
 	int outputWidth,
 	int outputHeight,
 	SceneTransform transform,
+	int rotation,
 	bool mirrored) {
 	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
 	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
@@ -508,17 +564,18 @@ __global__ void compositeWebcamChroma(
 	const float sampleOutputY = static_cast<float>(chromaY * 2) + 1.0f;
 	float sourceX = 0.0f;
 	float sourceYCoordinate = 0.0f;
-	if (!mapOutputToSource(
+	if (!mapWebcamOutputToSource(
 			sampleOutputX,
 			sampleOutputY,
 			transform,
 			sourceWidth,
 			sourceHeight,
+			rotation,
+			mirrored,
 			&sourceX,
 			&sourceYCoordinate)) {
 		return;
 	}
-	if (mirrored) sourceX = static_cast<float>(sourceWidth - 1) - sourceX;
 	const float sourceChromaX = sourceX * 0.5f;
 	const float sourceChromaY = sourceYCoordinate * 0.5f;
 	const int outputOffset = chromaY * outputPitch + chromaX * 2;
@@ -1057,6 +1114,7 @@ double compositeFrame(
 			output->data[0],
 			output->linesize[0],
 			*webcamTransform,
+			webcam.rotation,
 			webcam.mirrored);
 		requireRuntime(cudaGetLastError(), "compositeWebcamLuma launch");
 
@@ -1081,6 +1139,7 @@ double compositeFrame(
 			outputWidth,
 			outputHeight,
 			*webcamTransform,
+			webcam.rotation,
 			webcam.mirrored);
 		requireRuntime(cudaGetLastError(), "compositeWebcamChroma launch");
 	}
@@ -1157,7 +1216,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 4) fail("Unsupported native GPU export plan version");
+	if (plan.version != 5) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
@@ -1254,6 +1313,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 			fail("Native GPU export webcam mask shape is invalid");
 		}
 		plan.webcam.mirrored = item.at("mirrored").get<bool>();
+		plan.webcam.rotation = item.at("rotation").get<int>();
 		plan.webcam.anchorRight = item.at("anchorRight").get<bool>();
 		plan.webcam.anchorBottom = item.at("anchorBottom").get<bool>();
 		if (!item.at("shadow").is_null()) {
@@ -1274,7 +1334,9 @@ ExportPlan loadPlan(const std::string &planPath) {
 			plan.webcam.y + plan.webcam.height > static_cast<float>(plan.height) + 0.001f ||
 			plan.webcam.borderRadius < 0.0f || !std::isfinite(plan.webcam.shadowBlur) ||
 			!std::isfinite(plan.webcam.shadowOffsetX) ||
-			!std::isfinite(plan.webcam.shadowOffsetY) || plan.webcam.shadowBlur < 0.0f) {
+			!std::isfinite(plan.webcam.shadowOffsetY) || plan.webcam.shadowBlur < 0.0f ||
+			(plan.webcam.rotation != 0 && plan.webcam.rotation != 90 &&
+			 plan.webcam.rotation != 180 && plan.webcam.rotation != 270)) {
 			fail("Native GPU export webcam layout is invalid");
 		}
 	}

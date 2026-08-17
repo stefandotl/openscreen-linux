@@ -81,6 +81,7 @@ import type {
 	Rotation3DPreset,
 	WebcamLayoutPreset,
 	WebcamMaskShape,
+	WebcamRotation,
 	WebcamSizePreset,
 	ZoomDepth,
 	ZoomFocus,
@@ -89,6 +90,7 @@ import type {
 import {
 	DEFAULT_WEBCAM_MIRRORED,
 	DEFAULT_WEBCAM_REACTIVE_ZOOM,
+	DEFAULT_WEBCAM_ROTATION,
 	MAX_ZOOM_SCALE,
 	MIN_ZOOM_SCALE,
 	ROTATION_3D_PRESET_ORDER,
@@ -326,6 +328,8 @@ interface SettingsPanelProps {
 	onWebcamMaskShapeChange?: (shape: import("./types").WebcamMaskShape) => void;
 	webcamMirrored?: boolean;
 	onWebcamMirroredChange?: (mirrored: boolean) => void;
+	webcamRotation?: WebcamRotation;
+	onWebcamRotationChange?: (rotation: WebcamRotation) => void;
 	webcamReactiveZoom?: boolean;
 	onWebcamReactiveZoomChange?: (reactive: boolean) => void;
 	webcamSizePreset?: WebcamSizePreset;
@@ -462,6 +466,8 @@ export function SettingsPanel({
 	onWebcamMaskShapeChange,
 	webcamMirrored = DEFAULT_WEBCAM_MIRRORED,
 	onWebcamMirroredChange,
+	webcamRotation = DEFAULT_WEBCAM_ROTATION,
+	onWebcamRotationChange,
 	webcamReactiveZoom = DEFAULT_WEBCAM_REACTIVE_ZOOM,
 	onWebcamReactiveZoomChange,
 	webcamSizePreset = DEFAULT_WEBCAM_SETTINGS.sizePreset,
@@ -1297,6 +1303,37 @@ export function SettingsPanel({
 													className="data-[state=checked]:bg-[#34B27B] scale-90"
 													aria-label={t("layout.mirrorWebcam")}
 												/>
+											</div>
+										)}
+										{webcamLayoutPreset !== "no-webcam" && (
+											<div className="mt-2 flex items-center justify-between gap-3 p-2 rounded-lg editor-control-surface">
+												<div className="text-[10px] font-medium text-slate-300">
+													{t("layout.rotateWebcam")}
+												</div>
+												<Select
+													value={String(webcamRotation)}
+													onValueChange={(value) =>
+														onWebcamRotationChange?.(Number(value) as WebcamRotation)
+													}
+												>
+													<SelectTrigger
+														className="h-8 w-[88px] bg-black/20 border-white/10 text-xs"
+														aria-label={t("layout.rotateWebcam")}
+													>
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{([0, 90, 180, 270] as const).map((rotation) => (
+															<SelectItem
+																key={rotation}
+																value={String(rotation)}
+																className="text-xs"
+															>
+																{rotation}°
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
 										)}
 										{webcamLayoutPreset === "picture-in-picture" && (

@@ -13,10 +13,12 @@ import {
 	DEFAULT_WEBCAM_LAYOUT_PRESET,
 	DEFAULT_WEBCAM_MASK_SHAPE,
 	DEFAULT_WEBCAM_POSITION,
+	DEFAULT_WEBCAM_ROTATION,
 	DEFAULT_WEBCAM_SIZE_PRESET,
 	type WebcamLayoutPreset,
 	type WebcamMaskShape,
 	type WebcamPosition,
+	type WebcamRotation,
 	type WebcamSizePreset,
 } from "./types";
 
@@ -61,11 +63,13 @@ export const DEFAULT_WEBCAM_SETTINGS = {
 	maskShape: DEFAULT_WEBCAM_MASK_SHAPE,
 	sizePreset: DEFAULT_WEBCAM_SIZE_PRESET,
 	position: DEFAULT_WEBCAM_POSITION,
+	rotation: DEFAULT_WEBCAM_ROTATION,
 } as const satisfies {
 	layoutPreset: WebcamLayoutPreset;
 	maskShape: WebcamMaskShape;
 	sizePreset: WebcamSizePreset;
 	position: WebcamPosition | null;
+	rotation: WebcamRotation;
 };
 
 export const DEFAULT_CURSOR_SETTINGS: CursorVisualSettings & { show: boolean; theme: string } = {

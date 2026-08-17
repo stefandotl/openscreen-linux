@@ -46,6 +46,7 @@
 		"noWebcam": "Sem Webcam",
 		"webcamShape": "Formato da Câmera",
 		"webcamSize": "Tamanho da Webcam",
+		"rotateWebcam": "Girar Webcam",
 		"reactiveWebcam": "Encolher ao ampliar",
 		"reactiveWebcamDescription": "A câmera diminui suavemente enquanto o vídeo está ampliado, para não atrapalhar."
 	},

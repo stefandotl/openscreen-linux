@@ -20,6 +20,7 @@ describe("editor defaults SSOT", () => {
 			wallpaper: DEFAULT_EDITOR_LAYOUT_SETTINGS.wallpaper,
 			webcamLayoutPreset: DEFAULT_WEBCAM_SETTINGS.layoutPreset,
 			webcamMaskShape: DEFAULT_WEBCAM_SETTINGS.maskShape,
+			webcamRotation: DEFAULT_WEBCAM_SETTINGS.rotation,
 			webcamSizePreset: DEFAULT_WEBCAM_SETTINGS.sizePreset,
 			webcamPosition: DEFAULT_WEBCAM_SETTINGS.position,
 		});
@@ -43,6 +44,7 @@ describe("editor defaults SSOT", () => {
 			aspectRatio: DEFAULT_EDITOR_LAYOUT_SETTINGS.aspectRatio,
 			webcamLayoutPreset: DEFAULT_WEBCAM_SETTINGS.layoutPreset,
 			webcamMaskShape: DEFAULT_WEBCAM_SETTINGS.maskShape,
+			webcamRotation: DEFAULT_WEBCAM_SETTINGS.rotation,
 			webcamSizePreset: DEFAULT_WEBCAM_SETTINGS.sizePreset,
 			webcamPosition: DEFAULT_WEBCAM_SETTINGS.position,
 			exportQuality: DEFAULT_EXPORT_SETTINGS.quality,

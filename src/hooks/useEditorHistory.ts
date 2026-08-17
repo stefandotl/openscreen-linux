@@ -12,6 +12,7 @@ import type {
 	WebcamLayoutPreset,
 	WebcamMaskShape,
 	WebcamPosition,
+	WebcamRotation,
 	WebcamSizePreset,
 	ZoomRegion,
 } from "@/components/video-editor/types";
@@ -19,6 +20,7 @@ import {
 	DEFAULT_CROP_REGION,
 	DEFAULT_WEBCAM_MIRRORED,
 	DEFAULT_WEBCAM_REACTIVE_ZOOM,
+	DEFAULT_WEBCAM_ROTATION,
 } from "@/components/video-editor/types";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 
@@ -46,6 +48,7 @@ export interface EditorState {
 	webcamLayoutPreset: WebcamLayoutPreset;
 	webcamMaskShape: WebcamMaskShape;
 	webcamMirrored: boolean;
+	webcamRotation: WebcamRotation;
 	webcamReactiveZoom: boolean;
 	webcamSizePreset: WebcamSizePreset;
 	webcamPosition: WebcamPosition | null;
@@ -70,6 +73,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
 	webcamLayoutPreset: DEFAULT_WEBCAM_SETTINGS.layoutPreset,
 	webcamMaskShape: DEFAULT_WEBCAM_SETTINGS.maskShape,
 	webcamMirrored: DEFAULT_WEBCAM_MIRRORED,
+	webcamRotation: DEFAULT_WEBCAM_ROTATION,
 	webcamReactiveZoom: DEFAULT_WEBCAM_REACTIVE_ZOOM,
 	webcamSizePreset: DEFAULT_WEBCAM_SETTINGS.sizePreset,
 	webcamPosition: DEFAULT_WEBCAM_SETTINGS.position,

@@ -439,6 +439,7 @@ export function createNativeGpuExportPlan(
 						borderRadius: layout.webcamRect.borderRadius,
 						maskShape: layout.webcamRect.maskShape ?? config.webcamMaskShape ?? "rectangle",
 						mirrored: config.webcamMirrored === true,
+						rotation: config.webcamRotation ?? 0,
 						anchorRight: config.webcamPosition ? config.webcamPosition.cx >= 0.5 : true,
 						anchorBottom: config.webcamPosition ? config.webcamPosition.cy >= 0.5 : true,
 						shadow: webcamPreset.shadow,

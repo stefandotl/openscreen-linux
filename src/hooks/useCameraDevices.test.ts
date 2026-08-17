@@ -35,6 +35,7 @@ describe("useCameraDevices", () => {
 	});
 
 	afterEach(() => {
+		vi.restoreAllMocks();
 		vi.resetAllMocks();
 	});
 
@@ -109,5 +110,40 @@ describe("useCameraDevices", () => {
 		await waitFor(() => {
 			expect(result.current.selectedDeviceId).toBe("cam2");
 		});
+	});
+
+	it("should discover virtual cameras that become capture-capable without devicechange", async () => {
+		const setIntervalSpy = vi.spyOn(window, "setInterval");
+		const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+
+		mockEnumerateDevices.mockResolvedValueOnce([mockDevices[0]]);
+		const { result, unmount } = renderHook(() => useCameraDevices(true));
+
+		await waitFor(() => {
+			expect(result.current.devices.map((device) => device.deviceId)).toEqual(["cam1"]);
+		});
+		const refreshTimerCall = setIntervalSpy.mock.calls.find(([, delay]) => delay === 2_000);
+		const refreshHandler = refreshTimerCall?.[0] as (() => void) | undefined;
+
+		mockEnumerateDevices.mockResolvedValueOnce([
+			mockDevices[0],
+			{
+				kind: "videoinput",
+				deviceId: "droidcam",
+				label: "Virtual Camera",
+				groupId: "virtual",
+			},
+		]);
+
+		act(() => refreshHandler?.());
+
+		await waitFor(() => {
+			expect(result.current.devices.map((device) => device.deviceId)).toEqual(["cam1", "droidcam"]);
+		});
+		expect(result.current.isLoading).toBe(false);
+		expect(refreshTimerCall).toBeDefined();
+
+		unmount();
+		expect(clearIntervalSpy).toHaveBeenCalled();
 	});
 });

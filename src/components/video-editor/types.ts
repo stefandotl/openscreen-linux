@@ -16,6 +16,14 @@ export const DEFAULT_WEBCAM_MASK_SHAPE: WebcamMaskShape = "rectangle";
 
 export const DEFAULT_WEBCAM_MIRRORED = false;
 
+export type WebcamRotation = 0 | 90 | 180 | 270;
+
+export const DEFAULT_WEBCAM_ROTATION: WebcamRotation = 0;
+
+export function isWebcamRotation(value: unknown): value is WebcamRotation {
+	return value === 0 || value === 90 || value === 180 || value === 270;
+}
+
 /** When true, the picture-in-picture webcam scales inversely with zoom (shrinks as you zoom in). */
 export const DEFAULT_WEBCAM_REACTIVE_ZOOM = true;
 

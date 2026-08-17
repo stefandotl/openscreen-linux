@@ -48,6 +48,7 @@
 		"onlyWebcam": "Webカメラのみ",
 		"noWebcam": "Webカメラなし",
 		"mirrorWebcam": "Webカメラを反転",
+		"rotateWebcam": "Webカメラを回転",
 		"reactiveWebcam": "ズーム時に縮小",
 		"reactiveWebcamDescription": "ズーム中はカメラがスムーズに縮小し、邪魔になりません。"
 	},

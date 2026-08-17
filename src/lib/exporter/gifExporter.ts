@@ -48,6 +48,7 @@ interface GifExporterConfig {
 	webcamLayoutPreset?: WebcamLayoutPreset;
 	webcamMaskShape?: import("@/components/video-editor/types").WebcamMaskShape;
 	webcamMirrored?: boolean;
+	webcamRotation?: import("@/components/video-editor/types").WebcamRotation;
 	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
 	webcamPosition?: { cx: number; cy: number } | null;
@@ -180,6 +181,7 @@ export class GifExporter {
 				webcamLayoutPreset: this.config.webcamLayoutPreset,
 				webcamMaskShape: this.config.webcamMaskShape,
 				webcamMirrored: this.config.webcamMirrored,
+				webcamRotation: this.config.webcamRotation,
 				webcamReactiveZoom: this.config.webcamReactiveZoom,
 				webcamSizePreset: this.config.webcamSizePreset,
 				webcamPosition: this.config.webcamPosition,

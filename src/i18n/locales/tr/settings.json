@@ -48,6 +48,7 @@
 		"onlyWebcam": "Yalnızca web kamerası",
 		"noWebcam": "Web kamerası yok",
 		"mirrorWebcam": "Web kamerasını aynala",
+		"rotateWebcam": "Web kamerasını döndür",
 		"reactiveWebcam": "Yakınlaştırınca küçült",
 		"reactiveWebcamDescription": "Video yakınlaştırıldığında kamera yumuşakça küçülür, böylece yoldan çekilir."
 	},

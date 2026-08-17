@@ -93,6 +93,7 @@ interface FrameRenderConfig {
 	webcamLayoutPreset?: WebcamLayoutPreset;
 	webcamMaskShape?: import("@/components/video-editor/types").WebcamMaskShape;
 	webcamMirrored?: boolean;
+	webcamRotation?: import("@/components/video-editor/types").WebcamRotation;
 	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
 	webcamPosition?: { cx: number; cy: number } | null;
@@ -966,10 +967,17 @@ export class FrameRenderer {
 					: webcamFrame.codedHeight) || webcamRect.height;
 			const sourceAspect = sourceWidth / sourceHeight;
 			const targetAspect = webcamRect.width / webcamRect.height;
+			const webcamRotation = this.config.webcamRotation ?? 0;
+			const sourceTargetAspect =
+				webcamRotation === 90 || webcamRotation === 270 ? 1 / targetAspect : targetAspect;
 			const sourceCropWidth =
-				sourceAspect > targetAspect ? Math.round(sourceHeight * targetAspect) : sourceWidth;
+				sourceAspect > sourceTargetAspect
+					? Math.round(sourceHeight * sourceTargetAspect)
+					: sourceWidth;
 			const sourceCropHeight =
-				sourceAspect > targetAspect ? sourceHeight : Math.round(sourceWidth / targetAspect);
+				sourceAspect > sourceTargetAspect
+					? sourceHeight
+					: Math.round(sourceWidth / sourceTargetAspect);
 			const sourceCropX = Math.max(0, Math.round((sourceWidth - sourceCropWidth) / 2));
 			const sourceCropY = Math.max(0, Math.round((sourceHeight - sourceCropHeight) / 2));
 			fgCtx.save();
@@ -1007,6 +1015,7 @@ export class FrameRenderer {
 					height: drawRect.height,
 				},
 				this.config.webcamMirrored,
+				webcamRotation,
 			);
 			fgCtx.restore();
 		}

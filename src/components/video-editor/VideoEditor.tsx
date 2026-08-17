@@ -271,6 +271,7 @@ export default function VideoEditor() {
 		webcamLayoutPreset,
 		webcamMaskShape,
 		webcamMirrored,
+		webcamRotation,
 		webcamReactiveZoom,
 		webcamSizePreset,
 		webcamPosition,
@@ -853,6 +854,7 @@ export default function VideoEditor() {
 				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
 				webcamMirrored: normalizedEditor.webcamMirrored,
+				webcamRotation: normalizedEditor.webcamRotation,
 				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
 				webcamSizePreset: normalizedEditor.webcamSizePreset,
 				webcamPosition: normalizedEditor.webcamPosition,
@@ -914,6 +916,7 @@ export default function VideoEditor() {
 							webcamLayoutPreset: scene.editor.webcamLayoutPreset,
 							webcamMaskShape: scene.editor.webcamMaskShape,
 							webcamMirrored: scene.editor.webcamMirrored,
+							webcamRotation: scene.editor.webcamRotation,
 							webcamReactiveZoom: scene.editor.webcamReactiveZoom,
 							webcamSizePreset: scene.editor.webcamSizePreset,
 							webcamPosition: scene.editor.webcamPosition,
@@ -950,6 +953,7 @@ export default function VideoEditor() {
 				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
 				webcamMirrored: normalizedEditor.webcamMirrored,
+				webcamRotation: normalizedEditor.webcamRotation,
 				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
 				webcamSizePreset: normalizedEditor.webcamSizePreset,
 				webcamPosition: normalizedEditor.webcamPosition,
@@ -1053,6 +1057,7 @@ export default function VideoEditor() {
 				webcamLayoutPreset,
 				webcamMaskShape,
 				webcamMirrored,
+				webcamRotation,
 				webcamReactiveZoom,
 				webcamSizePreset,
 				webcamPosition,
@@ -1090,6 +1095,7 @@ export default function VideoEditor() {
 		webcamLayoutPreset,
 		webcamMaskShape,
 		webcamMirrored,
+		webcamRotation,
 		webcamReactiveZoom,
 		webcamSizePreset,
 		webcamPosition,
@@ -1242,6 +1248,7 @@ export default function VideoEditor() {
 				webcamLayoutPreset,
 				webcamMaskShape,
 				webcamMirrored,
+				webcamRotation,
 				webcamReactiveZoom,
 				webcamSizePreset,
 				webcamPosition,
@@ -1321,6 +1328,7 @@ export default function VideoEditor() {
 			webcamLayoutPreset,
 			webcamMaskShape,
 			webcamMirrored,
+			webcamRotation,
 			webcamReactiveZoom,
 			webcamSizePreset,
 			webcamPosition,
@@ -2961,6 +2969,7 @@ export default function VideoEditor() {
 						webcamLayoutPreset,
 						webcamMaskShape,
 						webcamMirrored,
+						webcamRotation,
 						webcamReactiveZoom,
 						webcamSizePreset,
 						webcamPosition,
@@ -3087,6 +3096,7 @@ export default function VideoEditor() {
 									webcamLayoutPreset: sceneEditor.webcamLayoutPreset,
 									webcamMaskShape: sceneEditor.webcamMaskShape,
 									webcamMirrored: sceneEditor.webcamMirrored,
+									webcamRotation: sceneEditor.webcamRotation,
 									webcamReactiveZoom: sceneEditor.webcamReactiveZoom,
 									webcamSizePreset: sceneEditor.webcamSizePreset,
 									webcamPosition: sceneEditor.webcamPosition,
@@ -3178,6 +3188,7 @@ export default function VideoEditor() {
 							webcamLayoutPreset,
 							webcamMaskShape,
 							webcamMirrored,
+							webcamRotation,
 							webcamReactiveZoom,
 							webcamSizePreset,
 							webcamPosition,
@@ -3293,6 +3304,7 @@ export default function VideoEditor() {
 			webcamLayoutPreset,
 			webcamMaskShape,
 			webcamMirrored,
+			webcamRotation,
 			webcamReactiveZoom,
 			webcamSizePreset,
 			webcamPosition,
@@ -4064,6 +4076,7 @@ export default function VideoEditor() {
 													webcamLayoutPreset={webcamLayoutPreset}
 													webcamMaskShape={webcamMaskShape}
 													webcamMirrored={webcamMirrored}
+													webcamRotation={webcamRotation}
 													webcamReactiveZoom={webcamReactiveZoom}
 													webcamSizePreset={webcamSizePreset}
 													webcamPosition={webcamPosition}
@@ -4229,8 +4242,10 @@ export default function VideoEditor() {
 										webcamMaskShape={webcamMaskShape}
 										onWebcamMaskShapeChange={(shape) => pushState({ webcamMaskShape: shape })}
 										webcamMirrored={webcamMirrored}
+										webcamRotation={webcamRotation}
 										webcamReactiveZoom={webcamReactiveZoom}
 										onWebcamMirroredChange={(mirrored) => pushState({ webcamMirrored: mirrored })}
+										onWebcamRotationChange={(rotation) => pushState({ webcamRotation: rotation })}
 										onWebcamReactiveZoomChange={(reactive) =>
 											pushState({ webcamReactiveZoom: reactive })
 										}

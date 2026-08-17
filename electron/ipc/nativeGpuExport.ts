@@ -241,6 +241,7 @@ function validateRequest(payload: NativeGpuExportRequest) {
 			webcam.borderRadius < 0 ||
 			!["rectangle", "rounded", "circle", "square"].includes(webcam.maskShape) ||
 			typeof webcam.mirrored !== "boolean" ||
+			![0, 90, 180, 270].includes(webcam.rotation) ||
 			typeof webcam.anchorRight !== "boolean" ||
 			typeof webcam.anchorBottom !== "boolean"
 		) {

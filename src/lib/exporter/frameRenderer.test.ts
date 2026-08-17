@@ -4,6 +4,7 @@ import { drawWebcamFrameImage } from "./webcamFrameDrawing";
 type DrawCall =
 	| ["drawImage", unknown, number, number, number, number, number, number, number, number]
 	| ["restore"]
+	| ["rotate", number]
 	| ["save"]
 	| ["scale", number, number]
 	| ["translate", number, number];
@@ -23,6 +24,7 @@ function createMockCanvasContext() {
 			dh: number,
 		) => calls.push(["drawImage", image, sx, sy, sw, sh, dx, dy, dw, dh]),
 		restore: () => calls.push(["restore"]),
+		rotate: (angle: number) => calls.push(["rotate", angle]),
 		save: () => calls.push(["save"]),
 		scale: (x: number, y: number) => calls.push(["scale", x, y]),
 		translate: (x: number, y: number) => calls.push(["translate", x, y]),
@@ -60,9 +62,10 @@ describe("drawWebcamFrameImage", () => {
 
 		expect(calls).toEqual([
 			["save"],
-			["translate", 420, 50],
+			["translate", 260, 140],
+			["rotate", 0],
 			["scale", -1, 1],
-			["drawImage", frame, 12, 8, 640, 360, 0, 0, 320, 180],
+			["drawImage", frame, 12, 8, 640, 360, -160, -90, 320, 180],
 			["restore"],
 		]);
 	});
@@ -72,7 +75,7 @@ describe("drawWebcamFrameImage", () => {
 		const frame = {} as CanvasImageSource;
 		const error = new Error("draw failed");
 		ctx.drawImage = () => {
-			calls.push(["drawImage", frame, 12, 8, 640, 360, 0, 0, 320, 180]);
+			calls.push(["drawImage", frame, 12, 8, 640, 360, -160, -90, 320, 180]);
 			throw error;
 		};
 
@@ -88,9 +91,32 @@ describe("drawWebcamFrameImage", () => {
 
 		expect(calls).toEqual([
 			["save"],
-			["translate", 420, 50],
+			["translate", 260, 140],
+			["rotate", 0],
 			["scale", -1, 1],
-			["drawImage", frame, 12, 8, 640, 360, 0, 0, 320, 180],
+			["drawImage", frame, 12, 8, 640, 360, -160, -90, 320, 180],
+			["restore"],
+		]);
+	});
+
+	it("rotates quarter-turn frames around the webcam rect center", () => {
+		const { calls, ctx } = createMockCanvasContext();
+		const frame = {} as CanvasImageSource;
+
+		drawWebcamFrameImage(
+			ctx,
+			frame,
+			{ x: 12, y: 8, width: 360, height: 640 },
+			{ x: 100, y: 50, width: 320, height: 180 },
+			false,
+			90,
+		);
+
+		expect(calls).toEqual([
+			["save"],
+			["translate", 260, 140],
+			["rotate", Math.PI / 2],
+			["drawImage", frame, 12, 8, 360, 640, -90, -160, 180, 320],
 			["restore"],
 		]);
 	});

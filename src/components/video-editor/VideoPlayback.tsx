@@ -66,6 +66,7 @@ import {
 	rotation3DPerspective,
 	type SpeedRegion,
 	type TrimRegion,
+	type WebcamRotation,
 	type ZoomFocus,
 	type ZoomRegion,
 } from "./types";
@@ -98,6 +99,7 @@ interface VideoPlaybackProps {
 	webcamLayoutPreset: WebcamLayoutPreset;
 	webcamMaskShape?: import("./types").WebcamMaskShape;
 	webcamMirrored?: boolean;
+	webcamRotation?: WebcamRotation;
 	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
 	webcamPosition?: { cx: number; cy: number } | null;
@@ -228,6 +230,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			webcamLayoutPreset,
 			webcamMaskShape,
 			webcamMirrored = false,
+			webcamRotation = 0,
 			webcamReactiveZoom = false,
 			webcamSizePreset,
 			webcamPosition,
@@ -1995,18 +1998,29 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 											useClipPath && webcamCssBoxShadow !== "none"
 												? `drop-shadow(${webcamCssBoxShadow})`
 												: undefined,
+										borderRadius: useClipPath ? 0 : (webcamLayout?.borderRadius ?? 0),
+										clipPath: clipPath ?? undefined,
+										boxShadow: useClipPath ? "none" : webcamCssBoxShadow,
+										backgroundColor: "#000",
+										overflow: "hidden",
 									}}
 								>
 									<video
 										ref={webcamVideoRef}
 										src={webcamVideoPath}
-										className={`w-full h-full object-cover ${webcamLayoutPreset === "picture-in-picture" ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}
+										className={`absolute object-cover ${webcamLayoutPreset === "picture-in-picture" ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}
 										style={{
-											borderRadius: useClipPath ? 0 : (webcamLayout?.borderRadius ?? 0),
-											clipPath: clipPath ?? undefined,
-											boxShadow: useClipPath ? "none" : webcamCssBoxShadow,
-											backgroundColor: "#000",
-											transform: webcamMirrored ? "scaleX(-1)" : undefined,
+											left: "50%",
+											top: "50%",
+											width:
+												webcamRotation === 90 || webcamRotation === 270
+													? (webcamLayout?.height ?? 0)
+													: "100%",
+											height:
+												webcamRotation === 90 || webcamRotation === 270
+													? (webcamLayout?.width ?? 0)
+													: "100%",
+											transform: `translate(-50%, -50%) rotate(${webcamRotation}deg)${webcamMirrored ? " scaleX(-1)" : ""}`,
 										}}
 										onPointerDown={handleWebcamPointerDown}
 										onPointerMove={handleWebcamPointerMove}

@@ -48,6 +48,7 @@
 		"webcamShape": "Forma fotocamera",
 		"webcamSize": "Dimensione webcam",
 		"mirrorWebcam": "Specchia webcam",
+		"rotateWebcam": "Ruota webcam",
 		"reactiveWebcam": "Riduci con lo zoom",
 		"reactiveWebcamDescription": "La webcam si riduce dolcemente durante lo zoom, così non intralcia."
 	},

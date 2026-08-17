@@ -49,6 +49,7 @@
 		"onlyWebcam": "僅網路攝影機",
 		"noWebcam": "無網路攝影機",
 		"mirrorWebcam": "鏡像攝影機",
+		"rotateWebcam": "旋轉攝影機",
 		"reactiveWebcam": "縮放時縮小",
 		"reactiveWebcamDescription": "放大影片時鏡頭會平滑縮小，以免遮擋內容。"
 	},
