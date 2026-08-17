@@ -174,3 +174,15 @@ export function getNextProjectPlaybackSegment(
 	const sceneIndex = plan.findIndex((segment) => segment.sceneId === sceneId);
 	return sceneIndex >= 0 ? (plan[sceneIndex + 1] ?? null) : null;
 }
+
+const CONTIGUOUS_HANDOFF_EPSILON_SECONDS = 0.01;
+
+export function isContiguousProjectPlaybackHandoff(
+	current: ProjectPlaybackSegment,
+	next: ProjectPlaybackSegment,
+) {
+	return (
+		Math.abs(current.sourceEndSeconds - next.sourceStartSeconds) <=
+		CONTIGUOUS_HANDOFF_EPSILON_SECONDS
+	);
+}

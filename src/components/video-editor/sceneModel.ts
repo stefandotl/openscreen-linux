@@ -205,7 +205,7 @@ interface MatchingSceneCut {
 	boundaryMs: number;
 }
 
-function hasSameMedia(left: ProjectMedia | null, right: ProjectMedia | null) {
+export function hasSameSceneMedia(left: ProjectMedia | null, right: ProjectMedia | null) {
 	return (
 		left?.screenVideoPath === right?.screenVideoPath &&
 		left?.webcamVideoPath === right?.webcamVideoPath &&
@@ -215,7 +215,7 @@ function hasSameMedia(left: ProjectMedia | null, right: ProjectMedia | null) {
 }
 
 function findMatchingSceneCut(left: EditorScene, right: EditorScene): MatchingSceneCut | null {
-	if (!hasSameMedia(left.media, right.media)) return null;
+	if (!hasSameSceneMedia(left.media, right.media)) return null;
 
 	for (const leftTrim of left.editor.trimRegions) {
 		if (leftTrim.source !== "scene-split") continue;

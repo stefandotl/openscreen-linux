@@ -109,7 +109,7 @@ interface VideoPlaybackProps {
 	onTimeUpdate: (time: number) => void;
 	currentTime: number;
 	onPlayStateChange: (playing: boolean) => void;
-	onEnded?: () => void;
+	onEnded?: () => boolean | void;
 	onReady?: () => void;
 	onError: (error: string) => void;
 	wallpaper?: string;

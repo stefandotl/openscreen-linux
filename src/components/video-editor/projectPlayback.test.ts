@@ -5,6 +5,7 @@ import {
 	getNextProjectPlaybackSegment,
 	getProjectPlaybackDuration,
 	hasProjectPlaybackIntent,
+	isContiguousProjectPlaybackHandoff,
 	type ProjectPlaybackScene,
 	projectTimeToSceneSource,
 	sceneSourceTimeToProjectTime,
@@ -107,5 +108,20 @@ describe("project playback plan", () => {
 		expect(plan.map((segment) => segment.sceneId)).toEqual(["third", "first"]);
 		expect(getNextProjectPlaybackSegment(plan, "third")?.sceneId).toBe("first");
 		expect(getNextProjectPlaybackSegment(plan, "first")).toBeNull();
+	});
+
+	it("recognizes a source-contiguous scene handoff", () => {
+		const contiguous = buildProjectPlaybackPlan([
+			scene("first", 8, {
+				trimRegions: [{ id: "after", startMs: 4000, endMs: 8000 }],
+			}),
+			scene("second", 8, {
+				trimRegions: [{ id: "before", startMs: 0, endMs: 4000 }],
+			}),
+		]);
+		const discontinuous = buildProjectPlaybackPlan([scene("first", 2), scene("second", 3)]);
+
+		expect(isContiguousProjectPlaybackHandoff(contiguous[0], contiguous[1])).toBe(true);
+		expect(isContiguousProjectPlaybackHandoff(discontinuous[0], discontinuous[1])).toBe(false);
 	});
 });

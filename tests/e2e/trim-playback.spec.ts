@@ -278,6 +278,45 @@ test("splits the active scene at the playhead without changing project duration"
 		await expect
 			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 10_000 })
 			.toBeCloseTo(sourceDurationSeconds, 2);
+		await playbackRange.evaluate(
+			(input, value) => {
+				const range = input as HTMLInputElement;
+				range.value = String(value);
+				range.dispatchEvent(new Event("input", { bubbles: true }));
+				range.dispatchEvent(new Event("change", { bubbles: true }));
+			},
+			Math.max(0, splitTimeSeconds - 0.2),
+		);
+		await expect(firstSceneButton).toHaveAttribute("aria-current", "true");
+		const previewVideo = editorWindow.locator("video.hidden");
+		await expect(previewVideo).toHaveCount(1);
+		await previewVideo.evaluate((video) => {
+			const testWindow = window as typeof window & {
+				__sceneHandoffProbe?: { video: HTMLVideoElement; pauseCount: number };
+			};
+			testWindow.__sceneHandoffProbe = { video: video as HTMLVideoElement, pauseCount: 0 };
+			video.addEventListener("pause", () => {
+				if (testWindow.__sceneHandoffProbe) testWindow.__sceneHandoffProbe.pauseCount += 1;
+			});
+		});
+
+		await editorWindow.getByRole("button", { name: "Play", exact: true }).click();
+		await expect(secondSceneButton).toHaveAttribute("aria-current", "true", { timeout: 10_000 });
+		await expect
+			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
+			.toBeGreaterThan(splitTimeSeconds + 0.1);
+		const handoffProbe = await editorWindow.evaluate(() => {
+			const testWindow = window as typeof window & {
+				__sceneHandoffProbe?: { video: HTMLVideoElement; pauseCount: number };
+			};
+			const probe = testWindow.__sceneHandoffProbe;
+			return {
+				pauseCount: probe?.pauseCount ?? -1,
+				sameVideoElement: probe?.video === document.querySelector("video.hidden"),
+			};
+		});
+		expect(handoffProbe).toEqual({ pauseCount: 0, sameVideoElement: true });
+		await editorWindow.getByRole("button", { name: "Pause", exact: true }).click();
 
 		await editorWindow
 			.getByRole("button", { name: "Remove cut: Scene 1 + Scene 2", exact: true })

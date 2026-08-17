@@ -14,7 +14,7 @@ interface VideoEventHandlersParams {
 	timeUpdateAnimationRef: React.MutableRefObject<number | null>;
 	onPlayStateChange: (playing: boolean) => void;
 	onTimeUpdate: (time: number) => void;
-	onTerminalTrim?: () => void;
+	onTerminalTrim?: () => boolean | void;
 	onPlaybackError?: (message: string) => void;
 	trimRegionsRef: React.MutableRefObject<TrimRegion[]>;
 	speedRegionsRef: React.MutableRefObject<SpeedRegion[]>;
@@ -42,6 +42,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		onScrubChange,
 	} = params;
 	let pendingTrimSkipEndSeconds: number | null = null;
+	let continuingPastTerminalTrim = false;
 
 	const clearScrubEndTimer = () => {
 		if (scrubEndTimerRef && scrubEndTimerRef.current !== null) {
@@ -111,12 +112,17 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 			// Pause if the skip would run past the end
 			if (skipToTime >= video.duration) {
-				onTerminalTrim?.();
-				video.pause();
+				if (continuingPastTerminalTrim || onTerminalTrim?.() === true) {
+					continuingPastTerminalTrim = true;
+					emitTime(video.currentTime);
+				} else {
+					video.pause();
+				}
 			} else {
 				seekPastTrim(activeTrimRegion);
 			}
 		} else {
+			continuingPastTerminalTrim = false;
 			const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
 			video.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
 			emitTime(video.currentTime);
@@ -152,6 +158,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			return;
 		}
 		pendingTrimSkipEndSeconds = null;
+		continuingPastTerminalTrim = false;
 
 		isPlayingRef.current = false;
 		onPlayStateChange(false);
@@ -184,8 +191,12 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			const skipToTime = activeTrimRegion.endMs / 1000;
 
 			if (skipToTime >= video.duration) {
-				onTerminalTrim?.();
-				video.pause();
+				if (onTerminalTrim?.() === true) {
+					continuingPastTerminalTrim = true;
+					emitTime(video.currentTime);
+				} else {
+					video.pause();
+				}
 			} else {
 				seekPastTrim(activeTrimRegion);
 			}

@@ -7,7 +7,7 @@ function createHandlers(
 		currentTime?: number;
 		duration?: number;
 		isPlaying?: boolean;
-		onTerminalTrim?: () => void;
+		onTerminalTrim?: () => boolean | void;
 		trimRegions?: Array<{ id: string; startMs: number; endMs: number }>;
 	} = {},
 ) {
@@ -110,6 +110,31 @@ describe("video seeking playback intent", () => {
 		expect(onTerminalTrim.mock.invocationCallOrder[0]).toBeLessThan(
 			pause.mock.invocationCallOrder[0],
 		);
+		requestFrame.mockRestore();
+	});
+
+	it("keeps the media playing when a terminal trim hands off to a contiguous scene", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const onTerminalTrim = vi.fn(() => true);
+		const { handlers, pause } = createHandlers(true, {
+			currentTime: 9,
+			duration: 10,
+			onTerminalTrim,
+			trimRegions: [{ id: "scene-boundary", startMs: 9000, endMs: 10_000 }],
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+
+		expect(onTerminalTrim).toHaveBeenCalledOnce();
+		expect(pause).not.toHaveBeenCalled();
+		expect(frameCallback).not.toBeNull();
 		requestFrame.mockRestore();
 	});
 
