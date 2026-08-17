@@ -105,6 +105,10 @@
 		"save": "Salva progetto",
 		"load": "Carica progetto"
 	},
+	"recordings": {
+		"openFolder": "Apri cartella registrazioni",
+		"openFolderFailed": "Impossibile aprire la cartella delle registrazioni"
+	},
 	"export": {
 		"videoButton": "Esporta video",
 		"gifButton": "Esporta GIF",

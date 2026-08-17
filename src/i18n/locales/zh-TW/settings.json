@@ -107,6 +107,10 @@
 		"load": "載入專案",
 		"new": "新增專案"
 	},
+	"recordings": {
+		"openFolder": "開啟錄製資料夾",
+		"openFolderFailed": "無法開啟錄製資料夾"
+	},
 	"export": {
 		"videoButton": "匯出影片",
 		"gifButton": "匯出 GIF",

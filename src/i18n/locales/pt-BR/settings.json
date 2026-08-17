@@ -103,6 +103,10 @@
 		"save": "Salvar Projeto",
 		"load": "Carregar Projeto"
 	},
+	"recordings": {
+		"openFolder": "Abrir pasta de gravações",
+		"openFolderFailed": "Não foi possível abrir a pasta de gravações"
+	},
 	"export": {
 		"videoButton": "Exportar Vídeo",
 		"gifButton": "Exportar GIF",

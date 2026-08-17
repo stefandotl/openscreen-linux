@@ -93,13 +93,15 @@
 		"importVideoButton": "Video Dosyası İçe Aktar…",
 		"loadProjectButton": "Proje Yükle…",
 		"supportedFormats": "Desteklenen formatlar: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "veya bir .openscreen proje dosyasını buraya sürükleyip bırakın",
-		"dropOverlay": "Açmak için proje dosyasını bırakın",
+		"dragDropHint": "Video dosyası veya .openscreen projesi",
+		"dropOverlay": "Videoyu veya projeyi buraya bırakın",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Desteklenmeyen Format",
 			"unsupportedFormatMessage": "Buraya yalnızca .openscreen proje dosyaları bırakılabilir. Video içe aktarmak için \"Video Dosyası İçe Aktar...\" düğmesini kullanın.",
+			"unsupportedVideoOrProjectMessage": "Desteklenen bir video dosyasını veya .openscreen projesini buraya bırakın.",
 			"couldNotOpenTitle": "Dosya Açılamadı",
-			"couldNotOpenMessage": "Proje dosyası açılamadı. Başvurulan video taşınmış veya silinmiş olabilir."
+			"couldNotOpenMessage": "Proje dosyası açılamadı. Başvurulan video taşınmış veya silinmiş olabilir.",
+			"couldNotOpenDroppedMessage": "Bırakılan dosya açılamadı. Taşınmış, silinmiş veya okunamıyor olabilir."
 		}
 	}
 }

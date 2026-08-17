@@ -106,6 +106,10 @@
 		"load": "Загрузить проект",
 		"new": "Новый проект"
 	},
+	"recordings": {
+		"openFolder": "Открыть папку записей",
+		"openFolderFailed": "Не удалось открыть папку записей"
+	},
 	"export": {
 		"videoButton": "Экспорт видео",
 		"gifButton": "Экспорт GIF",

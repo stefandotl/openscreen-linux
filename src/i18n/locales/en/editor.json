@@ -93,13 +93,15 @@
 		"importVideoButton": "Import Video File…",
 		"loadProjectButton": "Load Project…",
 		"supportedFormats": "Supported formats: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "or drag & drop a .openscreen project file here",
-		"dropOverlay": "Drop project file to open",
+		"dragDropHint": "Video file or .openscreen project",
+		"dropOverlay": "Drop video or project here",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Unsupported Format",
 			"unsupportedFormatMessage": "Only .openscreen project files can be dropped here. To import a video file, use the \"Import Video File…\" button on this screen.",
+			"unsupportedVideoOrProjectMessage": "Drop a supported video file or an .openscreen project here.",
 			"couldNotOpenTitle": "Could Not Open File",
-			"couldNotOpenMessage": "The project file could not be opened. The video it references may have been moved or deleted."
+			"couldNotOpenMessage": "The project file could not be opened. The video it references may have been moved or deleted.",
+			"couldNotOpenDroppedMessage": "The dropped file could not be opened. It may have been moved, deleted, or be unreadable."
 		}
 	}
 }

@@ -28,6 +28,7 @@ export interface NativeBridgeContext {
 	loadProjectFile: (projectFolder?: string) => Promise<ProjectFileResult>;
 	loadCurrentProjectFile: () => Promise<ProjectFileResult>;
 	loadProjectFileFromPath: (path: string) => Promise<ProjectFileResult>;
+	importVideoFileFromPath: (path: string) => Promise<ProjectPathResult>;
 	setCurrentVideoPath: (path: string) => ProjectPathResult | Promise<ProjectPathResult>;
 	getCurrentVideoPathResult: () => ProjectPathResult;
 	clearCurrentVideoPath: () => ProjectPathResult;
@@ -102,6 +103,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 		loadProjectFile: context.loadProjectFile,
 		loadCurrentProjectFile: context.loadCurrentProjectFile,
 		loadProjectFileFromPath: context.loadProjectFileFromPath,
+		importVideoFileFromPath: context.importVideoFileFromPath,
 		setCurrentVideoPath: context.setCurrentVideoPath,
 		getCurrentVideoPathResult: context.getCurrentVideoPathResult,
 		clearCurrentVideoPath: context.clearCurrentVideoPath,
@@ -177,6 +179,11 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 							return createSuccessResponse(
 								requestId,
 								await projectService.loadProjectFileFromPath(request.payload.path),
+							);
+						case "importVideoFileFromPath":
+							return createSuccessResponse(
+								requestId,
+								await projectService.importVideoFileFromPath(request.payload.path),
 							);
 						case "setCurrentVideoPath":
 							return createSuccessResponse(

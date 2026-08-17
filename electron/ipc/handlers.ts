@@ -66,6 +66,7 @@ import {
 	beginRecordingProjectTransition,
 	RecordingProjectTransitionState,
 } from "../recordingProjectTransition";
+import { openRecordingsFolder } from "../recordingsFolder";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -2999,6 +3000,21 @@ export function registerIpcHandlers(
 		}
 	});
 
+	ipcMain.on("open-recordings-folder", (event) => {
+		void openRecordingsFolder(RECORDINGS_DIR, {
+			ensureDirectory: async (directoryPath) => {
+				await fs.mkdir(directoryPath, { recursive: true });
+			},
+			openPath: (directoryPath) => shell.openPath(directoryPath),
+		}).then((result) => {
+			if (result.success) return;
+			console.error("Failed to open recordings folder:", result.error);
+			if (!event.sender.isDestroyed()) {
+				event.sender.send("open-recordings-folder-error", result.error);
+			}
+		});
+	});
+
 	ipcMain.handle("read-binary-file", async (_, filePath: string) => {
 		try {
 			const normalizedPath = await approveReadableVideoPath(filePath);
@@ -3390,6 +3406,17 @@ export function registerIpcHandlers(
 		return { success: true, path: currentVideoPath ?? normalizedPath };
 	}
 
+	async function importVideoFileFromPath(filePath: string): Promise<ProjectPathResult> {
+		const normalizedPath = await approveReadableVideoPath(filePath);
+		if (!normalizedPath) {
+			return {
+				success: false,
+				message: "Dropped file is not a supported readable video file",
+			};
+		}
+		return setCurrentVideoPath(normalizedPath);
+	}
+
 	ipcMain.handle("get-current-video-path", () => {
 		return getCurrentVideoPathResult();
 	});
@@ -3481,6 +3508,7 @@ export function registerIpcHandlers(
 		loadProjectFile,
 		loadCurrentProjectFile,
 		loadProjectFileFromPath,
+		importVideoFileFromPath,
 		setCurrentVideoPath,
 		getCurrentVideoPathResult,
 		clearCurrentVideoPath,

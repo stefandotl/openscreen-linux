@@ -93,13 +93,15 @@
 		"importVideoButton": "動画ファイルをインポート…",
 		"loadProjectButton": "プロジェクトを読み込む…",
 		"supportedFormats": "対応フォーマット：MP4、MOV、WebM、MKV、AVI、M4V、WMV",
-		"dragDropHint": ".openscreen プロジェクトファイルをここにドラッグ＆ドロップ",
-		"dropOverlay": "プロジェクトファイルをドロップして開く",
+		"dragDropHint": "動画ファイルまたは .openscreen プロジェクト",
+		"dropOverlay": "動画またはプロジェクトをここにドロップ",
 		"dropErrors": {
 			"unsupportedFormatTitle": "非対応フォーマット",
 			"unsupportedFormatMessage": "ここにドロップできるのは .openscreen プロジェクトファイルのみです。動画をインポートするには「動画ファイルをインポート...」ボタンをご使用ください。",
+			"unsupportedVideoOrProjectMessage": "対応する動画ファイルまたは .openscreen プロジェクトをここにドロップしてください。",
 			"couldNotOpenTitle": "ファイルを開けませんでした",
-			"couldNotOpenMessage": "プロジェクトファイルを開けませんでした。参照している動画が移動または削除された可能性があります。"
+			"couldNotOpenMessage": "プロジェクトファイルを開けませんでした。参照している動画が移動または削除された可能性があります。",
+			"couldNotOpenDroppedMessage": "ドロップしたファイルを開けませんでした。移動、削除、または読み取り不能の可能性があります。"
 		}
 	}
 }

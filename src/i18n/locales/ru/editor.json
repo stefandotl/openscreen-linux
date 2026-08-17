@@ -93,13 +93,15 @@
 		"importVideoButton": "Импортировать видеофайл…",
 		"loadProjectButton": "Загрузить проект…",
 		"supportedFormats": "Поддерживаемые форматы: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "или перетащите файл проекта .openscreen сюда",
-		"dropOverlay": "Перетащите файл проекта для открытия",
+		"dragDropHint": "Видеофайл или проект .openscreen",
+		"dropOverlay": "Перетащите видео или проект сюда",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Неподдерживаемый формат",
 			"unsupportedFormatMessage": "Сюда можно перетаскивать только файлы проекта .openscreen. Для импорта видео используйте кнопку «Импортировать видеофайл...».",
+			"unsupportedVideoOrProjectMessage": "Перетащите сюда поддерживаемый видеофайл или проект .openscreen.",
 			"couldNotOpenTitle": "Не удалось открыть файл",
-			"couldNotOpenMessage": "Не удалось открыть файл проекта. Видео, на которое он ссылается, возможно, было перемещено или удалено."
+			"couldNotOpenMessage": "Не удалось открыть файл проекта. Видео, на которое он ссылается, возможно, было перемещено или удалено.",
+			"couldNotOpenDroppedMessage": "Не удалось открыть перетащенный файл. Возможно, он был перемещён, удалён или недоступен для чтения."
 		}
 	}
 }

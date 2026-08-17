@@ -8,7 +8,11 @@
 	"emptyState": {
 		"sceneTitle": "Questa scena è vuota",
 		"sceneDescription": "Registra un nuovo video per questa scena o importa un file video esistente.",
-		"recordSceneButton": "Registra scena"
+		"recordSceneButton": "Registra scena",
+		"dropErrors": {
+			"unsupportedVideoOrProjectMessage": "Trascina qui un file video supportato o un progetto .openscreen.",
+			"couldNotOpenDroppedMessage": "Impossibile aprire il file trascinato. Potrebbe essere stato spostato, eliminato o non essere leggibile."
+		}
 	},
 	"loadingVideo": "Caricamento video...",
 	"errors": {

@@ -93,13 +93,15 @@
 		"importVideoButton": "Nhập tệp video…",
 		"loadProjectButton": "Tải dự án…",
 		"supportedFormats": "Định dạng được hỗ trợ: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "hoặc kéo và thả tệp dự án .openscreen vào đây",
-		"dropOverlay": "Thả tệp dự án để mở",
+		"dragDropHint": "Tệp video hoặc dự án .openscreen",
+		"dropOverlay": "Thả video hoặc dự án vào đây",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Định dạng không được hỗ trợ",
 			"unsupportedFormatMessage": "Chỉ có thể thả các tệp dự án .openscreen vào đây. Để nhập video, hãy sử dụng nút \"Nhập tệp video...\" thay thế.",
+			"unsupportedVideoOrProjectMessage": "Thả tệp video được hỗ trợ hoặc dự án .openscreen vào đây.",
 			"couldNotOpenTitle": "Không thể mở tệp",
-			"couldNotOpenMessage": "Không thể mở tệp dự án. Video mà nó tham chiếu có thể đã bị di chuyển hoặc xóa."
+			"couldNotOpenMessage": "Không thể mở tệp dự án. Video mà nó tham chiếu có thể đã bị di chuyển hoặc xóa.",
+			"couldNotOpenDroppedMessage": "Không thể mở tệp đã thả. Tệp có thể đã bị di chuyển, xóa hoặc không thể đọc."
 		}
 	}
 }

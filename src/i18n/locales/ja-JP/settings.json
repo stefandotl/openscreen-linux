@@ -106,6 +106,10 @@
 		"load": "プロジェクトを読み込む",
 		"new": "新規プロジェクト"
 	},
+	"recordings": {
+		"openFolder": "録画フォルダーを開く",
+		"openFolderFailed": "録画フォルダーを開けませんでした"
+	},
 	"export": {
 		"videoButton": "動画をエクスポート",
 		"gifButton": "GIF をエクスポート",

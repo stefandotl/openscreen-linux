@@ -106,6 +106,10 @@
 		"load": "加载项目",
 		"new": "新建项目"
 	},
+	"recordings": {
+		"openFolder": "打开录制文件夹",
+		"openFolderFailed": "无法打开录制文件夹"
+	},
 	"export": {
 		"videoButton": "导出视频",
 		"gifButton": "导出 GIF",

@@ -106,6 +106,10 @@
 		"load": "Proje Yükle",
 		"new": "Yeni Proje"
 	},
+	"recordings": {
+		"openFolder": "Kayıtlar klasörünü aç",
+		"openFolderFailed": "Kayıtlar klasörü açılamadı"
+	},
 	"export": {
 		"videoButton": "Videoyu Dışa Aktar",
 		"gifButton": "GIF Olarak Dışa Aktar",

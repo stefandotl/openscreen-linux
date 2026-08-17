@@ -106,6 +106,10 @@
 		"load": "Tải dự án",
 		"new": "Dự án mới"
 	},
+	"recordings": {
+		"openFolder": "Mở thư mục bản ghi",
+		"openFolderFailed": "Không thể mở thư mục bản ghi"
+	},
 	"export": {
 		"videoButton": "Xuất Video",
 		"gifButton": "Xuất GIF",

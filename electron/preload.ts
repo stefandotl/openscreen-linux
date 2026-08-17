@@ -286,6 +286,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	revealInFolder: (filePath: string) => {
 		return ipcRenderer.invoke("reveal-in-folder", filePath);
 	},
+	openRecordingsFolder: () => {
+		ipcRenderer.send("open-recordings-folder");
+	},
+	onOpenRecordingsFolderError: (callback: (error?: string) => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, error?: string) => callback(error);
+		ipcRenderer.on("open-recordings-folder-error", listener);
+		return () => ipcRenderer.removeListener("open-recordings-folder-error", listener);
+	},
 	getShortcuts: () => {
 		return ipcRenderer.invoke("get-shortcuts");
 	},

@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { FolderOpen, Languages, PanelLeftOpen, Save, Video } from "lucide-react";
+import { Archive, FolderOpen, Languages, PanelLeftOpen, Save, Video } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -3020,6 +3020,12 @@ export default function VideoEditor() {
 		}
 	}, []);
 
+	useEffect(() => {
+		return window.electronAPI.onOpenRecordingsFolderError((openError) => {
+			toast.error(openError || ts("recordings.openFolderFailed"));
+		});
+	}, [ts]);
+
 	const handleExportSaved = useCallback(
 		(formatLabel: "GIF" | "Video", filePath: string) => {
 			setExportedFilePath(filePath);
@@ -4214,6 +4220,14 @@ export default function VideoEditor() {
 					>
 						<FolderOpen size={14} />
 						{ts("project.load")}
+					</button>
+					<button
+						type="button"
+						onClick={() => window.electronAPI.openRecordingsFolder()}
+						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
+					>
+						<Archive size={14} />
+						{ts("recordings.openFolder")}
 					</button>
 					<button
 						type="button"

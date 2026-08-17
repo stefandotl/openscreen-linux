@@ -8,7 +8,11 @@
 	"emptyState": {
 		"sceneTitle": "Esta cena está vazia",
 		"sceneDescription": "Grave um novo vídeo para esta cena ou importe um arquivo de vídeo existente.",
-		"recordSceneButton": "Gravar cena"
+		"recordSceneButton": "Gravar cena",
+		"dropErrors": {
+			"unsupportedVideoOrProjectMessage": "Solte aqui um arquivo de vídeo compatível ou um projeto .openscreen.",
+			"couldNotOpenDroppedMessage": "Não foi possível abrir o arquivo solto. Ele pode ter sido movido, excluído ou estar ilegível."
+		}
 	},
 	"loadingVideo": "Carregando vídeo...",
 	"errors": {

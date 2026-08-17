@@ -106,6 +106,10 @@
 		"load": "Charger un projet",
 		"new": "Nouveau projet"
 	},
+	"recordings": {
+		"openFolder": "Ouvrir le dossier des enregistrements",
+		"openFolderFailed": "Impossible d’ouvrir le dossier des enregistrements"
+	},
 	"export": {
 		"videoButton": "Exporter la vidéo",
 		"gifButton": "Exporter le GIF",

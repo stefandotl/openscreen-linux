@@ -93,13 +93,15 @@
 		"importVideoButton": "استيراد ملف فيديو...",
 		"loadProjectButton": "تحميل مشروع...",
 		"supportedFormats": "الصيغ المدعومة: MP4، MOV، WebM، MKV، AVI، M4V، WMV",
-		"dragDropHint": "أو اسحب وأفلت ملف مشروع .openscreen هنا",
-		"dropOverlay": "أفلت ملف المشروع لفتحه",
+		"dragDropHint": "ملف فيديو أو مشروع .openscreen",
+		"dropOverlay": "أفلت الفيديو أو المشروع هنا",
 		"dropErrors": {
 			"unsupportedFormatTitle": "تنسيق غير مدعوم",
 			"unsupportedFormatMessage": "يمكن إسقاط ملفات مشروع .openscreen فقط هنا. لاستيراد مقطع فيديو، استخدم زر \"استيراد ملف فيديو...\" بدلاً من ذلك.",
+			"unsupportedVideoOrProjectMessage": "أفلت ملف فيديو مدعومًا أو مشروع .openscreen هنا.",
 			"couldNotOpenTitle": "تعذّر فتح الملف",
-			"couldNotOpenMessage": "تعذّر فتح ملف المشروع. ربما تم نقل الفيديو المرجعي أو حذفه."
+			"couldNotOpenMessage": "تعذّر فتح ملف المشروع. ربما تم نقل الفيديو المرجعي أو حذفه.",
+			"couldNotOpenDroppedMessage": "تعذّر فتح الملف المُسقط. ربما تم نقله أو حذفه أو تعذّرت قراءته."
 		}
 	}
 }

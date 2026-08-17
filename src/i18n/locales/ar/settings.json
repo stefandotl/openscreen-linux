@@ -106,6 +106,10 @@
 		"load": "تحميل المشروع",
 		"new": "مشروع جديد"
 	},
+	"recordings": {
+		"openFolder": "فتح مجلد التسجيلات",
+		"openFolderFailed": "تعذر فتح مجلد التسجيلات"
+	},
 	"export": {
 		"videoButton": "تصدير الفيديو",
 		"gifButton": "تصدير GIF",

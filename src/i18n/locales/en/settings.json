@@ -107,6 +107,10 @@
 		"load": "Load Project",
 		"new": "New Project"
 	},
+	"recordings": {
+		"openFolder": "Open Recordings Folder",
+		"openFolderFailed": "Could not open the recordings folder"
+	},
 	"export": {
 		"videoButton": "Export Video",
 		"gifButton": "Export GIF",

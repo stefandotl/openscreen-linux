@@ -93,13 +93,15 @@
 		"importVideoButton": "匯入影片檔案…",
 		"loadProjectButton": "載入專案…",
 		"supportedFormats": "支援的格式：MP4、MOV、WebM、MKV、AVI、M4V、WMV",
-		"dragDropHint": "或將 .openscreen 專案檔案拖放至此",
-		"dropOverlay": "將專案檔案拖放至此以開啟",
+		"dragDropHint": "影片檔案或 .openscreen 專案",
+		"dropOverlay": "將影片或專案拖放到此處",
 		"dropErrors": {
 			"unsupportedFormatTitle": "不支援的格式",
 			"unsupportedFormatMessage": "此處只能拖放 .openscreen 專案檔案。要匯入影片，請使用「匯入影片檔案...」按鈕。",
+			"unsupportedVideoOrProjectMessage": "請將支援的影片檔案或 .openscreen 專案拖放到此處。",
 			"couldNotOpenTitle": "無法開啟檔案",
-			"couldNotOpenMessage": "無法開啟專案檔案。它所參照的影片可能已被移動或刪除。"
+			"couldNotOpenMessage": "無法開啟專案檔案。它所參照的影片可能已被移動或刪除。",
+			"couldNotOpenDroppedMessage": "無法開啟拖放的檔案。它可能已被移動、刪除或無法讀取。"
 		}
 	}
 }

@@ -16,6 +16,23 @@ interface EditorEmptyStateProps {
 
 type DropError = "unsupported-format" | "load-failed" | null;
 
+const SUPPORTED_VIDEO_EXTENSIONS = new Set([
+	".webm",
+	".mp4",
+	".mov",
+	".avi",
+	".mkv",
+	".m4v",
+	".wmv",
+	".flv",
+	".ts",
+]);
+
+function fileExtension(fileName: string) {
+	const extensionStart = fileName.lastIndexOf(".");
+	return extensionStart >= 0 ? fileName.slice(extensionStart).toLowerCase() : "";
+}
+
 export function EditorEmptyState({
 	onVideoImported,
 	onProjectOpened,
@@ -78,8 +95,10 @@ export function EditorEmptyState({
 			const files = Array.from(e.dataTransfer.files);
 			if (files.length === 0) return;
 
-			const projectFile = files.find((f) => f.name.endsWith(".openscreen"));
-			if (!projectFile) {
+			const droppedFile = files[0];
+			const extension = fileExtension(droppedFile.name);
+			const isProjectFile = extension === ".openscreen";
+			if (!isProjectFile && !SUPPORTED_VIDEO_EXTENSIONS.has(extension)) {
 				setDropError("unsupported-format");
 				return;
 			}
@@ -87,7 +106,7 @@ export function EditorEmptyState({
 			// Use Electron's webUtils.getPathForFile; File.path was removed in Electron 32+
 			let filePath: string;
 			try {
-				filePath = window.electronAPI.getPathForFile(projectFile);
+				filePath = window.electronAPI.getPathForFile(droppedFile);
 			} catch {
 				setDropError("load-failed");
 				return;
@@ -97,21 +116,32 @@ export function EditorEmptyState({
 				return;
 			}
 
-			let result: Awaited<ReturnType<typeof window.electronAPI.loadProjectFileFromPath>>;
-			try {
-				result = await window.electronAPI.loadProjectFileFromPath(filePath);
-			} catch {
-				setDropError("load-failed");
-				return;
-			}
-			if (!result.success || !result.project) {
-				setDropError("load-failed");
+			if (isProjectFile) {
+				try {
+					const result = await window.electronAPI.loadProjectFileFromPath(filePath);
+					if (!result.success || !result.project) {
+						setDropError("load-failed");
+						return;
+					}
+					onProjectOpened(result.project, result.path ?? null);
+				} catch {
+					setDropError("load-failed");
+				}
 				return;
 			}
 
-			onProjectOpened(result.project, result.path ?? null);
+			try {
+				const result = await nativeBridgeClient.project.importVideoFileFromPath(filePath);
+				if (!result.success || !result.path) {
+					setDropError("load-failed");
+					return;
+				}
+				onVideoImported(result.path);
+			} catch {
+				setDropError("load-failed");
+			}
 		},
-		[onProjectOpened],
+		[onProjectOpened, onVideoImported],
 	);
 
 	return (
@@ -121,14 +151,6 @@ export function EditorEmptyState({
 			onDragLeave={isSceneMode ? undefined : handleDragLeave}
 			onDrop={isSceneMode ? undefined : handleDrop}
 		>
-			{/* Drop overlay */}
-			{!isSceneMode && isDraggingOver && (
-				<div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#34B27B] bg-[#34B27B]/10">
-					<Upload className="mb-3 h-10 w-10 text-[#34B27B]" />
-					<p className="text-base font-semibold text-[#34B27B]">{te("emptyState.dropOverlay")}</p>
-				</div>
-			)}
-
 			{/* Drop error dialog */}
 			<Dialog open={dropError !== null} onOpenChange={(open) => !open && setDropError(null)}>
 				<DialogContent className="bg-[#09090b] border-white/10 rounded-2xl max-w-sm p-6 gap-0">
@@ -154,8 +176,8 @@ export function EditorEmptyState({
 						</div>
 						<p className="text-sm text-slate-400 leading-relaxed">
 							{lastDropErrorRef.current === "unsupported-format"
-								? te("emptyState.dropErrors.unsupportedFormatMessage")
-								: te("emptyState.dropErrors.couldNotOpenMessage")}
+								? te("emptyState.dropErrors.unsupportedVideoOrProjectMessage")
+								: te("emptyState.dropErrors.couldNotOpenDroppedMessage")}
 						</p>
 					</div>
 
@@ -190,6 +212,20 @@ export function EditorEmptyState({
 
 				{/* Actions */}
 				<div className="flex flex-col gap-3 w-full max-w-xs">
+					{!isSceneMode && (
+						<div
+							data-testid="video-project-drop-zone"
+							className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 transition-colors ${
+								isDraggingOver
+									? "border-[#34B27B] bg-[#34B27B]/10 text-[#34B27B]"
+									: "border-white/15 bg-white/[0.025] text-slate-400"
+							}`}
+						>
+							<Upload className="h-6 w-6" />
+							<p className="text-sm font-medium">{te("emptyState.dropOverlay")}</p>
+							<p className="text-[11px] text-slate-600">{te("emptyState.dragDropHint")}</p>
+						</div>
+					)}
 					{isSceneMode && onStartRecording && (
 						<button
 							type="button"

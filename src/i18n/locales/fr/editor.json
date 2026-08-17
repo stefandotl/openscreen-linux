@@ -93,13 +93,15 @@
 		"importVideoButton": "Importer un fichier vidéo…",
 		"loadProjectButton": "Charger un projet…",
 		"supportedFormats": "Formats pris en charge : MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "ou glissez-déposez un fichier .openscreen ici",
-		"dropOverlay": "Déposez le fichier de projet pour l'ouvrir",
+		"dragDropHint": "Fichier vidéo ou projet .openscreen",
+		"dropOverlay": "Déposez la vidéo ou le projet ici",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Format non pris en charge",
 			"unsupportedFormatMessage": "Seuls les fichiers .openscreen peuvent être déposés ici. Pour importer une vidéo, utilisez plutôt le bouton \"Importer un fichier vidéo...\".",
+			"unsupportedVideoOrProjectMessage": "Déposez ici un fichier vidéo pris en charge ou un projet .openscreen.",
 			"couldNotOpenTitle": "Impossible d'ouvrir le fichier",
-			"couldNotOpenMessage": "Le fichier de projet n'a pas pu être ouvert. La vidéo qu'il référence a peut-être été déplacée ou supprimée."
+			"couldNotOpenMessage": "Le fichier de projet n'a pas pu être ouvert. La vidéo qu'il référence a peut-être été déplacée ou supprimée.",
+			"couldNotOpenDroppedMessage": "Le fichier déposé n’a pas pu être ouvert. Il a peut-être été déplacé, supprimé ou est illisible."
 		}
 	}
 }
