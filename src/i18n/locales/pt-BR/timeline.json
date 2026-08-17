@@ -1,6 +1,7 @@
 {
 	"buttons": {
 		"addZoom": "Adicionar Zoom (Z)",
+		"splitScene": "Dividir cena no cursor (Ctrl+B)",
 		"suggestZooms": "Sugerir Zooms a partir do Cursor",
 		"addTrim": "Adicionar Recorte (T)",
 		"addAnnotation": "Adicionar Anotação (A)",
@@ -18,6 +19,7 @@
 		"pan": "Mover",
 		"zoom": "Zoom",
 		"trim": "Recorte",
+		"outsideScene": "Fora da cena",
 		"speed": "Velocidade",
 		"zoomItem": "Zoom {{index}}",
 		"trimItem": "Recorte {{index}}",

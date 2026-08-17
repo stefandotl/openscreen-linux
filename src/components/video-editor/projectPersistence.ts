@@ -301,6 +301,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 						id: region.id,
 						startMs,
 						endMs,
+						...(region.source === "scene-split" ? { source: "scene-split" as const } : {}),
 					};
 				})
 		: [];

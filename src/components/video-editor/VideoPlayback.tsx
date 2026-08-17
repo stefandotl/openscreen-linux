@@ -1227,7 +1227,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			const blurFilter = new BlurFilter();
 			blurFilter.quality = 3;
 			blurFilter.resolution = app.renderer.resolution;
-			blurFilter.blur = 0;
+			blurFilter.strength = 0;
 			const motionBlurFilter = new MotionBlurFilter({
 				velocity: { x: 0, y: 0 },
 				kernelSize: 5,
@@ -1801,10 +1801,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			const waitForRenderableFrame = () => {
 				const hasDimensions = video.videoWidth > 0 && video.videoHeight > 0;
 				const hasData = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
-				if (!syncResolvedDuration(video)) {
+				const hasResolvedDuration = syncResolvedDuration(video);
+				if (!hasResolvedDuration) {
 					forceResolveDuration(video);
 				}
-				if (hasDimensions && hasData) {
+				if (hasDimensions && hasData && hasResolvedDuration && !isResolvingDurationRef.current) {
 					videoReadyRafRef.current = null;
 					setVideoReady(true);
 					return;

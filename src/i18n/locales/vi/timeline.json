@@ -1,6 +1,7 @@
 {
 	"buttons": {
 		"addZoom": "Thêm Thu phóng (Z)",
+		"splitScene": "Tách cảnh tại đầu phát (Ctrl+B)",
 		"suggestZooms": "Đề xuất Thu phóng từ Con trỏ",
 		"addTrim": "Thêm Cắt (T)",
 		"addAnnotation": "Thêm Chú thích (A)",
@@ -18,6 +19,7 @@
 		"pan": "Xoay",
 		"zoom": "Thu phóng",
 		"trim": "Cắt",
+		"outsideScene": "Ngoài cảnh",
 		"speed": "Tốc độ",
 		"zoomItem": "Thu phóng {{index}}",
 		"trimItem": "Cắt {{index}}",

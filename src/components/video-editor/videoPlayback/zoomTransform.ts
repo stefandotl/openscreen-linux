@@ -187,7 +187,7 @@ export function applyZoomTransform({
 			motionBlurFilter.velocity = { x: 0, y: 0 };
 			motionBlurFilter.kernelSize = 5;
 			motionBlurFilter.offset = 0;
-			if (blurFilter) blurFilter.blur = 0;
+			if (blurFilter) blurFilter.strength = 0;
 		} else {
 			const dtMs = Math.min(80, Math.max(1, now - motionBlurState.lastFrameTimeMs));
 			const dtSeconds = dtMs / 1000;
@@ -224,7 +224,7 @@ export function applyZoomTransform({
 			motionBlurFilter.offset = targetBlur > 0.5 ? -0.2 : 0;
 
 			if (blurFilter) {
-				blurFilter.blur = 0;
+				blurFilter.strength = 0;
 			}
 		}
 	} else {
@@ -234,7 +234,7 @@ export function applyZoomTransform({
 			motionBlurFilter.offset = 0;
 		}
 		if (blurFilter) {
-			blurFilter.blur = 0;
+			blurFilter.strength = 0;
 		}
 		if (motionBlurState) {
 			motionBlurState.initialized = false;

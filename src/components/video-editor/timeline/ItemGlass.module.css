@@ -54,6 +54,24 @@
 	z-index: 10;
 }
 
+.glassBoundary {
+	position: relative;
+	border-radius: 8px;
+	background:
+		repeating-linear-gradient(
+			-45deg,
+			rgba(56, 189, 248, 0.1) 0,
+			rgba(56, 189, 248, 0.1) 6px,
+			rgba(15, 23, 42, 0.38) 6px,
+			rgba(15, 23, 42, 0.38) 12px
+		),
+		rgba(15, 23, 42, 0.72);
+	border: 1px dashed rgba(125, 211, 252, 0.3);
+	box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+	margin: 3px 0;
+	opacity: 0.72;
+}
+
 .glassYellow {
 	position: relative;
 	border-radius: 10px;

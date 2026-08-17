@@ -1,6 +1,7 @@
 {
 	"buttons": {
 		"addZoom": "Add Zoom (Z)",
+		"splitScene": "Split scene at playhead (Ctrl+B)",
 		"suggestZooms": "Suggest Zooms from Cursor",
 		"autoZoomOn": "Auto zoom suggestions on — click to remove suggested zooms",
 		"autoZoomOff": "Auto zoom suggestions off — click to suggest zooms from cursor",
@@ -22,6 +23,7 @@
 		"pan": "Pan",
 		"zoom": "Zoom",
 		"trim": "Trim",
+		"outsideScene": "Outside scene",
 		"speed": "Speed",
 		"zoomItem": "Zoom {{index}}",
 		"trimItem": "Trim {{index}}",

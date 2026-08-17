@@ -117,6 +117,7 @@ import {
 import SceneStrip from "./SceneStrip";
 import { SettingsPanel } from "./SettingsPanel";
 import {
+	canSplitSceneAtSourceTime,
 	createSceneId,
 	createSceneName,
 	createScenePlaybackKey,
@@ -124,6 +125,7 @@ import {
 	normalizeSceneName,
 	reorderScenes,
 	shouldPersistScenes,
+	splitSceneAtSourceTime,
 } from "./sceneModel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
@@ -313,6 +315,9 @@ export default function VideoEditor() {
 	const readyProjectPlaybackKeyRef = useRef<string | null>(null);
 	const nextProjectPlaybackRequestIdRef = useRef(1);
 	const completingProjectPlaybackRequestIdRef = useRef<number | null>(null);
+	const pendingSceneSplitSeekRef = useRef<{ sceneId: string; sourceTimeSeconds: number } | null>(
+		null,
+	);
 	const [selectedZoomId, setSelectedZoomId] = useState<string | null>(null);
 	const [isPreviewingZoom, setIsPreviewingZoom] = useState(false);
 	const [selectedTrimId, setSelectedTrimId] = useState<string | null>(null);
@@ -642,6 +647,64 @@ export default function VideoEditor() {
 		scenesRef.current = nextScenes;
 		setScenes(nextScenes);
 	}, []);
+
+	const handleSplitScene = useCallback(() => {
+		const sceneId = activeSceneIdRef.current;
+		const sceneIndex = scenesRef.current.findIndex((scene) => scene.id === sceneId);
+		const video = videoPlaybackRef.current?.video;
+		const sourceDurationSeconds =
+			video && Number.isFinite(video.duration) ? video.duration : durationRef.current;
+		const sourceTimeSeconds = video?.currentTime ?? currentTime;
+		if (!sceneId || sceneIndex < 0 || !Number.isFinite(sourceDurationSeconds)) {
+			toast.error("This scene cannot be split at the current position.");
+			return;
+		}
+
+		exitProjectPlayback();
+		videoPlaybackRef.current?.pause();
+		const sourceScene = {
+			...scenesRef.current[sceneIndex],
+			media: currentProjectMedia,
+			editor: editorState,
+		};
+		const secondSceneId = createSceneId();
+		const result = splitSceneAtSourceTime({
+			scene: sourceScene,
+			splitTimeMs: sourceTimeSeconds * 1000,
+			durationMs: sourceDurationSeconds * 1000,
+			secondSceneId,
+			secondSceneName: createSceneName(scenesRef.current),
+		});
+		if (!result) {
+			toast.error("Move the playhead to a playable point away from the scene edges.");
+			return;
+		}
+
+		const nextScenes = [...scenesRef.current];
+		nextScenes.splice(sceneIndex, 1, result.firstScene, result.secondScene);
+		scenesRef.current = nextScenes;
+		setScenes(nextScenes);
+		activeSceneIdRef.current = secondSceneId;
+		setActiveSceneId(secondSceneId);
+		applySceneMedia(result.secondScene.media);
+		resetState(result.secondScene.editor);
+		pendingSceneSplitSeekRef.current = { sceneId: secondSceneId, sourceTimeSeconds };
+		setCurrentTime(sourceTimeSeconds);
+		setIsPlaying(false);
+		setSelectedZoomId(null);
+		setSelectedTrimId(null);
+		setSelectedSpeedId(null);
+		setSelectedAnnotationId(null);
+		setSelectedBlurId(null);
+		toast.success("Scene split");
+	}, [
+		applySceneMedia,
+		currentProjectMedia,
+		currentTime,
+		editorState,
+		exitProjectPlayback,
+		resetState,
+	]);
 
 	const handleSceneVideoImported = useCallback(
 		(sourcePath: string) => {
@@ -1687,6 +1750,18 @@ export default function VideoEditor() {
 				media?.webcamVideoPath ? toFileUrl(media.webcamVideoPath) : null,
 			);
 		}
+		const pendingSceneSeek = pendingSceneSplitSeekRef.current;
+		const playback = videoPlaybackRef.current;
+		if (pendingSceneSeek?.sceneId === sceneId && playback?.video) {
+			pendingSceneSplitSeekRef.current = null;
+			void playback
+				.seek(pendingSceneSeek.sourceTimeSeconds)
+				.then(() => setCurrentTime(pendingSceneSeek.sourceTimeSeconds))
+				.catch((seekError) => {
+					console.error("Failed to seek to the new scene boundary:", seekError);
+					toast.error("The scene was split, but preview seeking failed.");
+				});
+		}
 		completePendingProjectPlaybackPosition();
 	}, [completePendingProjectPlaybackPosition, recordSceneMediaReady]);
 
@@ -1999,6 +2074,12 @@ export default function VideoEditor() {
 			);
 		},
 		[moveProjectPlaybackTo],
+	);
+
+	const canSplitActiveScene = canSplitSceneAtSourceTime(
+		editorState,
+		currentTime * 1000,
+		duration * 1000,
 	);
 
 	const handleSelectZoom = useCallback((id: string | null) => {
@@ -4355,6 +4436,8 @@ export default function VideoEditor() {
 									videoDuration={duration}
 									currentTime={currentTime}
 									onSeek={handleSceneTimelineSeek}
+									onSplitScene={handleSplitScene}
+									canSplitScene={canSplitActiveScene}
 									zoomRegions={zoomRegions}
 									onZoomAdded={handleZoomAdded}
 									autoZoomEnabled={autoZoomEnabled}

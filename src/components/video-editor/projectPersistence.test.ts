@@ -124,6 +124,20 @@ describe("projectPersistence media compatibility", () => {
 		expect(normalizeProjectEditor({ webcamRotation: 45 as never }).webcamRotation).toBe(0);
 	});
 
+	it("preserves locked scene-split trim ranges", () => {
+		const editor = normalizeProjectEditor({
+			trimRegions: [
+				{ id: "manual", startMs: 100, endMs: 200 },
+				{ id: "scene-edge", startMs: 500, endMs: 1000, source: "scene-split" },
+			],
+		});
+
+		expect(editor.trimRegions).toEqual([
+			{ id: "manual", startMs: 100, endMs: 200 },
+			{ id: "scene-edge", startMs: 500, endMs: 1000, source: "scene-split" },
+		]);
+	});
+
 	it("preserves valid caption word timing and highlight styling", () => {
 		const editor = normalizeProjectEditor({
 			annotationRegions: [

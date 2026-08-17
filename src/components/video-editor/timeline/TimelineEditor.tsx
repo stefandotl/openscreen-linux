@@ -10,6 +10,7 @@ import {
 	Plus,
 	ScanEye,
 	Scissors,
+	ScissorsLineDashed,
 	WandSparkles,
 	ZoomIn,
 } from "lucide-react";
@@ -51,6 +52,8 @@ interface TimelineEditorProps {
 	hasVideoSource?: boolean;
 	currentTime: number;
 	onSeek?: (time: number) => void;
+	onSplitScene?: () => void;
+	canSplitScene?: boolean;
 	zoomRegions: ZoomRegion[];
 	onZoomAdded: (span: Span) => void;
 	/** Magic-wand auto-zoom toggle state + handler. */
@@ -117,7 +120,7 @@ interface TimelineRenderItem {
 	zoomCustomScale?: number;
 	speedValue?: number;
 	isAutoFocus?: boolean;
-	variant: "zoom" | "trim" | "annotation" | "speed" | "blur";
+	variant: "zoom" | "trim" | "scene-boundary" | "annotation" | "speed" | "blur";
 }
 
 const SCALE_CANDIDATES = [
@@ -821,9 +824,10 @@ function Timeline({
 						key={item.id}
 						rowId={item.rowId}
 						span={item.span}
-						isSelected={item.id === selectedTrimId}
-						onSelect={() => onSelectTrim?.(item.id)}
-						variant="trim"
+						isSelected={item.variant === "trim" && item.id === selectedTrimId}
+						onSelect={item.variant === "trim" ? () => onSelectTrim?.(item.id) : undefined}
+						disabled={item.variant === "scene-boundary"}
+						variant={item.variant}
 					>
 						{item.label}
 					</Item>
@@ -893,6 +897,8 @@ export default function TimelineEditor({
 	hasVideoSource = false,
 	currentTime,
 	onSeek,
+	onSplitScene,
+	canSplitScene = false,
 	zoomRegions,
 	onZoomAdded,
 	autoZoomEnabled = true,
@@ -1254,6 +1260,10 @@ export default function TimelineEditor({
 			if (matchesShortcut(e, keyShortcuts.addKeyframe, isMac)) {
 				addKeyframe();
 			}
+			if (matchesShortcut(e, keyShortcuts.splitScene, isMac)) {
+				e.preventDefault();
+				if (canSplitScene) onSplitScene?.();
+			}
 			if (matchesShortcut(e, keyShortcuts.addZoom, isMac)) {
 				handleAddZoom();
 			}
@@ -1316,6 +1326,8 @@ export default function TimelineEditor({
 		return () => window.removeEventListener("keydown", handleKeyDown);
 	}, [
 		addKeyframe,
+		canSplitScene,
+		onSplitScene,
 		handleAddZoom,
 		handleAddTrim,
 		handleAddAnnotation,
@@ -1367,8 +1379,11 @@ export default function TimelineEditor({
 			id: region.id,
 			rowId: TRIM_ROW_ID,
 			span: { start: region.startMs, end: region.endMs },
-			label: t("labels.trimItem", { index: String(index + 1) }),
-			variant: "trim",
+			label:
+				region.source === "scene-split"
+					? t("labels.outsideScene")
+					: t("labels.trimItem", { index: String(index + 1) }),
+			variant: region.source === "scene-split" ? "scene-boundary" : "trim",
 		}));
 
 		const annotations: TimelineRenderItem[] = annotationRegions.map((region) => {
@@ -1486,6 +1501,18 @@ export default function TimelineEditor({
 		<div className="flex-1 min-h-0 flex flex-col bg-[#09090b] overflow-hidden">
 			<div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/[0.06] bg-[#08090b]/95">
 				<div className="flex items-center gap-0.5 rounded-xl border border-white/[0.06] bg-white/[0.025] p-0.5">
+					<Button
+						onClick={onSplitScene}
+						disabled={!canSplitScene}
+						variant="ghost"
+						size="icon"
+						className="h-7 w-7 rounded-lg text-slate-400 hover:text-[#34B27B] hover:bg-[#34B27B]/10 transition-all disabled:cursor-not-allowed disabled:opacity-30"
+						title={t("buttons.splitScene")}
+						aria-label={t("buttons.splitScene")}
+					>
+						<ScissorsLineDashed className="w-4 h-4" />
+					</Button>
+					<div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
 					<Button
 						onClick={handleAddZoom}
 						variant="ghost"

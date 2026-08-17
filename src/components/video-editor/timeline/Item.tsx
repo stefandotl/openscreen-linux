@@ -1,6 +1,6 @@
 import type { Span } from "dnd-timeline";
 import { useItem } from "dnd-timeline";
-import { Gauge, MessageSquare, MousePointer2, Scissors, ZoomIn } from "lucide-react";
+import { Gauge, LockKeyhole, MessageSquare, MousePointer2, Scissors, ZoomIn } from "lucide-react";
 import { useMemo } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,8 @@ interface ItemProps {
 	zoomCustomScale?: number;
 	speedValue?: number;
 	isAutoFocus?: boolean;
-	variant?: "zoom" | "trim" | "annotation" | "speed" | "blur";
+	disabled?: boolean;
+	variant?: "zoom" | "trim" | "scene-boundary" | "annotation" | "speed" | "blur";
 }
 
 // Map zoom depth to multiplier labels
@@ -50,6 +51,7 @@ export default function Item({
 	zoomCustomScale,
 	speedValue,
 	isAutoFocus = false,
+	disabled = false,
 	variant = "zoom",
 	children,
 }: ItemProps) {
@@ -58,19 +60,23 @@ export default function Item({
 		id,
 		span,
 		data: { rowId },
+		disabled,
 	});
 
 	const isZoom = variant === "zoom";
 	const isTrim = variant === "trim";
+	const isSceneBoundary = variant === "scene-boundary";
 	const isSpeed = variant === "speed";
 
 	const glassClass = isZoom
 		? glassStyles.glassGreen
-		: isTrim
-			? glassStyles.glassRed
-			: isSpeed
-				? glassStyles.glassAmber
-				: glassStyles.glassYellow;
+		: isSceneBoundary
+			? glassStyles.glassBoundary
+			: isTrim
+				? glassStyles.glassRed
+				: isSpeed
+					? glassStyles.glassAmber
+					: glassStyles.glassYellow;
 
 	const endCapColor = isZoom ? "#21916A" : isTrim ? "#ef4444" : isSpeed ? "#d97706" : "#B4A046";
 
@@ -91,13 +97,14 @@ export default function Item({
 			{...listeners}
 			{...attributes}
 			onPointerDownCapture={() => onSelect?.()}
-			className="group"
+			className={cn("group", disabled && "cursor-default")}
 		>
 			<div style={{ ...itemContentStyle, minWidth: 24 }}>
 				<div
 					className={cn(
 						glassClass,
-						"w-full h-full overflow-hidden flex items-center justify-center gap-1.5 cursor-grab active:cursor-grabbing relative",
+						"w-full h-full overflow-hidden flex items-center justify-center gap-1.5 relative",
+						disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
 						isSelected && glassStyles.selected,
 					)}
 					style={{ height: 30, color: "#fff", minWidth: 24 }}
@@ -106,28 +113,32 @@ export default function Item({
 						onSelect?.();
 					}}
 				>
-					<div
-						className={cn(glassStyles.zoomEndCap, glassStyles.left)}
-						style={{
-							cursor: "col-resize",
-							pointerEvents: "auto",
-							width: 8,
-							opacity: 0.9,
-							background: endCapColor,
-						}}
-						title="Resize left"
-					/>
-					<div
-						className={cn(glassStyles.zoomEndCap, glassStyles.right)}
-						style={{
-							cursor: "col-resize",
-							pointerEvents: "auto",
-							width: 8,
-							opacity: 0.9,
-							background: endCapColor,
-						}}
-						title="Resize right"
-					/>
+					{!disabled && (
+						<>
+							<div
+								className={cn(glassStyles.zoomEndCap, glassStyles.left)}
+								style={{
+									cursor: "col-resize",
+									pointerEvents: "auto",
+									width: 8,
+									opacity: 0.9,
+									background: endCapColor,
+								}}
+								title="Resize left"
+							/>
+							<div
+								className={cn(glassStyles.zoomEndCap, glassStyles.right)}
+								style={{
+									cursor: "col-resize",
+									pointerEvents: "auto",
+									width: 8,
+									opacity: 0.9,
+									background: endCapColor,
+								}}
+								title="Resize right"
+							/>
+						</>
+					)}
 					{/* Content */}
 					<div className="relative z-10 flex min-w-0 flex-col items-center justify-center text-white/90 opacity-85 group-hover:opacity-100 transition-opacity select-none overflow-hidden px-3">
 						<div className="flex items-center gap-1.5">
@@ -145,6 +156,13 @@ export default function Item({
 											aria-label="Cursor-follow"
 										/>
 									)}
+								</>
+							) : isSceneBoundary ? (
+								<>
+									<LockKeyhole className="w-3.5 h-3.5 shrink-0 text-sky-200/80" />
+									<span className="text-[11px] font-semibold whitespace-nowrap text-sky-100/80">
+										{t("labels.outsideScene")}
+									</span>
 								</>
 							) : isTrim ? (
 								<>

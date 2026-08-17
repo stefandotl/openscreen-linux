@@ -212,7 +212,7 @@ export class FrameRenderer {
 		this.blurFilter = new BlurFilter();
 		this.blurFilter.quality = 5;
 		this.blurFilter.resolution = this.app.renderer.resolution;
-		this.blurFilter.blur = 0;
+		this.blurFilter.strength = 0;
 		this.motionBlurFilter = new MotionBlurFilter({
 			velocity: { x: 0, y: 0 },
 			kernelSize: 5,

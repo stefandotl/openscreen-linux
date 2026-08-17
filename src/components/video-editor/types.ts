@@ -220,6 +220,8 @@ export interface TrimRegion {
 	id: string;
 	startMs: number;
 	endMs: number;
+	/** Locked range owned by a scene split rather than a user-created trim. */
+	source?: "scene-split";
 }
 
 export type AnnotationType = "text" | "image" | "figure" | "blur";

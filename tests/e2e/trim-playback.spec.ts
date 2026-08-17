@@ -111,6 +111,16 @@ test("scene and project playback continue after a trim in the middle of a scene"
 			hudWindow.getByTestId("launch-open-studio-button").click(),
 		]);
 		await editorWindow.waitForLoadState("domcontentloaded");
+		const playbackConsoleErrors: string[] = [];
+		editorWindow.on("console", (message) => {
+			const text = message.text();
+			if (
+				text.includes("Project playback failed") ||
+				text.includes("BlurFilter.blur is deprecated")
+			) {
+				playbackConsoleErrors.push(text);
+			}
+		});
 		await editorWindow.getByRole("button", { name: "Import Video" }).click();
 		await expect(editorWindow.getByText("Loading video...")).not.toBeVisible({ timeout: 20_000 });
 
@@ -199,6 +209,75 @@ test("scene and project playback continue after a trim in the middle of a scene"
 			},
 		});
 		await expect(secondSceneButton).toHaveAttribute("aria-current", "true");
+		expect(playbackConsoleErrors).toEqual([]);
+	} finally {
+		await closeApp(app);
+	}
+});
+
+test("splits the active scene at the playhead without changing project duration", async () => {
+	const app = await launchApp();
+	try {
+		const hudWindow = await app.firstWindow({ timeout: 60_000 });
+		await hudWindow.waitForLoadState("domcontentloaded");
+		await dismissLanguagePrompt(hudWindow);
+		const testVideoPath = await copyFixtureToRecordings(app);
+
+		await app.evaluate(({ ipcMain }, videoPath) => {
+			ipcMain.removeHandler("open-video-file-picker");
+			ipcMain.handle("open-video-file-picker", () => ({ success: true, path: videoPath }));
+		}, testVideoPath);
+
+		const [editorWindow] = await Promise.all([
+			app.waitForEvent("window", {
+				predicate: (window) => window.url().includes("windowType=editor"),
+				timeout: 15_000,
+			}),
+			hudWindow.getByTestId("launch-open-studio-button").click(),
+		]);
+		await editorWindow.waitForLoadState("domcontentloaded");
+		await editorWindow.getByRole("button", { name: "Import Video" }).click();
+		await expect(editorWindow.getByText("Loading video...")).not.toBeVisible({ timeout: 20_000 });
+
+		const playbackRange = editorWindow.locator('input[type="range"][aria-label$="timeline"]');
+		await expect
+			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 20_000 })
+			.not.toBe(100);
+		const sourceDurationSeconds = Number(await playbackRange.getAttribute("max"));
+		expect(sourceDurationSeconds).toBeGreaterThan(0.25);
+		const splitTimeSeconds = sourceDurationSeconds * 0.4;
+		const sceneTimeline = editorWindow.getByTestId("editor-scene-timeline");
+		const timelineBounds = await sceneTimeline.boundingBox();
+		expect(timelineBounds).not.toBeNull();
+		await sceneTimeline.click({
+			position: {
+				x: Math.round((timelineBounds?.width ?? 1) * 0.4),
+				y: Math.round((timelineBounds?.height ?? 1) * 0.5),
+			},
+		});
+		await expect
+			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
+			.toBeCloseTo(splitTimeSeconds, 2);
+
+		const splitButton = editorWindow.getByRole("button", {
+			name: "Split scene at playhead (Ctrl+B)",
+		});
+		await expect(splitButton).toBeEnabled();
+		await splitButton.click();
+
+		const firstSceneButton = editorWindow.getByRole("button", { name: /^Scene 1:/ });
+		const secondSceneButton = editorWindow.getByRole("button", { name: /^Scene 2:/ });
+		await expect(firstSceneButton).toBeVisible();
+		await expect(secondSceneButton).toHaveAttribute("aria-current", "true");
+		await expect(editorWindow.getByText("Outside scene", { exact: true })).toBeVisible();
+		await expect
+			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
+			.toBeCloseTo(splitTimeSeconds, 1);
+
+		await editorWindow.getByRole("button", { name: "Project", exact: true }).click();
+		await expect
+			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 10_000 })
+			.toBeCloseTo(sourceDurationSeconds, 2);
 	} finally {
 		await closeApp(app);
 	}

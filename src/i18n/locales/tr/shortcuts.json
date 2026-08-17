@@ -22,6 +22,7 @@
 		"addAnnotation": "Açıklama Ekle",
 		"addBlur": "Bulanik Ekle",
 		"addKeyframe": "Anahtar Kare Ekle",
+		"splitScene": "Sahneyi böl",
 		"deleteSelected": "Seçileni Sil",
 		"playPause": "Oynat / Duraklat"
 	},

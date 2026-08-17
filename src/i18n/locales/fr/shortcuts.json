@@ -22,6 +22,7 @@
 		"addAnnotation": "Ajouter une annotation",
 		"addBlur": "Ajouter un flou",
 		"addKeyframe": "Ajouter une image-clé",
+		"splitScene": "Diviser la scène",
 		"deleteSelected": "Supprimer la sélection",
 		"playPause": "Lecture / Pause"
 	},

@@ -530,7 +530,7 @@ export class PixiCursorOverlay {
 			shadowSprite.tint = CURSOR_SHADOW_COLOR;
 			shadowSprite.alpha = CURSOR_SHADOW_ALPHA;
 			const shadowFilter = new BlurFilter();
-			shadowFilter.blur = CURSOR_SHADOW_BLUR;
+			shadowFilter.strength = CURSOR_SHADOW_BLUR;
 			shadowFilter.quality = 4;
 			shadowFilter.padding = CURSOR_SHADOW_PADDING;
 			shadowSprite.filters = [shadowFilter];
