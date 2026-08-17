@@ -1801,6 +1801,7 @@ export default function VideoEditor() {
 			!pending ||
 			pending.sceneId !== activeSceneId ||
 			!playback?.video ||
+			!playback.isReady ||
 			playback.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
 			playback.video.getAttribute("src") !== videoPath
 		) {

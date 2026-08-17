@@ -162,6 +162,7 @@ export interface VideoPlaybackRef {
 	videoSprite: Sprite | null;
 	videoContainer: Container | null;
 	containerRef: React.RefObject<HTMLDivElement>;
+	isReady: boolean;
 	seek: (timeSeconds: number) => Promise<void>;
 	play: () => Promise<void>;
 	pause: () => void;
@@ -629,6 +630,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			videoSprite: videoSpriteRef.current,
 			videoContainer: videoContainerRef.current,
 			containerRef,
+			isReady: pixiReady && videoReady,
 			seek: async (timeSeconds: number) => {
 				const video = videoRef.current;
 				if (!video) return;
@@ -1309,8 +1311,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, [pixiReady, videoReady]);
 
 		useEffect(() => {
-			if (pixiReady && videoReady && (!webcamVideoPath || webcamDimensions)) onReady?.();
-		}, [onReady, pixiReady, videoReady, webcamDimensions, webcamVideoPath]);
+			if (pixiReady && videoReady) onReady?.();
+		}, [onReady, pixiReady, videoReady]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
@@ -2029,7 +2031,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										onPointerLeave={handleWebcamPointerUp}
 										onError={() => onError("Failed to load webcam video")}
 										muted
-										preload="metadata"
+										preload="auto"
 										playsInline
 									/>
 								</div>

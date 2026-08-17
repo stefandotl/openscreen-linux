@@ -13,6 +13,19 @@ const TEST_VIDEO =
 	process.env["OPENSCREEN_E2E_VIDEO"] ?? path.join(__dirname, "../fixtures/sample.webm");
 const MIDDLE_TRIM_START_SECONDS = Number(process.env["OPENSCREEN_E2E_TRIM_START_SECONDS"] ?? "0.5");
 const USE_TERMINAL_TRIM = !process.env["OPENSCREEN_E2E_VIDEO"];
+const HANDOFF_FIRST_VIDEO = process.env["OPENSCREEN_E2E_HANDOFF_FIRST_VIDEO"];
+const HANDOFF_SECOND_VIDEO = process.env["OPENSCREEN_E2E_HANDOFF_SECOND_VIDEO"];
+const HANDOFF_WEBCAM_VIDEO = process.env["OPENSCREEN_E2E_HANDOFF_WEBCAM_VIDEO"];
+const HANDOFF_PROJECT_PATH = process.env["OPENSCREEN_E2E_HANDOFF_PROJECT"];
+const HANDOFF_FIRST_DURATION_SECONDS = Number(
+	process.env["OPENSCREEN_E2E_HANDOFF_FIRST_DURATION_SECONDS"] ?? "2",
+);
+const HANDOFF_SECOND_DURATION_SECONDS = Number(
+	process.env["OPENSCREEN_E2E_HANDOFF_SECOND_DURATION_SECONDS"] ?? "2",
+);
+const HANDOFF_SPLIT_TIME_SECONDS = Number(
+	process.env["OPENSCREEN_E2E_HANDOFF_SPLIT_TIME_SECONDS"] ?? "0.8",
+);
 
 type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
 
@@ -78,10 +91,19 @@ async function dismissLanguagePrompt(page: Page) {
 	if ((await keepCurrentLanguage.count()) > 0) await keepCurrentLanguage.click();
 }
 
-async function copyFixtureToRecordings(app: ElectronApplication) {
+async function pausePreview(page: Page) {
+	await page.locator("video.hidden").evaluate((video) => {
+		(video as HTMLVideoElement).pause();
+	});
+}
+
+async function copyFixtureToRecordings(
+	app: ElectronApplication,
+	fileName = "trim-playback-sample.webm",
+) {
 	const userDataDir = await app.evaluate(({ app: electronApp }) => electronApp.getPath("userData"));
 	const recordingsDir = path.join(userDataDir, "recordings");
-	const targetPath = path.join(recordingsDir, "trim-playback-sample.webm");
+	const targetPath = path.join(recordingsDir, fileName);
 	fs.mkdirSync(recordingsDir, { recursive: true });
 	fs.copyFileSync(TEST_VIDEO, targetPath);
 	return targetPath;
@@ -149,8 +171,7 @@ test("scene and project playback continue after a trim in the middle of a scene"
 		await expect
 			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
 			.toBeGreaterThan(MIDDLE_TRIM_START_SECONDS + 1.05);
-		const scenePauseButton = editorWindow.getByRole("button", { name: "Pause", exact: true });
-		if ((await scenePauseButton.count()) > 0) await scenePauseButton.click();
+		await pausePreview(editorWindow);
 
 		if (USE_TERMINAL_TRIM) {
 			await playbackRange.evaluate((input, value) => {
@@ -186,7 +207,7 @@ test("scene and project playback continue after a trim in the middle of a scene"
 			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
 			.toBeGreaterThan(MIDDLE_TRIM_START_SECONDS + 0.15);
 
-		await editorWindow.getByRole("button", { name: "Pause", exact: true }).click();
+		await pausePreview(editorWindow);
 		const firstSceneProjectDuration = USE_TERMINAL_TRIM
 			? MIDDLE_TRIM_START_SECONDS
 			: sourceDurationSeconds - 1;
@@ -274,10 +295,23 @@ test("splits the active scene at the playhead without changing project duration"
 			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
 			.toBeCloseTo(splitTimeSeconds, 1);
 
+		const secondVideoPath = await copyFixtureToRecordings(app, "trim-playback-second-sample.webm");
+		await app.evaluate(({ ipcMain }, videoPath) => {
+			ipcMain.removeHandler("open-video-file-picker");
+			ipcMain.handle("open-video-file-picker", () => ({ success: true, path: videoPath }));
+		}, secondVideoPath);
+		await editorWindow.getByText("Add scene", { exact: true }).click();
+		await editorWindow
+			.getByRole("button", { name: /^Import Video File/ })
+			.last()
+			.click();
+		const thirdSceneButton = editorWindow.getByRole("button", { name: /^Scene 3:/ });
+		await expect(thirdSceneButton).toHaveAttribute("aria-current", "true", { timeout: 20_000 });
+
 		await editorWindow.getByRole("button", { name: "Project", exact: true }).click();
 		await expect
 			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 10_000 })
-			.toBeCloseTo(sourceDurationSeconds, 2);
+			.toBeCloseTo(sourceDurationSeconds * 2, 2);
 		await playbackRange.evaluate(
 			(input, value) => {
 				const range = input as HTMLInputElement;
@@ -316,7 +350,11 @@ test("splits the active scene at the playhead without changing project duration"
 			};
 		});
 		expect(handoffProbe).toEqual({ pauseCount: 0, sameVideoElement: true });
-		await editorWindow.getByRole("button", { name: "Pause", exact: true }).click();
+		await expect(thirdSceneButton).toHaveAttribute("aria-current", "true", { timeout: 15_000 });
+		await expect
+			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
+			.toBeGreaterThan(sourceDurationSeconds + 0.1);
+		await pausePreview(editorWindow);
 
 		await editorWindow
 			.getByRole("button", { name: "Remove cut: Scene 1 + Scene 2", exact: true })
@@ -330,6 +368,156 @@ test("splits the active scene at the playhead without changing project duration"
 		await expect
 			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 10_000 })
 			.toBeCloseTo(sourceDurationSeconds, 2);
+	} finally {
+		await closeApp(app);
+	}
+});
+
+test("continues project playback from split scenes into a different recording with webcam", async () => {
+	const app = await launchApp();
+	try {
+		const hudWindow = await app.firstWindow({ timeout: 60_000 });
+		await hudWindow.waitForLoadState("domcontentloaded");
+		await dismissLanguagePrompt(hudWindow);
+		const firstVideoPath =
+			HANDOFF_FIRST_VIDEO ?? (await copyFixtureToRecordings(app, "handoff-first.webm"));
+		const secondVideoPath =
+			HANDOFF_SECOND_VIDEO ?? (await copyFixtureToRecordings(app, "handoff-second.webm"));
+		const webcamVideoPath =
+			HANDOFF_WEBCAM_VIDEO ?? (await copyFixtureToRecordings(app, "handoff-webcam.webm"));
+		const splitTimeMs = HANDOFF_SPLIT_TIME_SECONDS * 1000;
+		const projectDurationSeconds = HANDOFF_FIRST_DURATION_SECONDS + HANDOFF_SECOND_DURATION_SECONDS;
+		const generatedProject = {
+			version: 2,
+			media: { screenVideoPath: firstVideoPath },
+			editor: {},
+			activeSceneId: "split-left",
+			scenes: [
+				{
+					id: "split-left",
+					name: "Split left",
+					media: { screenVideoPath: firstVideoPath },
+					editor: {
+						trimRegions: [
+							{
+								id: "after-split",
+								startMs: splitTimeMs,
+								endMs: HANDOFF_FIRST_DURATION_SECONDS * 1000,
+								source: "scene-split",
+							},
+						],
+					},
+				},
+				{
+					id: "split-right",
+					name: "Split right",
+					media: { screenVideoPath: firstVideoPath },
+					editor: {
+						trimRegions: [
+							{ id: "before-split", startMs: 0, endMs: splitTimeMs, source: "scene-split" },
+						],
+					},
+				},
+				{
+					id: "different-recording",
+					name: "Different recording",
+					media: { screenVideoPath: secondVideoPath, webcamVideoPath },
+					editor: {},
+				},
+			],
+		};
+		const project = HANDOFF_PROJECT_PATH
+			? (JSON.parse(fs.readFileSync(HANDOFF_PROJECT_PATH, "utf8")) as {
+					scenes: Array<{ name: string }>;
+				})
+			: generatedProject;
+		const firstSceneName = project.scenes[0]?.name ?? "Split left";
+		const finalSceneName = project.scenes.at(-1)?.name ?? "Different recording";
+
+		const [editorWindow] = await Promise.all([
+			app.waitForEvent("window", {
+				predicate: (window) => window.url().includes("windowType=editor"),
+				timeout: 15_000,
+			}),
+			hudWindow.getByTestId("launch-open-studio-button").click(),
+		]);
+		await editorWindow.waitForLoadState("domcontentloaded");
+		await app.evaluate(({ ipcMain }, loadedProject) => {
+			ipcMain.removeHandler("native-bridge:invoke");
+			ipcMain.handle("native-bridge:invoke", (_event, request) => {
+				const candidate = request as { requestId?: string; domain?: string; action?: string };
+				if (candidate.domain === "project" && candidate.action === "loadProjectFile") {
+					return {
+						ok: true,
+						data: {
+							success: true,
+							path: "/tmp/handoff.openscreen",
+							project: loadedProject,
+						},
+						meta: {
+							version: 1,
+							requestId: candidate.requestId ?? "handoff-load",
+							timestampMs: Date.now(),
+						},
+					};
+				}
+				return {
+					ok: false,
+					error: { code: "UNSUPPORTED_ACTION", message: "Not used by this test", retryable: false },
+					meta: {
+						version: 1,
+						requestId: candidate.requestId ?? "handoff-unsupported",
+						timestampMs: Date.now(),
+					},
+				};
+			});
+		}, project);
+		await editorWindow
+			.getByRole("button", { name: /Load Project/ })
+			.last()
+			.click();
+		const playbackRange = editorWindow.locator('input[type="range"][aria-label$="timeline"]');
+		await expect(editorWindow.getByRole("button", { name: "Project", exact: true })).toBeVisible({
+			timeout: 20_000,
+		});
+		const firstScene = editorWindow.getByRole("button", {
+			name: new RegExp(`^${firstSceneName}:`),
+		});
+		await firstScene.click();
+		await expect(firstScene).toHaveAttribute("aria-current", "true", { timeout: 10_000 });
+		await editorWindow.getByRole("button", { name: "Project", exact: true }).click();
+		await expect
+			.poll(async () => Number(await playbackRange.getAttribute("max")), { timeout: 20_000 })
+			.toBeCloseTo(projectDurationSeconds, 2);
+		await playbackRange.evaluate((input) => {
+			const range = input as HTMLInputElement;
+			range.value = "0";
+			range.dispatchEvent(new Event("input", { bubbles: true }));
+			range.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		await expect(firstScene).toHaveAttribute("aria-current", "true", { timeout: 10_000 });
+		await editorWindow.getByRole("button", { name: "Play", exact: true }).click();
+
+		const thirdScene = editorWindow.getByRole("button", {
+			name: new RegExp(`^${finalSceneName}:`),
+		});
+		await expect(thirdScene).toHaveAttribute("aria-current", "true", {
+			timeout: HANDOFF_FIRST_DURATION_SECONDS * 1000 + 15_000,
+		});
+		await expect
+			.poll(
+				async () =>
+					editorWindow.locator("video.hidden").evaluate((video) => {
+						const media = video as HTMLVideoElement;
+						return media.paused ? -media.readyState : media.currentTime;
+					}),
+				{ timeout: 10_000 },
+			)
+			.toBeGreaterThan(0.05);
+		await expect
+			.poll(async () => Number(await playbackRange.inputValue()), { timeout: 10_000 })
+			.toBeGreaterThan(HANDOFF_FIRST_DURATION_SECONDS + 0.1);
+		await pausePreview(editorWindow);
 	} finally {
 		await closeApp(app);
 	}
