@@ -1,6 +1,6 @@
 import type { SpeedRegion, TrimRegion } from "@/components/video-editor/types";
 
-export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 5 as const;
+export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 7 as const;
 
 export const NATIVE_GPU_EXPORT_CHANNELS = {
 	start: "start-native-gpu-export",
@@ -26,6 +26,21 @@ export interface NativeGpuExportOverlay {
 	y: number;
 	width: number;
 	height: number;
+	zIndex: number;
+}
+
+export interface NativeGpuExportBlurRegion {
+	startMs: number;
+	endMs: number;
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	type: "blur" | "mosaic";
+	intensity: number;
+	shape: "rectangle" | "oval";
+	blockSize: number;
+	color: "white" | "black";
 	zIndex: number;
 }
 
@@ -61,6 +76,7 @@ export interface NativeGpuExportPlan {
 		} | null;
 	};
 	frames: NativeGpuExportFrame[];
+	blurRegions: NativeGpuExportBlurRegion[];
 	overlays: NativeGpuExportOverlay[];
 }
 

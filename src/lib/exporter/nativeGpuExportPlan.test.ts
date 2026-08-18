@@ -61,6 +61,24 @@ function highlightedCaption(overrides: Partial<AnnotationRegion>): AnnotationReg
 	};
 }
 
+function mosaicRegion(overrides: Partial<AnnotationRegion> = {}): AnnotationRegion {
+	return {
+		...staticTextAnnotation(),
+		id: "mosaic",
+		type: "blur",
+		position: { x: 10, y: 20 },
+		size: { width: 30, height: 25 },
+		blurData: {
+			type: "mosaic",
+			shape: "rectangle",
+			color: "black",
+			intensity: 12,
+			blockSize: 16,
+		},
+		...overrides,
+	};
+}
+
 describe("native GPU export plan", () => {
 	it("creates a deterministic 30 fps plan using the existing timeline and zoom math", () => {
 		const config = createConfig({
@@ -116,6 +134,111 @@ describe("native GPU export plan", () => {
 		expect(plan.overlays).toHaveLength(5);
 		expect(plan.overlays.map((overlay) => overlay.zIndex)).toEqual([2, 5, 5, 5, 20]);
 		expect(plan.overlays.every((overlay) => overlay.width > 0 && overlay.height > 0)).toBe(true);
+	});
+
+	it("plans timed soft-blur and mosaic regions for native GPU export", () => {
+		const config = createConfig({
+			previewWidth: 540,
+			previewHeight: 960,
+			annotationRegions: [
+				mosaicRegion(),
+				mosaicRegion({
+					id: "oval",
+					startMs: 300,
+					endMs: 900,
+					blurData: {
+						type: "mosaic",
+						shape: "oval",
+						color: "white",
+						intensity: 12,
+						blockSize: 12,
+					},
+				}),
+				mosaicRegion({
+					id: "soft",
+					startMs: 400,
+					endMs: 1_000,
+					blurData: {
+						type: "blur",
+						shape: "rectangle",
+						color: "white",
+						intensity: 10,
+						blockSize: 12,
+					},
+				}),
+			],
+		});
+
+		expect(getNativeGpuExportBlockers(config, videoInfo)).toEqual([]);
+		expect(createNativeGpuExportPlan(config, videoInfo).blurRegions).toEqual([
+			{
+				startMs: 100,
+				endMs: 800,
+				x: 108,
+				y: 384,
+				width: 324,
+				height: 480,
+				type: "mosaic",
+				intensity: 24,
+				shape: "rectangle",
+				blockSize: 32,
+				color: "black",
+				zIndex: 1,
+			},
+			{
+				startMs: 300,
+				endMs: 900,
+				x: 108,
+				y: 384,
+				width: 324,
+				height: 480,
+				type: "mosaic",
+				intensity: 24,
+				shape: "oval",
+				blockSize: 24,
+				color: "white",
+				zIndex: 1,
+			},
+			{
+				startMs: 400,
+				endMs: 1_000,
+				x: 108,
+				y: 384,
+				width: 324,
+				height: 480,
+				type: "blur",
+				intensity: 20,
+				shape: "rectangle",
+				blockSize: 24,
+				color: "white",
+				zIndex: 1,
+			},
+		]);
+	});
+
+	it("keeps unsupported freehand blur regions fail-fast", () => {
+		const config = createConfig({
+			annotationRegions: [
+				mosaicRegion({
+					blurData: {
+						type: "mosaic",
+						shape: "freehand",
+						color: "black",
+						intensity: 12,
+						blockSize: 16,
+						freehandPoints: [
+							{ x: 0, y: 0 },
+							{ x: 100, y: 0 },
+							{ x: 50, y: 100 },
+						],
+					},
+				}),
+			],
+		});
+
+		expect(getNativeGpuExportBlockers(config, videoInfo)).toContain(
+			"blur shape freehand is not implemented",
+		);
 	});
 
 	it("plans directional motion blur only while the camera is moving", () => {

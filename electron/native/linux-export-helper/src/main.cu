@@ -206,6 +206,22 @@ struct PlannedOverlay {
 	int zIndex = 0;
 };
 
+struct PlannedBlurRegion {
+	double startMs = -1.0;
+	double endMs = -1.0;
+	int x = 0;
+	int y = 0;
+	int width = 0;
+	int height = 0;
+	int blockSize = 1;
+	int intensity = 1;
+	int zIndex = 0;
+	bool mosaic = true;
+	bool oval = false;
+	float tintAlpha = 0.06f;
+	float tintLuma = 235.0f;
+};
+
 struct ExportPlan {
 	int version = 0;
 	int width = 0;
@@ -223,6 +239,7 @@ struct ExportPlan {
 	int64_t bitrate = 0;
 	WebcamPlan webcam;
 	std::vector<PlannedFrame> frames;
+	std::vector<PlannedBlurRegion> blurRegions;
 	std::vector<PlannedOverlay> overlays;
 };
 
@@ -234,10 +251,12 @@ struct GpuOverlay {
 	int y = 0;
 	int width = 0;
 	int height = 0;
+	int zIndex = 0;
 };
 
 struct GpuAssets {
 	uint8_t *wallpaper = nullptr;
+	uint8_t *blurScratch = nullptr;
 	std::vector<GpuOverlay> overlays;
 };
 
@@ -692,6 +711,203 @@ __global__ void compositeWebcamShadowChroma(
 			240.0f));
 }
 
+__device__ bool insideMosaicShape(
+	int x,
+	int y,
+	int regionX,
+	int regionY,
+	int regionWidth,
+	int regionHeight,
+	bool oval) {
+	if (!oval) return true;
+	const float radiusX = fmaxf(0.5f, static_cast<float>(regionWidth) * 0.5f);
+	const float radiusY = fmaxf(0.5f, static_cast<float>(regionHeight) * 0.5f);
+	const float centerX = static_cast<float>(regionX) + radiusX;
+	const float centerY = static_cast<float>(regionY) + radiusY;
+	const float dx = (static_cast<float>(x) + 0.5f - centerX) / radiusX;
+	const float dy = (static_cast<float>(y) + 0.5f - centerY) / radiusY;
+	return dx * dx + dy * dy <= 1.0f;
+}
+
+__global__ void mosaicLuma(
+	uint8_t *outputY,
+	int outputPitch,
+	int regionX,
+	int regionY,
+	int regionWidth,
+	int regionHeight,
+	int blockSize,
+	bool oval,
+	float tintAlpha,
+	float tintLuma) {
+	__shared__ uint8_t sample;
+	const int blockStartLocalX = static_cast<int>(blockIdx.x) * blockSize;
+	const int blockStartLocalY = static_cast<int>(blockIdx.y) * blockSize;
+	if (threadIdx.x == 0 && threadIdx.y == 0) {
+		const int sampleX = regionX + min(regionWidth - 1, blockStartLocalX + blockSize / 2);
+		const int sampleY = regionY + min(regionHeight - 1, blockStartLocalY + blockSize / 2);
+		sample = outputY[sampleY * outputPitch + sampleX];
+	}
+	__syncthreads();
+	for (int localY = blockStartLocalY + static_cast<int>(threadIdx.y);
+		 localY < min(regionHeight, blockStartLocalY + blockSize);
+		 localY += static_cast<int>(blockDim.y)) {
+		for (int localX = blockStartLocalX + static_cast<int>(threadIdx.x);
+			 localX < min(regionWidth, blockStartLocalX + blockSize);
+			 localX += static_cast<int>(blockDim.x)) {
+			const int x = regionX + localX;
+			const int y = regionY + localY;
+			if (!insideMosaicShape(x, y, regionX, regionY, regionWidth, regionHeight, oval)) continue;
+			outputY[y * outputPitch + x] = static_cast<uint8_t>(clampFloat(
+				static_cast<float>(sample) * (1.0f - tintAlpha) + tintLuma * tintAlpha,
+				16.0f,
+				235.0f));
+		}
+	}
+}
+
+__global__ void mosaicChroma(
+	uint8_t *outputUv,
+	int outputPitch,
+	int regionX,
+	int regionY,
+	int regionWidth,
+	int regionHeight,
+	int blockSize,
+	bool oval,
+	float tintAlpha) {
+	__shared__ uint8_t sampleU;
+	__shared__ uint8_t sampleV;
+	const int blockStartLocalX = static_cast<int>(blockIdx.x) * blockSize;
+	const int blockStartLocalY = static_cast<int>(blockIdx.y) * blockSize;
+	if (threadIdx.x == 0 && threadIdx.y == 0) {
+		const int sampleX = regionX + min(regionWidth - 1, blockStartLocalX + blockSize / 2);
+		const int sampleY = regionY + min(regionHeight - 1, blockStartLocalY + blockSize / 2);
+		const int sampleOffset = sampleY * outputPitch + sampleX * 2;
+		sampleU = outputUv[sampleOffset];
+		sampleV = outputUv[sampleOffset + 1];
+	}
+	__syncthreads();
+	for (int localY = blockStartLocalY + static_cast<int>(threadIdx.y);
+		 localY < min(regionHeight, blockStartLocalY + blockSize);
+		 localY += static_cast<int>(blockDim.y)) {
+		for (int localX = blockStartLocalX + static_cast<int>(threadIdx.x);
+			 localX < min(regionWidth, blockStartLocalX + blockSize);
+			 localX += static_cast<int>(blockDim.x)) {
+			const int x = regionX + localX;
+			const int y = regionY + localY;
+			if (!insideMosaicShape(x, y, regionX, regionY, regionWidth, regionHeight, oval)) continue;
+			const int offset = y * outputPitch + x * 2;
+			outputUv[offset] = static_cast<uint8_t>(clampFloat(
+				static_cast<float>(sampleU) * (1.0f - tintAlpha) + 128.0f * tintAlpha,
+				16.0f,
+				240.0f));
+			outputUv[offset + 1] = static_cast<uint8_t>(clampFloat(
+				static_cast<float>(sampleV) * (1.0f - tintAlpha) + 128.0f * tintAlpha,
+				16.0f,
+				240.0f));
+		}
+	}
+}
+
+__device__ int softBlurWeight(int tap) {
+	const int distance = abs(tap);
+	if (distance == 0) return 10;
+	if (distance == 1) return 7;
+	if (distance == 2) return 4;
+	if (distance == 3) return 2;
+	return 1;
+}
+
+__global__ void softBlurHorizontal(
+	const uint8_t *input,
+	int inputPitch,
+	uint8_t *scratch,
+	int scratchPitch,
+	int regionX,
+	int regionY,
+	int regionWidth,
+	int regionHeight,
+	int radius,
+	bool oval,
+	int components) {
+	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (localX >= regionWidth || localY >= regionHeight) return;
+	const int x = regionX + localX;
+	const int y = regionY + localY;
+	if (!insideMosaicShape(x, y, regionX, regionY, regionWidth, regionHeight, oval)) return;
+	for (int component = 0; component < components; component++) {
+		int weightedTotal = 0;
+		int totalWeight = 0;
+		for (int tap = -4; tap <= 4; tap++) {
+			const int sampleX = max(regionX, min(regionX + regionWidth - 1, x + tap * radius / 4));
+			if (!insideMosaicShape(
+					sampleX,
+					y,
+					regionX,
+					regionY,
+					regionWidth,
+					regionHeight,
+					oval))
+				continue;
+			const int weight = softBlurWeight(tap);
+			weightedTotal += input[y * inputPitch + sampleX * components + component] * weight;
+			totalWeight += weight;
+		}
+		scratch[y * scratchPitch + x * components + component] =
+			static_cast<uint8_t>(weightedTotal / max(1, totalWeight));
+	}
+}
+
+__global__ void softBlurVertical(
+	const uint8_t *scratch,
+	int scratchPitch,
+	uint8_t *output,
+	int outputPitch,
+	int regionX,
+	int regionY,
+	int regionWidth,
+	int regionHeight,
+	int radius,
+	bool oval,
+	int components,
+	float tintAlpha,
+	float tintValue,
+	float minimumValue,
+	float maximumValue) {
+	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
+	const int localY = static_cast<int>(blockIdx.y * blockDim.y + threadIdx.y);
+	if (localX >= regionWidth || localY >= regionHeight) return;
+	const int x = regionX + localX;
+	const int y = regionY + localY;
+	if (!insideMosaicShape(x, y, regionX, regionY, regionWidth, regionHeight, oval)) return;
+	for (int component = 0; component < components; component++) {
+		int weightedTotal = 0;
+		int totalWeight = 0;
+		for (int tap = -4; tap <= 4; tap++) {
+			const int sampleY = max(regionY, min(regionY + regionHeight - 1, y + tap * radius / 4));
+			if (!insideMosaicShape(
+					x,
+					sampleY,
+					regionX,
+					regionY,
+					regionWidth,
+					regionHeight,
+					oval))
+				continue;
+			const int weight = softBlurWeight(tap);
+			weightedTotal += scratch[sampleY * scratchPitch + x * components + component] * weight;
+			totalWeight += weight;
+		}
+		const float blurred = static_cast<float>(weightedTotal) / static_cast<float>(max(1, totalWeight));
+		output[y * outputPitch + x * components + component] = static_cast<uint8_t>(clampFloat(
+			blurred * (1.0f - tintAlpha) + tintValue * tintAlpha,
+			minimumValue,
+			maximumValue));
+	}
+}
+
 __global__ void compositeOverlayLuma(
 	uint8_t *outputY,
 	int outputPitch,
@@ -1144,8 +1360,128 @@ double compositeFrame(
 		requireRuntime(cudaGetLastError(), "compositeWebcamChroma launch");
 	}
 
-	for (const auto &overlay : assets.overlays) {
-		if (sourceTimestampMs < overlay.startMs || sourceTimestampMs >= overlay.endMs) continue;
+	const auto compositeBlurRegion = [&](const PlannedBlurRegion &region) {
+		if (!region.mosaic) {
+			if (!assets.blurScratch) fail("Native GPU blur scratch buffer is unavailable");
+			const dim3 blurGrid(
+				(region.width + block.x - 1) / block.x,
+				(region.height + block.y - 1) / block.y);
+			softBlurHorizontal<<<blurGrid, block, 0, stream>>>(
+				output->data[0],
+				output->linesize[0],
+				assets.blurScratch,
+				outputWidth,
+				region.x,
+				region.y,
+				region.width,
+				region.height,
+				region.intensity,
+				region.oval,
+				1);
+			requireRuntime(cudaGetLastError(), "softBlurHorizontal luma launch");
+			softBlurVertical<<<blurGrid, block, 0, stream>>>(
+				assets.blurScratch,
+				outputWidth,
+				output->data[0],
+				output->linesize[0],
+				region.x,
+				region.y,
+				region.width,
+				region.height,
+				region.intensity,
+				region.oval,
+				1,
+				region.tintAlpha,
+				region.tintLuma,
+				16.0f,
+				235.0f);
+			requireRuntime(cudaGetLastError(), "softBlurVertical luma launch");
+
+			const int chromaX = region.x / 2;
+			const int chromaY = region.y / 2;
+			const int chromaEndX = (region.x + region.width + 1) / 2;
+			const int chromaEndY = (region.y + region.height + 1) / 2;
+			const int chromaWidth = chromaEndX - chromaX;
+			const int chromaHeight = chromaEndY - chromaY;
+			const int chromaRadius = std::max(1, (region.intensity + 1) / 2);
+			const dim3 chromaGrid(
+				(chromaWidth + block.x - 1) / block.x,
+				(chromaHeight + block.y - 1) / block.y);
+			uint8_t *scratchUv =
+				assets.blurScratch + static_cast<std::size_t>(outputWidth) * outputHeight;
+			softBlurHorizontal<<<chromaGrid, block, 0, stream>>>(
+				output->data[1],
+				output->linesize[1],
+				scratchUv,
+				outputWidth,
+				chromaX,
+				chromaY,
+				chromaWidth,
+				chromaHeight,
+				chromaRadius,
+				region.oval,
+				2);
+			requireRuntime(cudaGetLastError(), "softBlurHorizontal chroma launch");
+			softBlurVertical<<<chromaGrid, block, 0, stream>>>(
+				scratchUv,
+				outputWidth,
+				output->data[1],
+				output->linesize[1],
+				chromaX,
+				chromaY,
+				chromaWidth,
+				chromaHeight,
+				chromaRadius,
+				region.oval,
+				2,
+				region.tintAlpha,
+				128.0f,
+				16.0f,
+				240.0f);
+			requireRuntime(cudaGetLastError(), "softBlurVertical chroma launch");
+			return;
+		}
+		const dim3 mosaicBlock(16, 16);
+		const dim3 mosaicLumaGrid(
+			(region.width + region.blockSize - 1) / region.blockSize,
+			(region.height + region.blockSize - 1) / region.blockSize);
+		mosaicLuma<<<mosaicLumaGrid, mosaicBlock, 0, stream>>>(
+			output->data[0],
+			output->linesize[0],
+			region.x,
+			region.y,
+			region.width,
+			region.height,
+			region.blockSize,
+			region.oval,
+			region.tintAlpha,
+			region.tintLuma);
+		requireRuntime(cudaGetLastError(), "mosaicLuma launch");
+
+		const int chromaX = region.x / 2;
+		const int chromaY = region.y / 2;
+		const int chromaEndX = (region.x + region.width + 1) / 2;
+		const int chromaEndY = (region.y + region.height + 1) / 2;
+		const int chromaWidth = chromaEndX - chromaX;
+		const int chromaHeight = chromaEndY - chromaY;
+		const int chromaBlockSize = std::max(1, (region.blockSize + 1) / 2);
+		const dim3 mosaicChromaGrid(
+			(chromaWidth + chromaBlockSize - 1) / chromaBlockSize,
+			(chromaHeight + chromaBlockSize - 1) / chromaBlockSize);
+		mosaicChroma<<<mosaicChromaGrid, mosaicBlock, 0, stream>>>(
+			output->data[1],
+			output->linesize[1],
+			chromaX,
+			chromaY,
+			chromaWidth,
+			chromaHeight,
+			chromaBlockSize,
+			region.oval,
+			region.tintAlpha);
+			requireRuntime(cudaGetLastError(), "mosaicChroma launch");
+	};
+
+	const auto compositeStaticOverlay = [&](const GpuOverlay &overlay) {
 		const dim3 overlayLumaGrid(
 			(overlay.width + block.x - 1) / block.x,
 			(overlay.height + block.y - 1) / block.y);
@@ -1180,7 +1516,27 @@ double compositeFrame(
 			chromaStartY,
 			chromaWidth,
 			chromaHeight);
-		requireRuntime(cudaGetLastError(), "compositeOverlayChroma launch");
+			requireRuntime(cudaGetLastError(), "compositeOverlayChroma launch");
+	};
+
+	std::size_t blurIndex = 0;
+	std::size_t overlayIndex = 0;
+	while (blurIndex < plan.blurRegions.size() || overlayIndex < assets.overlays.size()) {
+		const bool compositeOverlayNext =
+			overlayIndex < assets.overlays.size() &&
+			(blurIndex >= plan.blurRegions.size() ||
+			 assets.overlays[overlayIndex].zIndex <= plan.blurRegions[blurIndex].zIndex);
+		if (compositeOverlayNext) {
+			const auto &overlay = assets.overlays[overlayIndex++];
+			if (sourceTimestampMs >= overlay.startMs && sourceTimestampMs < overlay.endMs) {
+				compositeStaticOverlay(overlay);
+			}
+		} else {
+			const auto &region = plan.blurRegions[blurIndex++];
+			if (sourceTimestampMs >= region.startMs && sourceTimestampMs < region.endMs) {
+				compositeBlurRegion(region);
+			}
+		}
 	}
 	requireRuntime(cudaStreamSynchronize(stream), "compositor stream synchronization");
 
@@ -1216,7 +1572,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 5) fail("Unsupported native GPU export plan version");
+	if (plan.version != 7) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
@@ -1340,6 +1696,61 @@ ExportPlan loadPlan(const std::string &planPath) {
 			fail("Native GPU export webcam layout is invalid");
 		}
 	}
+	for (const auto &item : document.at("blurRegions")) {
+		PlannedBlurRegion region;
+		region.startMs = item.at("startMs").get<double>();
+		region.endMs = item.at("endMs").get<double>();
+		region.x = item.at("x").get<int>();
+		region.y = item.at("y").get<int>();
+		region.width = item.at("width").get<int>();
+		region.height = item.at("height").get<int>();
+		region.blockSize = item.at("blockSize").get<int>();
+		region.intensity = item.at("intensity").get<int>();
+		region.zIndex = item.at("zIndex").get<int>();
+		const std::string type = item.at("type").get<std::string>();
+		const std::string shape = item.at("shape").get<std::string>();
+		const std::string color = item.at("color").get<std::string>();
+		if (type == "mosaic") {
+			region.mosaic = true;
+		} else if (type == "blur") {
+			region.mosaic = false;
+		} else {
+			fail("Native GPU export blur type is invalid");
+		}
+		if (shape == "rectangle") {
+			region.oval = false;
+		} else if (shape == "oval") {
+			region.oval = true;
+		} else {
+			fail("Native GPU export blur shape is invalid");
+		}
+		if (color == "black") {
+			region.tintAlpha = 0.72f;
+			region.tintLuma = 16.0f;
+		} else if (color == "white") {
+			region.tintAlpha = 0.06f;
+			region.tintLuma = 235.0f;
+		} else {
+			fail("Native GPU export blur color is invalid");
+		}
+		if (!std::isfinite(region.startMs) || !std::isfinite(region.endMs) ||
+			region.startMs < 0.0 || region.endMs <= region.startMs || region.x < 0 ||
+			region.y < 0 || region.width < 1 || region.height < 1 ||
+			region.x + region.width > plan.width || region.y + region.height > plan.height ||
+			region.blockSize < 1 || region.blockSize > 512 || region.intensity < 1 ||
+			region.intensity > 512) {
+			fail("Native GPU export blur region is invalid");
+		}
+		plan.blurRegions.push_back(region);
+	}
+	if (!std::is_sorted(
+			plan.blurRegions.begin(),
+			plan.blurRegions.end(),
+			[](const PlannedBlurRegion &a, const PlannedBlurRegion &b) {
+				return a.zIndex < b.zIndex;
+			})) {
+		fail("Native GPU export blur regions are not ordered by z-index");
+	}
 	for (const auto &item : document.at("overlays")) {
 		PlannedOverlay overlay;
 		overlay.rgbaPath = item.at("rgbaPath").get<std::string>();
@@ -1401,6 +1812,7 @@ GpuAssets uploadGpuAssets(ExportState &state, const ExportPlan &plan) {
 	const std::size_t wallpaperBytes = outputPixels * 3 / 2;
 	const auto wallpaper = readExactFile(plan.wallpaperNv12Path, wallpaperBytes);
 	requireRuntime(cudaMalloc(&assets.wallpaper, wallpaperBytes), "cudaMalloc wallpaper");
+	requireRuntime(cudaMalloc(&assets.blurScratch, wallpaperBytes), "cudaMalloc blur scratch");
 	requireRuntime(
 		cudaMemcpy(assets.wallpaper, wallpaper.data(), wallpaperBytes, cudaMemcpyHostToDevice),
 		"upload wallpaper");
@@ -1415,6 +1827,7 @@ GpuAssets uploadGpuAssets(ExportState &state, const ExportPlan &plan) {
 		gpuOverlay.y = overlay.y;
 		gpuOverlay.width = overlay.width;
 		gpuOverlay.height = overlay.height;
+		gpuOverlay.zIndex = overlay.zIndex;
 		requireRuntime(cudaMalloc(&gpuOverlay.pixels, bytes), "cudaMalloc overlay");
 		requireRuntime(
 			cudaMemcpy(gpuOverlay.pixels, data.data(), bytes, cudaMemcpyHostToDevice),
@@ -1427,16 +1840,19 @@ GpuAssets uploadGpuAssets(ExportState &state, const ExportPlan &plan) {
 }
 
 void releaseGpuAssets(ExportState &state, GpuAssets *assets) {
-	if (!assets->wallpaper && assets->overlays.empty()) return;
+	if (!assets->wallpaper && !assets->blurScratch && assets->overlays.empty()) return;
 	auto *deviceContext = reinterpret_cast<AVHWDeviceContext *>(state.deviceRef->data);
 	auto *cudaContext = reinterpret_cast<AVCUDADeviceContext *>(deviceContext->hwctx);
 	requireCuda(cuCtxPushCurrent(cudaContext->cuda_ctx), "cuCtxPushCurrent for asset release");
 	if (assets->wallpaper) requireRuntime(cudaFree(assets->wallpaper), "cudaFree wallpaper");
+	if (assets->blurScratch)
+		requireRuntime(cudaFree(assets->blurScratch), "cudaFree blur scratch");
 	for (auto &overlay : assets->overlays) {
 		if (overlay.pixels) requireRuntime(cudaFree(overlay.pixels), "cudaFree overlay");
 		overlay.pixels = nullptr;
 	}
 	assets->wallpaper = nullptr;
+	assets->blurScratch = nullptr;
 	assets->overlays.clear();
 	CUcontext poppedContext = nullptr;
 	requireCuda(cuCtxPopCurrent(&poppedContext), "cuCtxPopCurrent after asset release");

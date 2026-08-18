@@ -23,6 +23,12 @@ import {
 	computeFocusFromTransform,
 	computeZoomTransform,
 } from "@/components/video-editor/videoPlayback/zoomTransform";
+import {
+	getNormalizedBlurIntensity,
+	getNormalizedMosaicBlockSize,
+	normalizeBlurColor,
+	normalizeBlurType,
+} from "@/lib/blurEffects";
 import { getCaptionDisplayWords } from "@/lib/captionWordHighlight";
 import {
 	computeCompositeLayout,
@@ -80,6 +86,14 @@ function activeAnnotations(config: VideoExporterConfig) {
 
 function sortedActiveAnnotations(config: VideoExporterConfig) {
 	return activeAnnotations(config).sort((a, b) => a.zIndex - b.zIndex);
+}
+
+function sortedTextAnnotations(config: VideoExporterConfig) {
+	return sortedActiveAnnotations(config).filter((annotation) => annotation.type === "text");
+}
+
+function sortedBlurRegions(config: VideoExporterConfig) {
+	return sortedActiveAnnotations(config).filter((annotation) => annotation.type === "blur");
 }
 
 function annotationPixelBounds(
@@ -195,10 +209,21 @@ export function getNativeGpuExportBlockers(
 
 	const annotations = activeAnnotations(config);
 	for (const annotation of annotations) {
-		if (annotation.type !== "text")
+		if (annotation.type !== "text" && annotation.type !== "blur")
 			blockers.push(`annotation type ${annotation.type} is not implemented`);
-		if (annotation.style.textAnimation && annotation.style.textAnimation !== "none") {
+		if (
+			annotation.type === "text" &&
+			annotation.style.textAnimation &&
+			annotation.style.textAnimation !== "none"
+		) {
 			blockers.push(`text animation ${annotation.style.textAnimation} is not implemented`);
+		}
+		if (
+			annotation.type === "blur" &&
+			annotation.blurData?.shape !== "rectangle" &&
+			annotation.blurData?.shape !== "oval"
+		) {
+			blockers.push(`blur shape ${annotation.blurData?.shape ?? "unknown"} is not implemented`);
 		}
 		const bounds = annotationPixelBounds(annotation, config);
 		if (bounds.width < 1 || bounds.height < 1) {
@@ -404,10 +429,27 @@ export function createNativeGpuExportPlan(
 	if (sourceTimestampsMs.length === 0) {
 		throw new Error("Native GPU export timeline contains no frames");
 	}
-	const overlays = sortedActiveAnnotations(config).map((annotation) => ({
+	const overlays = sortedTextAnnotations(config).map((annotation) => ({
 		startMs: annotation.startMs,
 		endMs: annotation.endMs,
 		...annotationPixelBounds(annotation, config),
+		zIndex: annotation.zIndex,
+	}));
+	const previewWidth = config.previewWidth ?? config.width;
+	const previewHeight = config.previewHeight ?? config.height;
+	const blurScaleFactor = (config.width / previewWidth + config.height / previewHeight) / 2;
+	const blurRegions = sortedBlurRegions(config).map((annotation) => ({
+		startMs: annotation.startMs,
+		endMs: annotation.endMs,
+		...annotationPixelBounds(annotation, config),
+		type: normalizeBlurType(annotation.blurData?.type),
+		intensity: Math.max(
+			1,
+			Math.round(getNormalizedBlurIntensity(annotation.blurData) * blurScaleFactor),
+		),
+		shape: annotation.blurData?.shape === "oval" ? ("oval" as const) : ("rectangle" as const),
+		blockSize: getNormalizedMosaicBlockSize(annotation.blurData, blurScaleFactor),
+		color: normalizeBlurColor(annotation.blurData?.color),
 		zIndex: annotation.zIndex,
 	}));
 	const webcamPreset = getWebcamLayoutPresetDefinition(config.webcamLayoutPreset);
@@ -447,6 +489,7 @@ export function createNativeGpuExportPlan(
 				}
 			: {}),
 		frames: createFrameTransforms(config, layout.screenRect, sourceTimestampsMs),
+		blurRegions,
 		overlays,
 	};
 }
@@ -477,7 +520,7 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 		? blurWallpaperCanvas(rawWallpaperCanvas)
 		: rawWallpaperCanvas;
 	const wallpaperPng = await canvasToPng(wallpaperCanvas);
-	const annotations = sortedActiveAnnotations(config);
+	const annotations = sortedTextAnnotations(config);
 	const previewWidth = config.previewWidth ?? config.width;
 	const previewHeight = config.previewHeight ?? config.height;
 	const scaleFactor = (config.width / previewWidth + config.height / previewHeight) / 2;

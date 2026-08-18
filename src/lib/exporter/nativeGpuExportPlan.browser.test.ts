@@ -107,6 +107,28 @@ describe("native GPU export assets", () => {
 		expect(assets.overlays.map((overlay) => overlay.zIndex)).toEqual([2, 10, 20]);
 	});
 
+	it("keeps mosaic regions out of the static text-overlay assets", async () => {
+		const mosaic: AnnotationRegion = {
+			...caption("mosaic", 100, 800, 10),
+			type: "blur",
+			blurData: {
+				type: "mosaic",
+				shape: "rectangle",
+				color: "black",
+				intensity: 12,
+				blockSize: 16,
+			},
+		};
+		const assets = await createNativeGpuExportAssets({
+			...createConfig(false),
+			annotationRegions: [caption("caption", 0, 900, 2), mosaic],
+		});
+
+		expect(assets.overlayPngs).toHaveLength(1);
+		expect(assets.overlays).toHaveLength(1);
+		expect(assets.overlays[0]?.zIndex).toBe(2);
+	});
+
 	it("creates a static caption plus tightly cropped timed word highlights", async () => {
 		const highlighted = caption("caption", 100, 900, 5);
 		highlighted.content = "one two";

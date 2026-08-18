@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyMosaicToImageData, getBlurOverlayColor, normalizeBlurColor } from "./blurEffects";
+import {
+	applyMosaicToImageData,
+	getBlurOverlayColor,
+	normalizeBlurColor,
+	normalizeBlurType,
+} from "./blurEffects";
 
 function createTestImageData(width: number, height: number) {
 	const data = new Uint8ClampedArray(width * height * 4);
@@ -61,6 +66,12 @@ describe("applyMosaicToImageData", () => {
 });
 
 describe("blur color helpers", () => {
+	it("preserves mosaic but defaults invalid blur types to soft blur", () => {
+		expect(normalizeBlurType("mosaic")).toBe("mosaic");
+		expect(normalizeBlurType("blur")).toBe("blur");
+		expect(normalizeBlurType("invalid")).toBe("blur");
+	});
+
 	it("normalizes invalid blur colors to white", () => {
 		expect(normalizeBlurColor("black")).toBe("black");
 		expect(normalizeBlurColor("invalid")).toBe("white");

@@ -16,8 +16,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function normalizeBlurType(value: unknown): BlurType {
-	void value;
-	return "mosaic";
+	return value === "mosaic" ? "mosaic" : "blur";
 }
 
 export function normalizeBlurColor(value: unknown): BlurColor {

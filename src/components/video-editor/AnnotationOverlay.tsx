@@ -4,7 +4,9 @@ import { getTextAnimationState } from "@/lib/annotationTextAnimation";
 import {
 	getBlurOverlayColor,
 	getMosaicGridOverlayColor,
+	getNormalizedBlurIntensity,
 	getNormalizedMosaicBlockSize,
+	normalizeBlurType,
 } from "@/lib/blurEffects";
 import { getActiveCaptionWordIndex, tokenizeCaptionContent } from "@/lib/captionWordHighlight";
 import { cn } from "@/lib/utils";
@@ -14,7 +16,6 @@ import {
 	type BlurData,
 	DEFAULT_BLUR_BLOCK_SIZE,
 	DEFAULT_BLUR_DATA,
-	DEFAULT_BLUR_INTENSITY,
 } from "./types";
 
 const FREEHAND_POINT_THRESHOLD = 1;
@@ -86,7 +87,8 @@ export function AnnotationOverlay({
 	);
 	const [livePointerPoint, setLivePointerPoint] = useState<{ x: number; y: number } | null>(null);
 	const mosaicCanvasRef = useRef<HTMLCanvasElement | null>(null);
-	const blurType = "mosaic";
+	const softBlurScratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
+	const blurType = normalizeBlurType(annotation.blurData?.type);
 	const blurOverlayColor =
 		annotation.type === "blur" ? getBlurOverlayColor(annotation.blurData) : "";
 	const mosaicGridOverlayColor =
@@ -143,8 +145,48 @@ export function AnnotationOverlay({
 		canvas.width = drawWidth;
 		canvas.height = drawHeight;
 
-		const context = canvas.getContext("2d", { willReadFrequently: true });
+		const context = canvas.getContext("2d", { willReadFrequently: blurType === "mosaic" });
 		if (!context) {
+			return;
+		}
+		if (blurType === "blur") {
+			const blurRadius = getNormalizedBlurIntensity(annotation.blurData);
+			const padding = Math.max(2, Math.ceil(blurRadius * 2));
+			let scratchCanvas = softBlurScratchCanvasRef.current;
+			if (!scratchCanvas) {
+				scratchCanvas = document.createElement("canvas");
+				softBlurScratchCanvasRef.current = scratchCanvas;
+			}
+			scratchCanvas.width = drawWidth + padding * 2;
+			scratchCanvas.height = drawHeight + padding * 2;
+			const scratchContext = scratchCanvas.getContext("2d");
+			if (!scratchContext) return;
+			scratchContext.clearRect(0, 0, scratchCanvas.width, scratchCanvas.height);
+			scratchContext.filter = `blur(${blurRadius}px)`;
+			scratchContext.drawImage(
+				sourceCanvas as CanvasImageSource,
+				0,
+				0,
+				sourceWidth,
+				sourceHeight,
+				padding - x,
+				padding - y,
+				sourceClientWidth,
+				sourceClientHeight,
+			);
+			scratchContext.filter = "none";
+			context.clearRect(0, 0, drawWidth, drawHeight);
+			context.drawImage(
+				scratchCanvas,
+				padding,
+				padding,
+				drawWidth,
+				drawHeight,
+				0,
+				0,
+				drawWidth,
+				drawHeight,
+			);
 			return;
 		}
 
@@ -177,6 +219,7 @@ export function AnnotationOverlay({
 		);
 	}, [
 		annotation,
+		blurType,
 		containerHeight,
 		containerWidth,
 		height,
@@ -398,10 +441,7 @@ export function AnnotationOverlay({
 
 			case "blur": {
 				const shape = annotation.blurData?.shape ?? "rectangle";
-				const blurIntensity = Math.max(
-					1,
-					Math.round(annotation.blurData?.intensity ?? DEFAULT_BLUR_INTENSITY),
-				);
+				const blurIntensity = getNormalizedBlurIntensity(annotation.blurData);
 				const blockSize = Math.max(
 					1,
 					Math.round(annotation.blurData?.blockSize ?? DEFAULT_BLUR_BLOCK_SIZE),
@@ -451,7 +491,7 @@ export function AnnotationOverlay({
 							className="absolute inset-0 overflow-hidden"
 							style={{
 								...shapeMaskStyle,
-								isolation: "isolate",
+								isolation: blurType === "mosaic" ? "isolate" : undefined,
 							}}
 						>
 							<div
@@ -464,17 +504,17 @@ export function AnnotationOverlay({
 									opacity: shouldShowFreehandBlurFill ? 1 : 0,
 								}}
 							/>
-							{blurType === "mosaic" && shouldShowFreehandBlurFill && (
+							{shouldShowFreehandBlurFill && (
 								<canvas
 									ref={mosaicCanvasRef}
 									className="absolute inset-0 w-full h-full"
 									style={{
 										...shapeMaskStyle,
-										imageRendering: "pixelated",
+										imageRendering: blurType === "mosaic" ? "pixelated" : "auto",
 									}}
 								/>
 							)}
-							{blurType === "mosaic" && shouldShowFreehandBlurFill && (
+							{shouldShowFreehandBlurFill && (
 								<div
 									className="absolute inset-0 pointer-events-none"
 									style={{

@@ -17,6 +17,7 @@ const HELPER_NAME = "openscreen-linux-export-helper";
 const MAX_STATIC_ASSET_BYTES = 32 * 1024 * 1024;
 const MAX_TOTAL_OVERLAY_ASSET_BYTES = 256 * 1024 * 1024;
 const MAX_OVERLAYS = 10_000;
+const MAX_BLUR_REGIONS = 10_000;
 const MAX_PLAN_FRAMES = 20_736_000;
 const MAX_OUTPUT_DIMENSION = 4096;
 
@@ -276,6 +277,40 @@ function validateRequest(payload: NativeGpuExportRequest) {
 		payload.wallpaperPng.byteLength > MAX_STATIC_ASSET_BYTES
 	) {
 		throw new Error("Native GPU export wallpaper PNG has an invalid size");
+	}
+	if (!Array.isArray(plan.blurRegions) || plan.blurRegions.length > MAX_BLUR_REGIONS) {
+		throw new Error("Native GPU export blur-region collection is invalid");
+	}
+	for (let index = 0; index < plan.blurRegions.length; index++) {
+		const region = plan.blurRegions[index];
+		if (
+			!finiteNumber(region.startMs) ||
+			!finiteNumber(region.endMs) ||
+			region.startMs < 0 ||
+			region.endMs <= region.startMs ||
+			!Number.isInteger(region.x) ||
+			!Number.isInteger(region.y) ||
+			!Number.isInteger(region.width) ||
+			!Number.isInteger(region.height) ||
+			!Number.isInteger(region.blockSize) ||
+			!Number.isInteger(region.zIndex) ||
+			region.x < 0 ||
+			region.y < 0 ||
+			region.width < 1 ||
+			region.height < 1 ||
+			region.x + region.width > plan.width ||
+			region.y + region.height > plan.height ||
+			region.blockSize < 1 ||
+			region.blockSize > 512 ||
+			!Number.isInteger(region.intensity) ||
+			region.intensity < 1 ||
+			region.intensity > 512 ||
+			!["blur", "mosaic"].includes(region.type) ||
+			!["rectangle", "oval"].includes(region.shape) ||
+			!["white", "black"].includes(region.color)
+		) {
+			throw new Error(`Native GPU export blur region ${index} is invalid`);
+		}
 	}
 	if (
 		!Array.isArray(plan.overlays) ||
