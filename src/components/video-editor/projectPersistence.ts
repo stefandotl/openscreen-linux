@@ -13,6 +13,7 @@ import {
 	DEFAULT_GIF_SETTINGS,
 	DEFAULT_WEBCAM_SETTINGS,
 } from "./editorDefaults";
+import { mergeConnectedTrimRegions } from "./trimRegions";
 import {
 	type AnnotationRegion,
 	type CropRegion,
@@ -290,20 +291,26 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		: [];
 
 	const normalizedTrimRegions: TrimRegion[] = Array.isArray(editor.trimRegions)
-		? editor.trimRegions
-				.filter((region): region is TrimRegion => Boolean(region && typeof region.id === "string"))
-				.map((region) => {
-					const rawStart = isFiniteNumber(region.startMs) ? Math.round(region.startMs) : 0;
-					const rawEnd = isFiniteNumber(region.endMs) ? Math.round(region.endMs) : rawStart + 1000;
-					const startMs = Math.max(0, Math.min(rawStart, rawEnd));
-					const endMs = Math.max(startMs + 1, rawEnd);
-					return {
-						id: region.id,
-						startMs,
-						endMs,
-						...(region.source === "scene-split" ? { source: "scene-split" as const } : {}),
-					};
-				})
+		? mergeConnectedTrimRegions(
+				editor.trimRegions
+					.filter((region): region is TrimRegion =>
+						Boolean(region && typeof region.id === "string"),
+					)
+					.map((region) => {
+						const rawStart = isFiniteNumber(region.startMs) ? Math.round(region.startMs) : 0;
+						const rawEnd = isFiniteNumber(region.endMs)
+							? Math.round(region.endMs)
+							: rawStart + 1000;
+						const startMs = Math.max(0, Math.min(rawStart, rawEnd));
+						const endMs = Math.max(startMs + 1, rawEnd);
+						return {
+							id: region.id,
+							startMs,
+							endMs,
+							...(region.source === "scene-split" ? { source: "scene-split" as const } : {}),
+						};
+					}),
+			)
 		: [];
 
 	const normalizedSpeedRegions: SpeedRegion[] = Array.isArray(editor.speedRegions)

@@ -138,6 +138,18 @@ describe("projectPersistence media compatibility", () => {
 		]);
 	});
 
+	it("merges touching and overlapping editable trims when loading a project", () => {
+		const editor = normalizeProjectEditor({
+			trimRegions: [
+				{ id: "overlap", startMs: 250, endMs: 400 },
+				{ id: "first", startMs: 100, endMs: 200 },
+				{ id: "touching", startMs: 200, endMs: 300 },
+			],
+		});
+
+		expect(editor.trimRegions).toEqual([{ id: "first", startMs: 100, endMs: 400 }]);
+	});
+
 	it("preserves valid caption word timing and highlight styling", () => {
 		const editor = normalizeProjectEditor({
 			annotationRegions: [

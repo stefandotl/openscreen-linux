@@ -132,6 +132,7 @@ import {
 } from "./sceneModel";
 import TimelineEditor from "./timeline/TimelineEditor";
 import { buildAutoZoomSuggestions } from "./timeline/zoomSuggestionUtils";
+import { mergeConnectedTrimRegions } from "./trimRegions";
 import {
 	type AnnotationRegion,
 	type AnnotationTextStyle,
@@ -2368,7 +2369,11 @@ export default function VideoEditor() {
 				startMs: Math.round(span.start),
 				endMs: Math.round(span.end),
 			};
-			pushState((prev) => ({ trimRegions: [...prev.trimRegions, newRegion] }));
+			pushState((prev) => ({
+				trimRegions: mergeConnectedTrimRegions([...prev.trimRegions, newRegion], {
+					preferredId: id,
+				}),
+			}));
 			setSelectedTrimId(id);
 			setSelectedZoomId(null);
 			setSelectedSpeedId(null);
@@ -2399,14 +2404,17 @@ export default function VideoEditor() {
 	const handleTrimSpanChange = useCallback(
 		(id: string, span: Span) => {
 			pushState((prev) => ({
-				trimRegions: prev.trimRegions.map((region) =>
-					region.id === id
-						? {
-								...region,
-								startMs: Math.round(span.start),
-								endMs: Math.round(span.end),
-							}
-						: region,
+				trimRegions: mergeConnectedTrimRegions(
+					prev.trimRegions.map((region) =>
+						region.id === id
+							? {
+									...region,
+									startMs: Math.round(span.start),
+									endMs: Math.round(span.end),
+								}
+							: region,
+					),
+					{ preferredId: id },
 				),
 			}));
 		},
@@ -3662,7 +3670,11 @@ export default function VideoEditor() {
 				startMs: span.startMs,
 				endMs: span.endMs,
 			}));
-			pushState((prev) => ({ trimRegions: [...prev.trimRegions, ...newRegions] }));
+			pushState((prev) => ({
+				trimRegions: mergeConnectedTrimRegions([...prev.trimRegions, ...newRegions], {
+					preferredId: newRegions[0].id,
+				}),
+			}));
 			setSelectedTrimId(newRegions[0].id);
 			setSelectedZoomId(null);
 			setSelectedSpeedId(null);
