@@ -41,6 +41,7 @@ function createHandlers(
 	});
 	return {
 		handlers,
+		video,
 		pause,
 		play,
 		setPaused: (value: boolean) => {
@@ -158,6 +159,37 @@ describe("video seeking playback intent", () => {
 		handlers.handlePause();
 		handlers.handleSeeked();
 
+		expect(play).toHaveBeenCalledOnce();
+		requestFrame.mockRestore();
+	});
+
+	it("skips touching and overlapping trims with one media seek", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const { handlers, play, setPaused, video } = createHandlers(true, {
+			currentTime: 2,
+			duration: 10,
+			trimRegions: [
+				{ id: "overlap", startMs: 4800, endMs: 6000 },
+				{ id: "first", startMs: 2000, endMs: 4000 },
+				{ id: "touching", startMs: 4000, endMs: 5000 },
+			],
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+
+		expect(frameCallback).not.toBeNull();
+		expect(video.currentTime).toBe(6);
+
+		setPaused(true);
+		handlers.handlePause();
+		handlers.handleSeeked();
 		expect(play).toHaveBeenCalledOnce();
 		requestFrame.mockRestore();
 	});

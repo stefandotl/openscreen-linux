@@ -56,13 +56,34 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		onTimeUpdate(timeValue);
 	};
 
-	const findActiveTrimRegion = (currentTimeMs: number): TrimRegion | null => {
+	const resolveTrimSkipEndSeconds = (currentTimeMs: number): number | null => {
 		const trimRegions = trimRegionsRef.current;
-		return (
-			trimRegions.find(
-				(region) => currentTimeMs >= region.startMs && currentTimeMs < region.endMs,
-			) || null
-		);
+		let skipEndMs: number | null = null;
+
+		for (const region of trimRegions) {
+			if (currentTimeMs >= region.startMs && currentTimeMs < region.endMs) {
+				skipEndMs = Math.max(skipEndMs ?? region.endMs, region.endMs);
+			}
+		}
+
+		if (skipEndMs === null) {
+			return null;
+		}
+
+		// Collapse touching and overlapping trims into one seek. Multiple immediate
+		// media seeks can leave Chromium's audio decoder stalled while video continues.
+		let extended = true;
+		while (extended) {
+			extended = false;
+			for (const region of trimRegions) {
+				if (region.startMs <= skipEndMs && region.endMs > skipEndMs) {
+					skipEndMs = region.endMs;
+					extended = true;
+				}
+			}
+		}
+
+		return skipEndMs / 1000;
 	};
 
 	const findActiveSpeedRegion = (currentTimeMs: number): SpeedRegion | null => {
@@ -73,8 +94,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		);
 	};
 
-	const seekPastTrim = (trimRegion: TrimRegion) => {
-		const skipToTime = trimRegion.endMs / 1000;
+	const seekPastTrim = (skipToTime: number) => {
 		pendingTrimSkipEndSeconds =
 			allowPlaybackRef.current && isPlayingRef.current ? skipToTime : null;
 		video.currentTime = skipToTime;
@@ -104,14 +124,12 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		if (!video) return;
 
 		const currentTimeMs = video.currentTime * 1000;
-		const activeTrimRegion = findActiveTrimRegion(currentTimeMs);
+		const trimSkipEndSeconds = resolveTrimSkipEndSeconds(currentTimeMs);
 
 		// In a trim region during playback: skip to its end
-		if (activeTrimRegion && !video.paused && !video.ended) {
-			const skipToTime = activeTrimRegion.endMs / 1000;
-
+		if (trimSkipEndSeconds !== null && !video.paused && !video.ended) {
 			// Pause if the skip would run past the end
-			if (skipToTime >= video.duration) {
+			if (trimSkipEndSeconds >= video.duration) {
 				if (continuingPastTerminalTrim || onTerminalTrim?.() === true) {
 					continuingPastTerminalTrim = true;
 					emitTime(video.currentTime);
@@ -119,7 +137,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 					video.pause();
 				}
 			} else {
-				seekPastTrim(activeTrimRegion);
+				seekPastTrim(trimSkipEndSeconds);
 			}
 		} else {
 			continuingPastTerminalTrim = false;
@@ -184,13 +202,11 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		const currentTimeMs = video.currentTime * 1000;
 		const completedTrimSkip =
 			pendingTrimSkipEndSeconds !== null && video.currentTime >= pendingTrimSkipEndSeconds - 0.05;
-		const activeTrimRegion = completedTrimSkip ? null : findActiveTrimRegion(currentTimeMs);
+		const trimSkipEndSeconds = completedTrimSkip ? null : resolveTrimSkipEndSeconds(currentTimeMs);
 
 		// Seeked into a trim region while playing: skip to the end
-		if (activeTrimRegion && isPlayingRef.current && !video.paused) {
-			const skipToTime = activeTrimRegion.endMs / 1000;
-
-			if (skipToTime >= video.duration) {
+		if (trimSkipEndSeconds !== null && isPlayingRef.current && !video.paused) {
+			if (trimSkipEndSeconds >= video.duration) {
 				if (onTerminalTrim?.() === true) {
 					continuingPastTerminalTrim = true;
 					emitTime(video.currentTime);
@@ -198,7 +214,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 					video.pause();
 				}
 			} else {
-				seekPastTrim(activeTrimRegion);
+				seekPastTrim(trimSkipEndSeconds);
 			}
 		} else {
 			if (!isPlayingRef.current && !video.paused) {
