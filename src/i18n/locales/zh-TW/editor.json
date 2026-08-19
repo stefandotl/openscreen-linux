@@ -5,6 +5,15 @@
 		"cancel": "取消",
 		"confirm": "確認"
 	},
+	"discard": {
+		"button": "捨棄錄影",
+		"title": "捨棄這份錄影？",
+		"description": "錄影的影片將從您的錄影資料夾中刪除。此操作無法復原。",
+		"confirm": "捨棄錄影",
+		"cancel": "取消",
+		"failed": "無法捨棄錄影",
+		"discarded": "錄影已捨棄"
+	},
 	"loadingVideo": "正在載入影片...",
 	"loadingEditor": "正在載入編輯器...",
 	"errors": {

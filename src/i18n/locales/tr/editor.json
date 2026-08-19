@@ -44,6 +44,15 @@
 		"cancel": "İptal",
 		"confirm": "Onayla"
 	},
+	"discard": {
+		"button": "Kaydı at",
+		"title": "Bu kayıt atılsın mı?",
+		"description": "Kaydedilen video, kayıtlar klasörünüzden silinecek. Bu işlem geri alınamaz.",
+		"confirm": "Kaydı at",
+		"cancel": "İptal",
+		"failed": "Kayıt atılamadı",
+		"discarded": "Kayıt atıldı"
+	},
 	"autoCaptions": {
 		"button": "Otomatik altyazılar",
 		"dialogTitle": "Otomatik altyazılar",

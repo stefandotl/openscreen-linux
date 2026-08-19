@@ -5,6 +5,15 @@
 		"cancel": "Cancelar",
 		"confirm": "Confirmar"
 	},
+	"discard": {
+		"button": "Descartar gravação",
+		"title": "Descartar esta gravação?",
+		"description": "O vídeo gravado será excluído da sua pasta de gravações. Esta ação não pode ser desfeita.",
+		"confirm": "Descartar gravação",
+		"cancel": "Cancelar",
+		"failed": "Não foi possível descartar a gravação",
+		"discarded": "Gravação descartada"
+	},
 	"emptyState": {
 		"sceneTitle": "Esta cena está vazia",
 		"sceneDescription": "Grave um novo vídeo para esta cena ou importe um arquivo de vídeo existente.",

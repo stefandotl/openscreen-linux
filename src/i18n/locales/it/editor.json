@@ -5,6 +5,15 @@
 		"cancel": "Annulla",
 		"confirm": "Conferma"
 	},
+	"discard": {
+		"button": "Scarta registrazione",
+		"title": "Scartare questa registrazione?",
+		"description": "Il video registrato verrà eliminato dalla cartella delle registrazioni. Questa operazione non può essere annullata.",
+		"confirm": "Scarta registrazione",
+		"cancel": "Annulla",
+		"failed": "Impossibile scartare la registrazione",
+		"discarded": "Registrazione scartata"
+	},
 	"emptyState": {
 		"sceneTitle": "Questa scena è vuota",
 		"sceneDescription": "Registra un nuovo video per questa scena o importa un file video esistente.",

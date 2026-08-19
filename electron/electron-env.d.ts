@@ -251,6 +251,11 @@ interface Window {
 			pendingSceneId?: string;
 		}>;
 		clearPendingRecordingScene: () => Promise<{ success: boolean }>;
+		discardCurrentRecording: () => Promise<{
+			success: boolean;
+			message?: string;
+			deleted?: boolean;
+		}>;
 		readBinaryFile: (filePath: string) => Promise<{
 			success: boolean;
 			data?: ArrayBuffer;

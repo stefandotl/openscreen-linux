@@ -44,6 +44,15 @@
 		"cancel": "Cancelar",
 		"confirm": "Confirmar"
 	},
+	"discard": {
+		"button": "Descartar grabación",
+		"title": "¿Descartar esta grabación?",
+		"description": "El video grabado se eliminará de tu carpeta de grabaciones. Esta acción no se puede deshacer.",
+		"confirm": "Descartar grabación",
+		"cancel": "Cancelar",
+		"failed": "No se pudo descartar la grabación",
+		"discarded": "Grabación descartada"
+	},
 	"autoCaptions": {
 		"button": "Subtítulos automáticos",
 		"dialogTitle": "Subtítulos automáticos",

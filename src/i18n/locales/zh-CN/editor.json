@@ -5,6 +5,15 @@
 		"cancel": "取消",
 		"confirm": "确认"
 	},
+	"discard": {
+		"button": "丢弃录制",
+		"title": "丢弃此录制？",
+		"description": "录制的视频将从您的录制文件夹中删除。此操作无法撤销。",
+		"confirm": "丢弃录制",
+		"cancel": "取消",
+		"failed": "无法丢弃录制",
+		"discarded": "录制已丢弃"
+	},
 	"loadingVideo": "正在加载视频...",
 	"loadingEditor": "正在加载编辑器...",
 	"errors": {

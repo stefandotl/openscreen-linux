@@ -60,6 +60,7 @@ import { RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
+import { getDiscardDeletionTargets } from "../recording/recordingDiscard";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { RecordingPreferencesStore } from "../recordingPreferencesStore";
 import {
@@ -3382,6 +3383,26 @@ export function registerIpcHandlers(
 	ipcMain.handle("clear-pending-recording-scene", () => {
 		recordingProjectTransition.clear();
 		return { success: true };
+	});
+
+	ipcMain.handle("discard-current-recording", async () => {
+		const session = currentRecordingSession;
+		if (!session) {
+			return { success: false, message: "No recording session to discard" };
+		}
+
+		try {
+			const deletableTargets = getDiscardDeletionTargets(session, RECORDINGS_DIR);
+			await Promise.all(deletableTargets.map((target) => fs.rm(target, { force: true })));
+
+			setCurrentRecordingSessionState(null);
+			clearCurrentProjectForNewMedia();
+
+			return { success: true, deleted: deletableTargets.length > 0 };
+		} catch (error) {
+			console.error("Failed to discard recording:", error);
+			return { success: false, message: "Failed to discard the recording" };
+		}
 	});
 
 	async function setCurrentVideoPath(path: string): Promise<ProjectPathResult> {

@@ -5,6 +5,15 @@
 		"cancel": "Cancel",
 		"confirm": "Confirm"
 	},
+	"discard": {
+		"button": "Discard recording",
+		"title": "Discard this recording?",
+		"description": "The recorded video will be deleted from your recordings folder. This cannot be undone.",
+		"confirm": "Discard recording",
+		"cancel": "Cancel",
+		"failed": "Could not discard the recording",
+		"discarded": "Recording discarded"
+	},
 	"loadingVideo": "Loading video...",
 	"loadingEditor": "Loading editor...",
 	"errors": {

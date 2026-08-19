@@ -5,6 +5,15 @@
 		"cancel": "キャンセル",
 		"confirm": "確認"
 	},
+	"discard": {
+		"button": "録画を破棄",
+		"title": "この録画を破棄しますか？",
+		"description": "録画した動画は録画フォルダーから削除されます。この操作は元に戻せません。",
+		"confirm": "録画を破棄",
+		"cancel": "キャンセル",
+		"failed": "録画を破棄できませんでした",
+		"discarded": "録画を破棄しました"
+	},
 	"loadingVideo": "動画を読み込み中...",
 	"loadingEditor": "エディターを読み込み中...",
 	"errors": {

@@ -5,6 +5,15 @@
 		"cancel": "취소",
 		"confirm": "확인"
 	},
+	"discard": {
+		"button": "녹화 폐기",
+		"title": "이 녹화를 폐기할까요?",
+		"description": "녹화된 동영상이 녹화 폴더에서 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
+		"confirm": "녹화 폐기",
+		"cancel": "취소",
+		"failed": "녹화를 폐기할 수 없습니다",
+		"discarded": "녹화가 폐기되었습니다"
+	},
 	"loadingVideo": "비디오 로드 중...",
 	"loadingEditor": "편집기 로드 중...",
 	"errors": {

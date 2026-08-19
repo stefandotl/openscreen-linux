@@ -208,6 +208,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	clearPendingRecordingScene: () => {
 		return ipcRenderer.invoke("clear-pending-recording-scene");
 	},
+	discardCurrentRecording: () => {
+		return ipcRenderer.invoke("discard-current-recording");
+	},
 	readBinaryFile: (filePath: string) => {
 		return ipcRenderer.invoke("read-binary-file", filePath);
 	},

@@ -5,6 +5,15 @@
 		"cancel": "Hủy",
 		"confirm": "Xác nhận"
 	},
+	"discard": {
+		"button": "Xóa đoạn ghi hình",
+		"title": "Xóa đoạn ghi hình này?",
+		"description": "Video đã ghi sẽ bị xóa khỏi thư mục ghi hình. Không thể hoàn tác thao tác này.",
+		"confirm": "Xóa đoạn ghi hình",
+		"cancel": "Hủy",
+		"failed": "Không thể xóa đoạn ghi hình",
+		"discarded": "Đã xóa đoạn ghi hình"
+	},
 	"loadingVideo": "Đang tải video...",
 	"loadingEditor": "Đang tải trình chỉnh sửa...",
 	"errors": {

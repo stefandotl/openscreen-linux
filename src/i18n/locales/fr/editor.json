@@ -5,6 +5,15 @@
 		"cancel": "Annuler",
 		"confirm": "Confirmer"
 	},
+	"discard": {
+		"button": "Supprimer l'enregistrement",
+		"title": "Supprimer cet enregistrement ?",
+		"description": "La vidéo enregistrée sera supprimée de votre dossier d'enregistrements. Cette action est irréversible.",
+		"confirm": "Supprimer l'enregistrement",
+		"cancel": "Annuler",
+		"failed": "Impossible de supprimer l'enregistrement",
+		"discarded": "Enregistrement supprimé"
+	},
 	"errors": {
 		"noVideoLoaded": "Aucune vidéo chargée",
 		"videoNotReady": "Vidéo non prête",

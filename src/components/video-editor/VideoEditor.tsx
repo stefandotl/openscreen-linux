@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { Archive, FolderOpen, Languages, PanelLeftOpen, Save, Video } from "lucide-react";
+import { Archive, FolderOpen, Languages, PanelLeftOpen, Save, Trash2, Video } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -333,6 +333,7 @@ export default function VideoEditor() {
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDialog, setShowExportDialog] = useState(false);
 	const [showNewRecordingDialog, setShowNewRecordingDialog] = useState(false);
+	const [showDiscardRecordingDialog, setShowDiscardRecordingDialog] = useState(false);
 	const [isSceneStripOpen, setIsSceneStripOpen] = useState(true);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(
 		DEFAULT_EXPORT_SETTINGS.quality,
@@ -1666,6 +1667,22 @@ export default function VideoEditor() {
 		setConfirmDialogVariant(null);
 		await doNewProject();
 	}, [doNewProject]);
+
+	// Discard a fresh (unsaved) recording: delete its files from RECORDINGS_DIR
+	// and reset the editor to the empty Studio dashboard. Only offered when the
+	// project has no saved project file yet, so a saved project's media survives.
+	const showDiscardRecordingAction = Boolean(videoPath && !currentProjectPath);
+
+	const handleDiscardRecording = useCallback(async () => {
+		setShowDiscardRecordingDialog(false);
+		const result = await window.electronAPI.discardCurrentRecording();
+		if (!result.success) {
+			toast.error(result.message ?? t("discard.failed"));
+			return;
+		}
+		toast.success(t("discard.discarded"));
+		await doNewProject();
+	}, [doNewProject, t]);
 
 	useEffect(() => {
 		const removeNewProjectListener = window.electronAPI.onMenuNewProject(handleNewProject);
@@ -4005,6 +4022,34 @@ export default function VideoEditor() {
 				</DialogContent>
 			</Dialog>
 
+			<Dialog open={showDiscardRecordingDialog} onOpenChange={setShowDiscardRecordingDialog}>
+				<DialogContent
+					className="sm:max-w-[425px]"
+					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+				>
+					<DialogHeader>
+						<DialogTitle>{t("discard.title")}</DialogTitle>
+						<DialogDescription>{t("discard.description")}</DialogDescription>
+					</DialogHeader>
+					<DialogFooter>
+						<button
+							type="button"
+							onClick={() => setShowDiscardRecordingDialog(false)}
+							className="px-4 py-2 rounded-md bg-white/10 text-white hover:bg-white/20 text-sm font-medium transition-colors"
+						>
+							{t("discard.cancel")}
+						</button>
+						<button
+							type="button"
+							onClick={handleDiscardRecording}
+							className="px-4 py-2 rounded-md bg-red-500/15 text-red-400 hover:bg-red-500/25 text-sm font-medium transition-colors"
+						>
+							{t("discard.confirm")}
+						</button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
 			<Dialog
 				open={showSilenceDetectionDialog}
 				onOpenChange={(open) => {
@@ -4241,6 +4286,16 @@ export default function VideoEditor() {
 						<Archive size={14} />
 						{ts("recordings.openFolder")}
 					</button>
+					{showDiscardRecordingAction && (
+						<button
+							type="button"
+							onClick={() => setShowDiscardRecordingDialog(true)}
+							className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 text-[11px] font-medium"
+						>
+							<Trash2 size={14} />
+							{t("discard.button")}
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={handleSaveProject}
