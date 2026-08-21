@@ -50,6 +50,8 @@
 		"webcamSize": "Webcam Size",
 		"mirrorWebcam": "Mirror Webcam",
 		"rotateWebcam": "Rotate Webcam",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "Positive values show the webcam earlier to compensate for camera delay.",
 		"reactiveWebcam": "Shrink on Zoom",
 		"reactiveWebcamDescription": "Camera smoothly shrinks while the video is zoomed in, so it stays out of the way."
 	},

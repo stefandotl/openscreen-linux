@@ -1,6 +1,6 @@
 import type { SpeedRegion, TrimRegion } from "@/components/video-editor/types";
 
-export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 7 as const;
+export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 8 as const;
 
 export const NATIVE_GPU_EXPORT_CHANNELS = {
 	start: "start-native-gpu-export",
@@ -61,6 +61,8 @@ export interface NativeGpuExportPlan {
 		inputPath: string;
 		sourceWidth: number;
 		sourceHeight: number;
+		durationMs: number;
+		videoOffsetMs: number;
 		rect: { x: number; y: number; width: number; height: number };
 		borderRadius: number;
 		maskShape: "rectangle" | "rounded" | "circle" | "square";

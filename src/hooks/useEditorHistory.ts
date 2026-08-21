@@ -49,6 +49,7 @@ export interface EditorState {
 	webcamMaskShape: WebcamMaskShape;
 	webcamMirrored: boolean;
 	webcamRotation: WebcamRotation;
+	webcamVideoOffsetMs: number;
 	webcamReactiveZoom: boolean;
 	webcamSizePreset: WebcamSizePreset;
 	webcamPosition: WebcamPosition | null;
@@ -74,6 +75,7 @@ export const INITIAL_EDITOR_STATE: EditorState = {
 	webcamMaskShape: DEFAULT_WEBCAM_SETTINGS.maskShape,
 	webcamMirrored: DEFAULT_WEBCAM_MIRRORED,
 	webcamRotation: DEFAULT_WEBCAM_ROTATION,
+	webcamVideoOffsetMs: DEFAULT_WEBCAM_SETTINGS.videoOffsetMs,
 	webcamReactiveZoom: DEFAULT_WEBCAM_REACTIVE_ZOOM,
 	webcamSizePreset: DEFAULT_WEBCAM_SETTINGS.sizePreset,
 	webcamPosition: DEFAULT_WEBCAM_SETTINGS.position,

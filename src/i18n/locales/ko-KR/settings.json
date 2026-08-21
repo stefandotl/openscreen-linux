@@ -49,6 +49,8 @@
 		"noWebcam": "웹캠 없음",
 		"mirrorWebcam": "웹캠 미러링",
 		"rotateWebcam": "웹캠 회전",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "양수 값은 카메라 지연을 보정하기 위해 웹캠을 더 일찍 표시합니다.",
 		"reactiveWebcam": "확대 시 축소",
 		"reactiveWebcamDescription": "확대하는 동안 카메라가 부드럽게 작아져 방해되지 않습니다."
 	},

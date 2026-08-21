@@ -179,6 +179,8 @@ struct WebcamPlan {
 	std::string inputPath;
 	int sourceWidth = 0;
 	int sourceHeight = 0;
+	double durationMs = 0.0;
+	double videoOffsetMs = 0.0;
 	float x = 0.0f;
 	float y = 0.0f;
 	float width = 0.0f;
@@ -1572,7 +1574,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 7) fail("Unsupported native GPU export plan version");
+	if (plan.version != 8) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
@@ -1648,6 +1650,8 @@ ExportPlan loadPlan(const std::string &planPath) {
 		plan.webcam.inputPath = item.at("inputPath").get<std::string>();
 		plan.webcam.sourceWidth = item.at("sourceWidth").get<int>();
 		plan.webcam.sourceHeight = item.at("sourceHeight").get<int>();
+		plan.webcam.durationMs = item.at("durationMs").get<double>();
+		plan.webcam.videoOffsetMs = item.at("videoOffsetMs").get<double>();
 		const auto &rect = item.at("rect");
 		plan.webcam.x = rect.at("x").get<float>();
 		plan.webcam.y = rect.at("y").get<float>();
@@ -1681,7 +1685,9 @@ ExportPlan loadPlan(const std::string &planPath) {
 		}
 		if (plan.webcam.inputPath.empty() || plan.webcam.sourceWidth <= 0 ||
 			plan.webcam.sourceHeight <= 0 || plan.webcam.sourceWidth % 2 != 0 ||
-			plan.webcam.sourceHeight % 2 != 0 || !std::isfinite(plan.webcam.x) ||
+			plan.webcam.sourceHeight % 2 != 0 || !std::isfinite(plan.webcam.durationMs) ||
+			plan.webcam.durationMs <= 0.0 || !std::isfinite(plan.webcam.videoOffsetMs) ||
+			!std::isfinite(plan.webcam.x) ||
 			!std::isfinite(plan.webcam.y) || !std::isfinite(plan.webcam.width) ||
 			!std::isfinite(plan.webcam.height) || !std::isfinite(plan.webcam.borderRadius) ||
 			plan.webcam.x < 0.0f || plan.webcam.y < 0.0f || plan.webcam.width <= 0.0f ||
@@ -1995,7 +2001,10 @@ void renderOutputFrame(
 		webcamFrame = selectWebcamFrameAt(
 			state,
 			webcamSelection,
-			plannedFrame.sourceTimestampMs);
+			std::clamp(
+				plannedFrame.sourceTimestampMs + plan.webcam.videoOffsetMs,
+				0.0,
+				plan.webcam.durationMs));
 		webcamTransform = plannedWebcamTransform(plan, plannedFrame);
 	}
 	*compositorMs += compositeFrame(

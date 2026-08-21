@@ -97,6 +97,7 @@ describe("native GPU export plan", () => {
 		const first = createNativeGpuExportPlan(config, videoInfo);
 		const second = createNativeGpuExportPlan(config, videoInfo);
 
+		expect(first.version).toBe(8);
 		expect(first.frames).toHaveLength(30);
 		expect(first.frames[0].sourceTimestampMs).toBe(0);
 		expect(first.frames.at(-1)?.sourceTimestampMs).toBeCloseTo(966.6667, 3);
@@ -279,6 +280,7 @@ describe("native GPU export plan", () => {
 	it("plans a synchronized webcam overlay with editor geometry and reactive zoom", () => {
 		const config = createConfig({
 			webcamVideoUrl: "/tmp/webcam.webm",
+			webcamVideoOffsetMs: 125,
 			webcamLayoutPreset: "picture-in-picture",
 			webcamMaskShape: "circle",
 			webcamMirrored: true,
@@ -309,6 +311,8 @@ describe("native GPU export plan", () => {
 			inputPath: "/tmp/webcam.webm",
 			sourceWidth: 640,
 			sourceHeight: 480,
+			durationMs: 1000,
+			videoOffsetMs: 125,
 			maskShape: "circle",
 			mirrored: true,
 			rotation: 270,
@@ -318,6 +322,22 @@ describe("native GPU export plan", () => {
 		expect(plan.webcam?.rect.width).toBe(plan.webcam?.rect.height);
 		expect(plan.webcam?.shadow).not.toBeNull();
 		expect(plan.frames.some((frame) => frame.webcamScale < 1)).toBe(true);
+	});
+
+	it("rejects a non-finite webcam video offset", () => {
+		const config = createConfig({
+			webcamVideoUrl: "/tmp/webcam.webm",
+			webcamVideoOffsetMs: Number.NaN,
+			webcamLayoutPreset: "picture-in-picture",
+		});
+
+		expect(
+			getNativeGpuExportBlockers(config, videoInfo, {
+				width: 640,
+				height: 480,
+				duration: 1,
+			}),
+		).toContain("webcam video offset is invalid");
 	});
 
 	it("supports cover-mode webcam layouts in the native plan", () => {

@@ -5,6 +5,7 @@ import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@
 import type { ProjectMedia } from "@/lib/recordingSession";
 import { normalizeProjectMedia } from "@/lib/recordingSession";
 import { DEFAULT_WALLPAPER, WALLPAPER_PATHS } from "@/lib/wallpaper";
+import { normalizeWebcamVideoOffsetMs } from "@/lib/webcamSync";
 import { ASPECT_RATIOS, type AspectRatio, isPortraitAspectRatio } from "@/utils/aspectRatioUtils";
 import {
 	DEFAULT_EDITOR_APPEARANCE_SETTINGS,
@@ -88,6 +89,7 @@ export interface ProjectEditorState {
 	webcamMaskShape: WebcamMaskShape;
 	webcamMirrored: boolean;
 	webcamRotation: WebcamRotation;
+	webcamVideoOffsetMs: number;
 	webcamReactiveZoom: boolean;
 	webcamSizePreset: WebcamSizePreset;
 	webcamPosition: WebcamPosition | null;
@@ -565,6 +567,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		webcamRotation: isWebcamRotation(editor.webcamRotation)
 			? editor.webcamRotation
 			: DEFAULT_WEBCAM_ROTATION,
+		webcamVideoOffsetMs: normalizeWebcamVideoOffsetMs(editor.webcamVideoOffsetMs),
 		webcamReactiveZoom:
 			typeof editor.webcamReactiveZoom === "boolean"
 				? editor.webcamReactiveZoom

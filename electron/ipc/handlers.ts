@@ -44,6 +44,11 @@ import {
 	type SilenceDetectionResult,
 	type SilenceDetectionSettings,
 } from "../../src/lib/silenceDetection";
+import {
+	getRecommendedWebcamVideoOffsetMs,
+	normalizeWebcamVideoOffsetMs,
+	WEBCAM_VIDEO_OFFSET_DEFAULT_MS,
+} from "../../src/lib/webcamSync";
 import type {
 	CursorRecordingData,
 	CursorRecordingSample,
@@ -566,7 +571,14 @@ async function getApprovedProjectSession(
 	}
 
 	return webcamVideoPath
-		? { screenVideoPath, webcamVideoPath, createdAt: Date.now() }
+		? {
+				screenVideoPath,
+				webcamVideoPath,
+				createdAt: Date.now(),
+				...(media.webcamVideoOffsetMs !== undefined
+					? { webcamVideoOffsetMs: media.webcamVideoOffsetMs }
+					: {}),
+			}
 		: { screenVideoPath, createdAt: Date.now() };
 }
 
@@ -592,6 +604,7 @@ type AttachNativeMacWebcamRecordingInput = {
 	recordingId?: number;
 	webcam?: RecordedVideoAssetInput;
 	cursorCaptureMode?: CursorCaptureMode;
+	webcamVideoOffsetMs?: number;
 };
 
 let selectedSource: SelectedSource | null = null;
@@ -679,6 +692,7 @@ let nativeWindowsCaptureOutput = "";
 let nativeWindowsCaptureTargetPath: string | null = null;
 let nativeWindowsCaptureWebcamTargetPath: string | null = null;
 let nativeWindowsCaptureRecordingId: number | null = null;
+let nativeWindowsWebcamVideoOffsetMs = WEBCAM_VIDEO_OFFSET_DEFAULT_MS;
 let nativeWindowsCursorOffsetMs = 0;
 let nativeWindowsCursorCaptureMode: CursorCaptureMode = "editable-overlay";
 let nativeWindowsCursorRecordingStartMs = 0;
@@ -2031,6 +2045,9 @@ export function registerIpcHandlers(
 				nativeWindowsCaptureTargetPath = outputPath;
 				nativeWindowsCaptureWebcamTargetPath = request.webcam.enabled ? webcamOutputPath : null;
 				nativeWindowsCaptureRecordingId = recordingId;
+				nativeWindowsWebcamVideoOffsetMs = request.webcam.enabled
+					? getRecommendedWebcamVideoOffsetMs(request.webcam.deviceName)
+					: WEBCAM_VIDEO_OFFSET_DEFAULT_MS;
 				nativeWindowsCursorOffsetMs = 0;
 				nativeWindowsCursorCaptureMode = cursorCaptureMode;
 				nativeWindowsCursorRecordingStartMs = 0;
@@ -2088,6 +2105,7 @@ export function registerIpcHandlers(
 				nativeWindowsCaptureTargetPath = null;
 				nativeWindowsCaptureWebcamTargetPath = null;
 				nativeWindowsCaptureRecordingId = null;
+				nativeWindowsWebcamVideoOffsetMs = WEBCAM_VIDEO_OFFSET_DEFAULT_MS;
 				nativeWindowsCursorOffsetMs = 0;
 				nativeWindowsCursorCaptureMode = "editable-overlay";
 				nativeWindowsCursorRecordingStartMs = 0;
@@ -2345,6 +2363,7 @@ export function registerIpcHandlers(
 		const preferredWebcamPath = nativeWindowsCaptureWebcamTargetPath;
 		const recordingId = nativeWindowsCaptureRecordingId ?? Date.now();
 		const cursorCaptureMode = nativeWindowsCursorCaptureMode;
+		const webcamVideoOffsetMs = nativeWindowsWebcamVideoOffsetMs;
 
 		if (!proc) {
 			return { success: false, error: "Native Windows capture is not running." };
@@ -2390,7 +2409,13 @@ export function registerIpcHandlers(
 				}
 			}
 			const session: RecordingSession = webcamVideoPath
-				? { screenVideoPath, webcamVideoPath, createdAt: recordingId, cursorCaptureMode }
+				? {
+						screenVideoPath,
+						webcamVideoPath,
+						webcamVideoOffsetMs,
+						createdAt: recordingId,
+						cursorCaptureMode,
+					}
 				: { screenVideoPath, createdAt: recordingId, cursorCaptureMode };
 			setCurrentRecordingSessionState(session);
 			clearCurrentProjectForNewMedia();
@@ -2416,6 +2441,7 @@ export function registerIpcHandlers(
 			nativeWindowsCaptureTargetPath = null;
 			nativeWindowsCaptureWebcamTargetPath = null;
 			nativeWindowsCaptureRecordingId = null;
+			nativeWindowsWebcamVideoOffsetMs = WEBCAM_VIDEO_OFFSET_DEFAULT_MS;
 			nativeWindowsCursorOffsetMs = 0;
 			nativeWindowsCursorCaptureMode = "editable-overlay";
 			nativeWindowsCursorRecordingStartMs = 0;
@@ -2544,9 +2570,11 @@ export function registerIpcHandlers(
 						? payload.recordingId
 						: Date.now();
 				const cursorCaptureMode = normalizeCursorCaptureMode(payload.cursorCaptureMode);
+				const webcamVideoOffsetMs = normalizeWebcamVideoOffsetMs(payload.webcamVideoOffsetMs);
 				const session: RecordingSession = {
 					screenVideoPath,
 					webcamVideoPath,
+					webcamVideoOffsetMs,
 					createdAt,
 					...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 				};
@@ -2599,6 +2627,7 @@ export function registerIpcHandlers(
 				? payload.createdAt
 				: Date.now();
 		const cursorCaptureMode = normalizeCursorCaptureMode(payload.cursorCaptureMode);
+		const webcamVideoOffsetMs = normalizeWebcamVideoOffsetMs(payload.webcamVideoOffsetMs);
 		const screenVideoPath = resolveRecordingOutputPath(payload.screen.fileName);
 		const screenStreamed = await finalizeRecordingFile(
 			recordingStreams,
@@ -2637,6 +2666,7 @@ export function registerIpcHandlers(
 			? {
 					screenVideoPath,
 					webcamVideoPath,
+					webcamVideoOffsetMs,
 					createdAt,
 					...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 				}

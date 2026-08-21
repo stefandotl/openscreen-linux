@@ -22,12 +22,14 @@ import type {
 	GifFrameRate,
 	GifSizePreset,
 } from "./types";
+import { getWebcamSourceTimestampMs, offsetWebcamTimelineRegions } from "./webcamTiming";
 
 const GIF_WORKER_URL = new URL("gif.js/dist/gif.worker.js", import.meta.url).toString();
 
 interface GifExporterConfig {
 	videoUrl: string;
 	webcamVideoUrl?: string;
+	webcamVideoOffsetMs?: number;
 	width: number;
 	height: number;
 	frameRate: GifFrameRate;
@@ -231,6 +233,12 @@ export class GifExporter {
 
 			let frameIndex = 0;
 			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
+			const webcamTrimRegions = webcamFrameQueue
+				? offsetWebcamTimelineRegions(this.config.trimRegions, this.config.webcamVideoOffsetMs)
+				: undefined;
+			const webcamSpeedRegions = webcamFrameQueue
+				? offsetWebcamTimelineRegions(this.config.speedRegions, this.config.webcamVideoOffsetMs)
+				: undefined;
 			let stopWebcamDecode = false;
 			let webcamDecodeError: Error | null = null;
 			const webcamDecodePromise =
@@ -240,8 +248,8 @@ export class GifExporter {
 							return this.webcamDecoder
 								.decodeAll(
 									this.config.frameRate,
-									this.config.trimRegions,
-									this.config.speedRegions,
+									webcamTrimRegions,
+									webcamSpeedRegions,
 									async (webcamFrame, _exportTimestampUs, webcamSourceTimestampMs) => {
 										while (queue.length >= 12 && !this.cancelled && !stopWebcamDecode) {
 											await new Promise((resolve) => setTimeout(resolve, 2));
@@ -280,9 +288,16 @@ export class GifExporter {
 							return;
 						}
 
-						webcamFrame = webcamFrameQueue
-							? await webcamFrameQueue.frameAt(sourceTimestampMs)
-							: null;
+						webcamFrame =
+							webcamFrameQueue && webcamInfo
+								? await webcamFrameQueue.frameAt(
+										getWebcamSourceTimestampMs(
+											sourceTimestampMs,
+											this.config.webcamVideoOffsetMs,
+											webcamInfo.duration,
+										),
+									)
+								: null;
 						const renderer = this.renderer;
 						if (this.cancelled || !renderer) {
 							return;

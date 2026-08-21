@@ -49,6 +49,8 @@
 		"webcamSize": "Dimensione webcam",
 		"mirrorWebcam": "Specchia webcam",
 		"rotateWebcam": "Ruota webcam",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "I valori positivi mostrano la webcam in anticipo per compensare il ritardo della videocamera.",
 		"reactiveWebcam": "Riduci con lo zoom",
 		"reactiveWebcamDescription": "La webcam si riduce dolcemente durante lo zoom, così non intralcia."
 	},

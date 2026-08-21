@@ -49,6 +49,8 @@
 		"noWebcam": "Sin cámara",
 		"mirrorWebcam": "Reflejar cámara",
 		"rotateWebcam": "Girar cámara",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "Los valores positivos muestran la cámara web antes para compensar el retraso de la cámara.",
 		"reactiveWebcam": "Reducir al ampliar",
 		"reactiveWebcamDescription": "La cámara se reduce suavemente mientras el vídeo está ampliado, para no estorbar."
 	},

@@ -47,6 +47,8 @@
 		"webcamShape": "Formato da Câmera",
 		"webcamSize": "Tamanho da Webcam",
 		"rotateWebcam": "Girar Webcam",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "Valores positivos exibem a webcam mais cedo para compensar o atraso da câmera.",
 		"reactiveWebcam": "Encolher ao ampliar",
 		"reactiveWebcamDescription": "A câmera diminui suavemente enquanto o vídeo está ampliado, para não atrapalhar."
 	},

@@ -278,6 +278,7 @@ export default function VideoEditor() {
 		webcamMaskShape,
 		webcamMirrored,
 		webcamRotation,
+		webcamVideoOffsetMs,
 		webcamReactiveZoom,
 		webcamSizePreset,
 		webcamPosition,
@@ -461,7 +462,7 @@ export default function VideoEditor() {
 			webcamVideoSourcePath ?? (webcamVideoPath ? fromFileUrl(webcamVideoPath) : null);
 		return {
 			screenVideoPath,
-			...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
+			...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath, webcamVideoOffsetMs } : {}),
 			...(recordingCursorCaptureMode ? { cursorCaptureMode: recordingCursorCaptureMode } : {}),
 		};
 	}, [
@@ -469,6 +470,7 @@ export default function VideoEditor() {
 		videoSourcePath,
 		webcamVideoPath,
 		webcamVideoSourcePath,
+		webcamVideoOffsetMs,
 		recordingCursorCaptureMode,
 	]);
 
@@ -534,17 +536,23 @@ export default function VideoEditor() {
 	}, []);
 
 	const createSceneFromMedia = useCallback(
-		(media: ProjectMedia | null, sceneEditor: EditorState = INITIAL_EDITOR_STATE): EditorScene => ({
+		(media: ProjectMedia | null, sceneEditor?: EditorState): EditorScene => ({
 			id: createSceneId(),
 			name: createSceneName(scenesRef.current),
 			media,
-			editor: editorStateForScene(sceneEditor),
+			editor: editorStateForScene(
+				sceneEditor ?? {
+					...INITIAL_EDITOR_STATE,
+					webcamVideoOffsetMs:
+						media?.webcamVideoOffsetMs ?? INITIAL_EDITOR_STATE.webcamVideoOffsetMs,
+				},
+			),
 		}),
 		[editorStateForScene],
 	);
 
 	const installInitialScene = useCallback(
-		(media: ProjectMedia, sceneEditor: EditorState = INITIAL_EDITOR_STATE) => {
+		(media: ProjectMedia, sceneEditor?: EditorState) => {
 			const scene = createSceneFromMedia(media, sceneEditor);
 			scenesRef.current = [scene];
 			setScenes([scene]);
@@ -791,15 +799,19 @@ export default function VideoEditor() {
 			const scene = scenesRef.current.find((candidate) => candidate.id === sceneId);
 			if (!scene) return false;
 
+			const nextEditor = {
+				...scene.editor,
+				webcamVideoOffsetMs: media.webcamVideoOffsetMs ?? scene.editor.webcamVideoOffsetMs,
+			};
 			const nextScenes = scenesRef.current.map((candidate) =>
-				candidate.id === sceneId ? { ...candidate, media } : candidate,
+				candidate.id === sceneId ? { ...candidate, media, editor: nextEditor } : candidate,
 			);
 			scenesRef.current = nextScenes;
 			setScenes(nextScenes);
 			activeSceneIdRef.current = sceneId;
 			setActiveSceneId(sceneId);
 			applySceneMedia(media);
-			resetState(scene.editor);
+			resetState(nextEditor);
 			setCurrentTime(0);
 			setDuration(0);
 			setIsPlaying(false);
@@ -975,6 +987,7 @@ export default function VideoEditor() {
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
 				webcamMirrored: normalizedEditor.webcamMirrored,
 				webcamRotation: normalizedEditor.webcamRotation,
+				webcamVideoOffsetMs: normalizedEditor.webcamVideoOffsetMs,
 				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
 				webcamSizePreset: normalizedEditor.webcamSizePreset,
 				webcamPosition: normalizedEditor.webcamPosition,
@@ -1037,6 +1050,7 @@ export default function VideoEditor() {
 							webcamMaskShape: scene.editor.webcamMaskShape,
 							webcamMirrored: scene.editor.webcamMirrored,
 							webcamRotation: scene.editor.webcamRotation,
+							webcamVideoOffsetMs: scene.editor.webcamVideoOffsetMs,
 							webcamReactiveZoom: scene.editor.webcamReactiveZoom,
 							webcamSizePreset: scene.editor.webcamSizePreset,
 							webcamPosition: scene.editor.webcamPosition,
@@ -1074,6 +1088,7 @@ export default function VideoEditor() {
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
 				webcamMirrored: normalizedEditor.webcamMirrored,
 				webcamRotation: normalizedEditor.webcamRotation,
+				webcamVideoOffsetMs: normalizedEditor.webcamVideoOffsetMs,
 				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
 				webcamSizePreset: normalizedEditor.webcamSizePreset,
 				webcamPosition: normalizedEditor.webcamPosition,
@@ -1178,6 +1193,7 @@ export default function VideoEditor() {
 				webcamMaskShape,
 				webcamMirrored,
 				webcamRotation,
+				webcamVideoOffsetMs,
 				webcamReactiveZoom,
 				webcamSizePreset,
 				webcamPosition,
@@ -1216,6 +1232,7 @@ export default function VideoEditor() {
 		webcamMaskShape,
 		webcamMirrored,
 		webcamRotation,
+		webcamVideoOffsetMs,
 		webcamReactiveZoom,
 		webcamSizePreset,
 		webcamPosition,
@@ -1249,7 +1266,10 @@ export default function VideoEditor() {
 							const sessionMedia: ProjectMedia = {
 								screenVideoPath: fromFileUrl(session.screenVideoPath),
 								...(session.webcamVideoPath
-									? { webcamVideoPath: fromFileUrl(session.webcamVideoPath) }
+									? {
+											webcamVideoPath: fromFileUrl(session.webcamVideoPath),
+											webcamVideoOffsetMs: session.webcamVideoOffsetMs,
+										}
 									: {}),
 								...(session.cursorCaptureMode
 									? { cursorCaptureMode: session.cursorCaptureMode }
@@ -1276,26 +1296,24 @@ export default function VideoEditor() {
 						: null;
 					const sessionMedia: ProjectMedia = {
 						screenVideoPath: sourcePath,
-						...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
+						...(webcamSourcePath
+							? {
+									webcamVideoPath: webcamSourcePath,
+									webcamVideoOffsetMs: session.webcamVideoOffsetMs,
+								}
+							: {}),
 						...(session.cursorCaptureMode ? { cursorCaptureMode: session.cursorCaptureMode } : {}),
 					};
-					installInitialScene(sessionMedia);
+					const sessionEditor = editorStateForScene({
+						webcamVideoOffsetMs:
+							session.webcamVideoOffsetMs ?? INITIAL_EDITOR_STATE.webcamVideoOffsetMs,
+					});
+					installInitialScene(sessionMedia, sessionEditor);
 					if (currentSessionResult.pendingSceneId) {
 						await window.electronAPI.clearPendingRecordingScene();
 					}
 					setCurrentProjectPath(null);
-					setLastSavedSnapshot(
-						createProjectSnapshot(
-							{
-								screenVideoPath: sourcePath,
-								...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
-								...(session.cursorCaptureMode
-									? { cursorCaptureMode: session.cursorCaptureMode }
-									: {}),
-							},
-							INITIAL_EDITOR_STATE,
-						),
-					);
+					setLastSavedSnapshot(createProjectSnapshot(sessionMedia, sessionEditor));
 					return;
 				}
 
@@ -1317,7 +1335,7 @@ export default function VideoEditor() {
 		}
 
 		loadInitialData();
-	}, [applyLoadedProject, attachRecordingToScene, installInitialScene]);
+	}, [applyLoadedProject, attachRecordingToScene, editorStateForScene, installInitialScene]);
 
 	// Avoid overwriting saved prefs with defaults before they've loaded.
 	const [prefsHydrated, setPrefsHydrated] = useState(false);
@@ -1369,6 +1387,7 @@ export default function VideoEditor() {
 				webcamMaskShape,
 				webcamMirrored,
 				webcamRotation,
+				webcamVideoOffsetMs,
 				webcamReactiveZoom,
 				webcamSizePreset,
 				webcamPosition,
@@ -1449,6 +1468,7 @@ export default function VideoEditor() {
 			webcamMaskShape,
 			webcamMirrored,
 			webcamRotation,
+			webcamVideoOffsetMs,
 			webcamReactiveZoom,
 			webcamSizePreset,
 			webcamPosition,
@@ -3210,6 +3230,7 @@ export default function VideoEditor() {
 						webcamMaskShape,
 						webcamMirrored,
 						webcamRotation,
+						webcamVideoOffsetMs,
 						webcamReactiveZoom,
 						webcamSizePreset,
 						webcamPosition,
@@ -3337,6 +3358,7 @@ export default function VideoEditor() {
 									webcamMaskShape: sceneEditor.webcamMaskShape,
 									webcamMirrored: sceneEditor.webcamMirrored,
 									webcamRotation: sceneEditor.webcamRotation,
+									webcamVideoOffsetMs: sceneEditor.webcamVideoOffsetMs,
 									webcamReactiveZoom: sceneEditor.webcamReactiveZoom,
 									webcamSizePreset: sceneEditor.webcamSizePreset,
 									webcamPosition: sceneEditor.webcamPosition,
@@ -3429,6 +3451,7 @@ export default function VideoEditor() {
 							webcamMaskShape,
 							webcamMirrored,
 							webcamRotation,
+							webcamVideoOffsetMs,
 							webcamReactiveZoom,
 							webcamSizePreset,
 							webcamPosition,
@@ -3545,6 +3568,7 @@ export default function VideoEditor() {
 			webcamMaskShape,
 			webcamMirrored,
 			webcamRotation,
+			webcamVideoOffsetMs,
 			webcamReactiveZoom,
 			webcamSizePreset,
 			webcamPosition,
@@ -4390,6 +4414,7 @@ export default function VideoEditor() {
 													webcamMaskShape={webcamMaskShape}
 													webcamMirrored={webcamMirrored}
 													webcamRotation={webcamRotation}
+													webcamVideoOffsetMs={webcamVideoOffsetMs}
 													webcamReactiveZoom={webcamReactiveZoom}
 													webcamSizePreset={webcamSizePreset}
 													webcamPosition={webcamPosition}
@@ -4556,9 +4581,14 @@ export default function VideoEditor() {
 										onWebcamMaskShapeChange={(shape) => pushState({ webcamMaskShape: shape })}
 										webcamMirrored={webcamMirrored}
 										webcamRotation={webcamRotation}
+										webcamVideoOffsetMs={webcamVideoOffsetMs}
 										webcamReactiveZoom={webcamReactiveZoom}
 										onWebcamMirroredChange={(mirrored) => pushState({ webcamMirrored: mirrored })}
 										onWebcamRotationChange={(rotation) => pushState({ webcamRotation: rotation })}
+										onWebcamVideoOffsetChange={(offsetMs) =>
+											updateState({ webcamVideoOffsetMs: offsetMs })
+										}
+										onWebcamVideoOffsetCommit={commitState}
 										onWebcamReactiveZoomChange={(reactive) =>
 											pushState({ webcamReactiveZoom: reactive })
 										}

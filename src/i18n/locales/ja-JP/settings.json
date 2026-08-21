@@ -49,6 +49,8 @@
 		"noWebcam": "Webカメラなし",
 		"mirrorWebcam": "Webカメラを反転",
 		"rotateWebcam": "Webカメラを回転",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "正の値を設定すると、カメラの遅延を補正するためにWebカメラが早く表示されます。",
 		"reactiveWebcam": "ズーム時に縮小",
 		"reactiveWebcamDescription": "ズーム中はカメラがスムーズに縮小し、邪魔になりません。"
 	},

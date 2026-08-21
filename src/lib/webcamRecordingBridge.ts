@@ -19,8 +19,13 @@ export class WebcamRecordingBridge {
 	private readonly context: CanvasRenderingContext2D;
 	private readonly outputStream: MediaStream;
 	private readonly outputTrack: CanvasCaptureMediaStreamTrack;
-	private readonly frameIntervalId: number;
+	private readonly frameIntervalMs: number;
+	private readonly frameWatchdogId: number;
+	private readonly supportsVideoFrameCallbacks: boolean;
 	private sourceStream: MediaStream | null = null;
+	private sourceFrameCallbackId: number | null = null;
+	private sourceFrameCallbackGeneration = 0;
+	private receivedSourceFrameSinceWatchdog = false;
 	private destroyed = false;
 
 	private constructor(sourceStream: MediaStream, frameRate: number) {
@@ -52,9 +57,12 @@ export class WebcamRecordingBridge {
 		this.video.autoplay = true;
 		this.video.muted = true;
 		this.video.playsInline = true;
+		this.supportsVideoFrameCallbacks =
+			typeof this.video.requestVideoFrameCallback === "function" &&
+			typeof this.video.cancelVideoFrameCallback === "function";
 
-		const intervalMs = Math.max(1, Math.round(1000 / frameRate));
-		this.frameIntervalId = window.setInterval(() => this.renderFrame(), intervalMs);
+		this.frameIntervalMs = Math.max(1, Math.round(1000 / frameRate));
+		this.frameWatchdogId = window.setInterval(() => this.runFrameWatchdog(), this.frameIntervalMs);
 	}
 
 	static async create(sourceStream: MediaStream, frameRate: number) {
@@ -81,15 +89,22 @@ export class WebcamRecordingBridge {
 			throw new Error("Cannot attach a webcam stream without a live video track.");
 		}
 
+		this.cancelSourceFrameCallback();
+		this.receivedSourceFrameSinceWatchdog = false;
 		this.sourceStream = sourceStream;
 		this.video.srcObject = sourceStream;
 		await this.video.play();
+		if (!this.destroyed && this.sourceStream === sourceStream) {
+			this.scheduleSourceFrameCallback(sourceStream);
+		}
 	}
 
 	detachSource(sourceStream: MediaStream) {
 		if (this.sourceStream !== sourceStream) {
 			return;
 		}
+		this.cancelSourceFrameCallback();
+		this.receivedSourceFrameSinceWatchdog = false;
 		this.sourceStream = null;
 		this.video.pause();
 		this.video.srcObject = null;
@@ -100,22 +115,79 @@ export class WebcamRecordingBridge {
 			return;
 		}
 		this.destroyed = true;
-		window.clearInterval(this.frameIntervalId);
+		window.clearInterval(this.frameWatchdogId);
+		this.cancelSourceFrameCallback();
 		this.sourceStream = null;
 		this.video.pause();
 		this.video.srcObject = null;
 		this.outputStream.getTracks().forEach((track) => track.stop());
 	}
 
-	private renderFrame() {
+	private scheduleSourceFrameCallback(sourceStream: MediaStream) {
+		if (
+			this.destroyed ||
+			!this.supportsVideoFrameCallbacks ||
+			this.sourceStream !== sourceStream ||
+			this.sourceFrameCallbackId !== null
+		) {
+			return;
+		}
+
+		const callbackGeneration = this.sourceFrameCallbackGeneration;
+		const callbackId = this.video.requestVideoFrameCallback(() => {
+			if (this.sourceFrameCallbackId === callbackId) {
+				this.sourceFrameCallbackId = null;
+			}
+			if (
+				this.destroyed ||
+				callbackGeneration !== this.sourceFrameCallbackGeneration ||
+				this.sourceStream !== sourceStream
+			) {
+				return;
+			}
+
+			this.renderSourceFrame();
+			this.scheduleSourceFrameCallback(sourceStream);
+		});
+		this.sourceFrameCallbackId = callbackId;
+	}
+
+	private cancelSourceFrameCallback() {
+		this.sourceFrameCallbackGeneration += 1;
+		if (this.sourceFrameCallbackId !== null && this.supportsVideoFrameCallbacks) {
+			this.video.cancelVideoFrameCallback(this.sourceFrameCallbackId);
+		}
+		this.sourceFrameCallbackId = null;
+	}
+
+	private renderSourceFrame() {
 		if (this.destroyed) {
 			return;
 		}
 		if (this.sourceStream && this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
 			this.context.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+			this.receivedSourceFrameSinceWatchdog = true;
 		}
-		// requestFrame also repeats the last complete image while Linux re-enumerates
-		// the physical camera, so MediaRecorder's track never ends during the gap.
+		this.outputTrack.requestFrame();
+	}
+
+	private runFrameWatchdog() {
+		if (this.destroyed) {
+			return;
+		}
+
+		if (!this.supportsVideoFrameCallbacks) {
+			this.renderSourceFrame();
+			return;
+		}
+
+		if (this.sourceStream && this.receivedSourceFrameSinceWatchdog) {
+			this.receivedSourceFrameSinceWatchdog = false;
+			return;
+		}
+
+		// Repeat the last complete image while a source stalls or Linux re-enumerates
+		// the physical camera, so MediaRecorder's stable output track keeps advancing.
 		this.outputTrack.requestFrame();
 	}
 }

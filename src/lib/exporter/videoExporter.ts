@@ -22,6 +22,7 @@ import {
 import { StreamingVideoDecoder } from "./streamingDecoder";
 import { TimestampedVideoFrameQueue } from "./timestampedVideoFrameQueue";
 import type { ExportConfig, ExportProgress, ExportResult } from "./types";
+import { getWebcamSourceTimestampMs, offsetWebcamTimelineRegions } from "./webcamTiming";
 
 const ENCODER_STALL_TIMEOUT_MS = 15_000;
 const ENCODER_FLUSH_TIMEOUT_MS = 20_000;
@@ -39,6 +40,7 @@ export type LinuxExportFrameSource = "auto" | "canvas" | "readback";
 export interface VideoExporterConfig extends ExportConfig {
 	videoUrl: string;
 	webcamVideoUrl?: string;
+	webcamVideoOffsetMs?: number;
 	wallpaper: string;
 	zoomRegions: ZoomRegion[];
 	trimRegions?: TrimRegion[];
@@ -563,6 +565,12 @@ export class VideoExporter {
 					: this.MAX_ENCODE_QUEUE;
 
 			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
+			const webcamTrimRegions = webcamFrameQueue
+				? offsetWebcamTimelineRegions(this.config.trimRegions, this.config.webcamVideoOffsetMs)
+				: undefined;
+			const webcamSpeedRegions = webcamFrameQueue
+				? offsetWebcamTimelineRegions(this.config.speedRegions, this.config.webcamVideoOffsetMs)
+				: undefined;
 			webcamDecodePromise =
 				webcamDecoder && webcamFrameQueue
 					? (() => {
@@ -570,8 +578,8 @@ export class VideoExporter {
 							return webcamDecoder
 								.decodeAll(
 									this.config.frameRate,
-									this.config.trimRegions,
-									this.config.speedRegions,
+									webcamTrimRegions,
+									webcamSpeedRegions,
 									async (webcamFrame, _exportTimestampUs, webcamSourceTimestampMs) => {
 										while (queue.length >= 12 && !this.cancelled && !stopWebcamDecode) {
 											await new Promise((resolve) => setTimeout(resolve, 2));
@@ -614,9 +622,16 @@ export class VideoExporter {
 						}
 
 						const timestamp = frameIndex * frameDuration;
-						webcamFrame = webcamFrameQueue
-							? await webcamFrameQueue.frameAt(sourceTimestampMs)
-							: null;
+						webcamFrame =
+							webcamFrameQueue && webcamInfo
+								? await webcamFrameQueue.frameAt(
+										getWebcamSourceTimestampMs(
+											sourceTimestampMs,
+											this.config.webcamVideoOffsetMs,
+											webcamInfo.duration,
+										),
+									)
+								: null;
 						if (this.cancelled) {
 							return;
 						}

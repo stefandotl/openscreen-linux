@@ -19,6 +19,7 @@ import type { CursorCaptureMode, RecordedVideoAssetInput } from "@/lib/recording
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { loadUserPreferences } from "@/lib/userPreferences";
 import { WebcamRecordingBridge } from "@/lib/webcamRecordingBridge";
+import { getRecommendedWebcamVideoOffsetMs } from "@/lib/webcamSync";
 import { selectPreferredCameraDevice } from "./cameraDeviceSelection";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
 import { isUnexpectedWebcamTrackEnd } from "./webcamTrackLifecycle";
@@ -116,6 +117,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [webcamDeviceName, setWebcamDeviceName] = useState<string | undefined>(
 		initialRecordingPreferences.webcamDeviceName ?? undefined,
 	);
+	const webcamVideoOffsetMs = getRecommendedWebcamVideoOffsetMs(webcamDeviceName);
 	const [systemAudioEnabled, setSystemAudioEnabled] = useState(
 		initialRecordingPreferences.systemAudioEnabled,
 	);
@@ -578,6 +580,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 								: undefined,
 						createdAt: activeRecordingId,
 						cursorCaptureMode,
+						webcamVideoOffsetMs,
 						durationMs: duration,
 					});
 
@@ -616,7 +619,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 			})();
 		},
-		[cursorCaptureMode, teardownMedia],
+		[cursorCaptureMode, teardownMedia, webcamVideoOffsetMs],
 	);
 
 	const finalizeNativeWindowsRecording = useCallback(
@@ -687,6 +690,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 							},
 							createdAt: activeNativeRecording.recordingId,
 							cursorCaptureMode,
+							webcamVideoOffsetMs,
 						});
 						if (stored.success && stored.session) {
 							storedSession = stored.session;
@@ -716,7 +720,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 			}
 		},
-		[cursorCaptureMode, getRecordingDurationMs],
+		[cursorCaptureMode, getRecordingDurationMs, webcamVideoOffsetMs],
 	);
 
 	const finalizeNativeMacRecording = useCallback(
@@ -785,6 +789,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						recordingId: activeNativeRecording.recordingId,
 						webcam: webcamAsset,
 						cursorCaptureMode,
+						webcamVideoOffsetMs,
 					});
 					if (attachResult.success) {
 						result.session = attachResult.session;
@@ -816,7 +821,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 			}
 		},
-		[cursorCaptureMode, getRecordingDurationMs],
+		[cursorCaptureMode, getRecordingDurationMs, webcamVideoOffsetMs],
 	);
 
 	const stopRecording = useRef(() => {

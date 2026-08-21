@@ -49,6 +49,8 @@
 		"noWebcam": "Không có webcam",
 		"mirrorWebcam": "Lật webcam",
 		"rotateWebcam": "Xoay webcam",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "Giá trị dương hiển thị webcam sớm hơn để bù độ trễ của camera.",
 		"reactiveWebcam": "Thu nhỏ khi phóng to",
 		"reactiveWebcamDescription": "Camera thu nhỏ mượt mà khi video được phóng to, để không che khuất."
 	},

@@ -49,6 +49,8 @@
 		"noWebcam": "بدون كاميرا",
 		"mirrorWebcam": "عكس كاميرا الويب",
 		"rotateWebcam": "تدوير كاميرا الويب",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "تُظهر القيم الموجبة كاميرا الويب في وقتٍ أبكر للتعويض عن تأخر الكاميرا.",
 		"reactiveWebcam": "تصغير عند التكبير",
 		"reactiveWebcamDescription": "تتقلص الكاميرا بسلاسة أثناء تكبير الفيديو حتى لا تعيق الرؤية."
 	},

@@ -49,6 +49,8 @@
 		"noWebcam": "Web kamerası yok",
 		"mirrorWebcam": "Web kamerasını aynala",
 		"rotateWebcam": "Web kamerasını döndür",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "Pozitif değerler, kamera gecikmesini telafi etmek için web kamerasını daha erken gösterir.",
 		"reactiveWebcam": "Yakınlaştırınca küçült",
 		"reactiveWebcamDescription": "Video yakınlaştırıldığında kamera yumuşakça küçülür, böylece yoldan çekilir."
 	},

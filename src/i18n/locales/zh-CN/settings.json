@@ -49,6 +49,8 @@
 		"noWebcam": "无摄像头",
 		"mirrorWebcam": "镜像摄像头",
 		"rotateWebcam": "旋转摄像头",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "正值会让摄像头画面提前显示，以补偿摄像头延迟。",
 		"reactiveWebcam": "缩放时缩小",
 		"reactiveWebcamDescription": "放大视频时摄像头会平滑缩小，以免遮挡内容。"
 	},

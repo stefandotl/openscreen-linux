@@ -53,6 +53,7 @@ import {
 } from "@/lib/exporter";
 import { cn } from "@/lib/utils";
 import { resolveImageWallpaperUrl, WALLPAPER_PATHS } from "@/lib/wallpaper";
+import { WEBCAM_VIDEO_OFFSET_MAX_MS, WEBCAM_VIDEO_OFFSET_MIN_MS } from "@/lib/webcamSync";
 import { type AspectRatio, isPortraitAspectRatio } from "@/utils/aspectRatioUtils";
 import { getTestId } from "@/utils/getTestId";
 import ColorPicker from "../ui/color-picker";
@@ -330,6 +331,9 @@ interface SettingsPanelProps {
 	onWebcamMirroredChange?: (mirrored: boolean) => void;
 	webcamRotation?: WebcamRotation;
 	onWebcamRotationChange?: (rotation: WebcamRotation) => void;
+	webcamVideoOffsetMs?: number;
+	onWebcamVideoOffsetChange?: (offsetMs: number) => void;
+	onWebcamVideoOffsetCommit?: () => void;
 	webcamReactiveZoom?: boolean;
 	onWebcamReactiveZoomChange?: (reactive: boolean) => void;
 	webcamSizePreset?: WebcamSizePreset;
@@ -468,6 +472,9 @@ export function SettingsPanel({
 	onWebcamMirroredChange,
 	webcamRotation = DEFAULT_WEBCAM_ROTATION,
 	onWebcamRotationChange,
+	webcamVideoOffsetMs = 0,
+	onWebcamVideoOffsetChange,
+	onWebcamVideoOffsetCommit,
 	webcamReactiveZoom = DEFAULT_WEBCAM_REACTIVE_ZOOM,
 	onWebcamReactiveZoomChange,
 	webcamSizePreset = DEFAULT_WEBCAM_SETTINGS.sizePreset,
@@ -1334,6 +1341,31 @@ export function SettingsPanel({
 														))}
 													</SelectContent>
 												</Select>
+											</div>
+										)}
+										{webcamLayoutPreset !== "no-webcam" && (
+											<div className="mt-2 p-2 rounded-lg editor-control-surface">
+												<div className="mb-1.5 flex items-center justify-between gap-2">
+													<div className="text-[10px] font-medium text-slate-300">
+														{t("layout.webcamSync")}
+													</div>
+													<div className="text-[10px] font-medium tabular-nums text-slate-400">
+														{webcamVideoOffsetMs > 0 ? "+" : ""}
+														{webcamVideoOffsetMs} ms
+													</div>
+												</div>
+												<Slider
+													value={[webcamVideoOffsetMs]}
+													onValueChange={(values) => onWebcamVideoOffsetChange?.(values[0])}
+													onValueCommit={onWebcamVideoOffsetCommit}
+													min={WEBCAM_VIDEO_OFFSET_MIN_MS}
+													max={WEBCAM_VIDEO_OFFSET_MAX_MS}
+													step={10}
+													className="w-full"
+												/>
+												<p className="mt-1.5 text-[9px] leading-snug text-slate-500">
+													{t("layout.webcamSyncDescription")}
+												</p>
 											</div>
 										)}
 										{webcamLayoutPreset === "picture-in-picture" && (

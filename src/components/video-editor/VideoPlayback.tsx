@@ -81,6 +81,7 @@ import { clampFocusToScale } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { clamp01 } from "./videoPlayback/mathUtils";
 import { seekMediaElement } from "./videoPlayback/mediaElementPlayback";
+import { getOffsetMediaTime, synchronizeMediaFollower } from "./videoPlayback/mediaElementSync";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
@@ -100,6 +101,7 @@ interface VideoPlaybackProps {
 	webcamMaskShape?: import("./types").WebcamMaskShape;
 	webcamMirrored?: boolean;
 	webcamRotation?: WebcamRotation;
+	webcamVideoOffsetMs?: number;
 	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
 	webcamPosition?: { cx: number; cy: number } | null;
@@ -232,6 +234,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			webcamMaskShape,
 			webcamMirrored = false,
 			webcamRotation = 0,
+			webcamVideoOffsetMs = 0,
 			webcamReactiveZoom = false,
 			webcamSizePreset,
 			webcamPosition,
@@ -635,6 +638,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				const video = videoRef.current;
 				if (!video) return;
 				await seekMediaElement(video, timeSeconds);
+				const webcam = webcamVideoRef.current;
+				if (webcam && webcam.readyState >= HTMLMediaElement.HAVE_METADATA) {
+					webcam.currentTime = getOffsetMediaTime(
+						video.currentTime,
+						webcamVideoOffsetMs,
+						webcam.duration,
+					);
+				}
 			},
 			play: async () => {
 				const vid = videoRef.current;
@@ -642,7 +653,16 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				try {
 					allowPlaybackRef.current = true;
 					enableAllPreviewAudioTracks(vid);
-					await vid.play();
+					const webcam = webcamVideoRef.current;
+					if (webcam && webcam.readyState >= HTMLMediaElement.HAVE_METADATA) {
+						synchronizeMediaFollower(vid, webcam, webcamVideoOffsetMs);
+					}
+					const videoPlayPromise = vid.play();
+					const webcamPlayPromise = webcam?.play();
+					await videoPlayPromise;
+					await webcamPlayPromise?.catch(() => {
+						// The primary video remains playable if the muted sidecar cannot resume.
+					});
 					const supplementalAudio = supplementalAudioRef.current;
 					if (supplementalAudio) {
 						supplementalAudio.currentTime = vid.currentTime;
@@ -664,6 +684,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				}
 				video.pause();
 				supplementalAudioRef.current?.pause();
+				webcamVideoRef.current?.pause();
 			},
 		}));
 
@@ -1855,6 +1876,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						width: webcamVideo.videoWidth,
 						height: webcamVideo.videoHeight,
 					});
+					webcamVideo.currentTime = getOffsetMediaTime(
+						videoRef.current?.currentTime ?? 0,
+						webcamVideoOffsetMs,
+						webcamVideo.duration,
+					);
 				} else if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
 					onError("Webcam video metadata has invalid dimensions");
 				}
@@ -1868,7 +1894,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				webcamVideo.removeEventListener("loadedmetadata", handleLoadedMetadata);
 				webcamVideo.removeEventListener("error", handleError);
 			};
-		}, [onError, webcamVideoPath]);
+		}, [onError, webcamVideoOffsetMs, webcamVideoPath]);
 
 		useEffect(() => {
 			const webcamVideo = webcamVideoRef.current;
@@ -1876,28 +1902,75 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				return;
 			}
 
-			const activeSpeedRegion =
-				speedRegions.find(
-					(region) => currentTime * 1000 >= region.startMs && currentTime * 1000 < region.endMs,
-				) ?? null;
-			webcamVideo.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
-
 			if (!isPlaying) {
 				webcamVideo.pause();
-				if (Math.abs(webcamVideo.currentTime - currentTime) > 0.05) {
-					webcamVideo.currentTime = currentTime;
+				const activeSpeedRegion =
+					speedRegions.find(
+						(region) => currentTime * 1000 >= region.startMs && currentTime * 1000 < region.endMs,
+					) ?? null;
+				webcamVideo.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+				if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
+					const targetTime = getOffsetMediaTime(
+						currentTime,
+						webcamVideoOffsetMs,
+						webcamVideo.duration,
+					);
+					if (Math.abs(webcamVideo.currentTime - targetTime) > 0.015) {
+						webcamVideo.currentTime = targetTime;
+					}
 				}
 				return;
 			}
 
-			if (Math.abs(webcamVideo.currentTime - currentTime) > 0.15) {
-				webcamVideo.currentTime = currentTime;
+			const primaryVideo = videoRef.current;
+			if (primaryVideo && webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
+				synchronizeMediaFollower(primaryVideo, webcamVideo, webcamVideoOffsetMs);
 			}
 
-			webcamVideo.play().catch(() => {
-				// Ignore webcam autoplay restoration failures.
-			});
-		}, [currentTime, isPlaying, speedRegions, webcamVideoPath]);
+			if (webcamVideo.paused && !webcamVideo.ended) {
+				webcamVideo.play().catch(() => {
+					// Ignore webcam autoplay restoration failures.
+				});
+			}
+		}, [currentTime, isPlaying, speedRegions, webcamVideoOffsetMs, webcamVideoPath]);
+
+		useEffect(() => {
+			const primaryVideo = videoRef.current;
+			const webcamVideo = webcamVideoRef.current;
+			if (!isPlaying || !primaryVideo || !webcamVideo || !webcamVideoPath) {
+				return;
+			}
+
+			let stopped = false;
+			let videoFrameCallbackId: number | null = null;
+			let animationFrameId: number | null = null;
+			const syncNextFrame = () => {
+				if (stopped) return;
+				if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
+					synchronizeMediaFollower(primaryVideo, webcamVideo, webcamVideoOffsetMs);
+				}
+
+				if (typeof primaryVideo.requestVideoFrameCallback === "function") {
+					videoFrameCallbackId = primaryVideo.requestVideoFrameCallback(syncNextFrame);
+				} else {
+					animationFrameId = requestAnimationFrame(syncNextFrame);
+				}
+			};
+
+			syncNextFrame();
+			return () => {
+				stopped = true;
+				if (
+					videoFrameCallbackId !== null &&
+					typeof primaryVideo.cancelVideoFrameCallback === "function"
+				) {
+					primaryVideo.cancelVideoFrameCallback(videoFrameCallbackId);
+				}
+				if (animationFrameId !== null) {
+					cancelAnimationFrame(animationFrameId);
+				}
+			};
+		}, [isPlaying, webcamVideoOffsetMs, webcamVideoPath]);
 
 		useEffect(() => {
 			const webcamVideo = webcamVideoRef.current;
@@ -1906,8 +1979,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			}
 
 			webcamVideo.pause();
-			webcamVideo.currentTime = 0;
-		}, [webcamVideoPath]);
+			if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
+				webcamVideo.currentTime = getOffsetMediaTime(
+					videoRef.current?.currentTime ?? 0,
+					webcamVideoOffsetMs,
+					webcamVideo.duration,
+				);
+			}
+		}, [webcamVideoOffsetMs, webcamVideoPath]);
 
 		useEffect(() => {
 			return () => {

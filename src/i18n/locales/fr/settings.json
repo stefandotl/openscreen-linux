@@ -49,6 +49,8 @@
 		"noWebcam": "Sans webcam",
 		"mirrorWebcam": "Inverser la webcam",
 		"rotateWebcam": "Faire pivoter la webcam",
+		"webcamSync": "A/V Sync",
+		"webcamSyncDescription": "Les valeurs positives affichent la webcam plus tôt afin de compenser le retard de la caméra.",
 		"reactiveWebcam": "Réduire au zoom",
 		"reactiveWebcamDescription": "La caméra rétrécit doucement pendant le zoom, pour ne pas gêner."
 	},

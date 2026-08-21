@@ -291,6 +291,15 @@ describe("projectPersistence media compatibility", () => {
 		).toBe("only-webcam");
 	});
 
+	it("normalizes the webcam A/V sync offset", () => {
+		expect(normalizeProjectEditor({}).webcamVideoOffsetMs).toBe(0);
+		expect(normalizeProjectEditor({ webcamVideoOffsetMs: 200 }).webcamVideoOffsetMs).toBe(200);
+		expect(normalizeProjectEditor({ webcamVideoOffsetMs: 5_000 }).webcamVideoOffsetMs).toBe(1_000);
+		expect(normalizeProjectEditor({ webcamVideoOffsetMs: -5_000 }).webcamVideoOffsetMs).toBe(
+			-1_000,
+		);
+	});
+
 	it("falls back from dual frame to picture in picture for portrait aspect ratios", () => {
 		expect(
 			normalizeProjectEditor({

@@ -166,6 +166,9 @@ export function getNativeGpuExportBlockers(
 		blockers.push("source duration is invalid");
 	}
 	if (hasVisibleWebcam(config)) {
+		if (config.webcamVideoOffsetMs !== undefined && !Number.isFinite(config.webcamVideoOffsetMs)) {
+			blockers.push("webcam video offset is invalid");
+		}
 		if (!webcamInfo) {
 			blockers.push("webcam metadata is unavailable");
 		} else if (
@@ -472,6 +475,8 @@ export function createNativeGpuExportPlan(
 						inputPath: config.webcamVideoUrl!,
 						sourceWidth: visibleWebcam.width,
 						sourceHeight: visibleWebcam.height,
+						durationMs: visibleWebcam.duration * 1000,
+						videoOffsetMs: config.webcamVideoOffsetMs ?? 0,
 						rect: {
 							x: layout.webcamRect.x,
 							y: layout.webcamRect.y,

@@ -1,6 +1,7 @@
 import { DEFAULT_CURSOR_THEME_ID } from "@/lib/cursor/cursorThemes";
 import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
 import { DEFAULT_WALLPAPER } from "@/lib/wallpaper";
+import { WEBCAM_VIDEO_OFFSET_DEFAULT_MS } from "@/lib/webcamSync";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
 import {
 	type CursorVisualSettings,
@@ -64,12 +65,14 @@ export const DEFAULT_WEBCAM_SETTINGS = {
 	sizePreset: DEFAULT_WEBCAM_SIZE_PRESET,
 	position: DEFAULT_WEBCAM_POSITION,
 	rotation: DEFAULT_WEBCAM_ROTATION,
+	videoOffsetMs: WEBCAM_VIDEO_OFFSET_DEFAULT_MS,
 } as const satisfies {
 	layoutPreset: WebcamLayoutPreset;
 	maskShape: WebcamMaskShape;
 	sizePreset: WebcamSizePreset;
 	position: WebcamPosition | null;
 	rotation: WebcamRotation;
+	videoOffsetMs: number;
 };
 
 export const DEFAULT_CURSOR_SETTINGS: CursorVisualSettings & { show: boolean; theme: string } = {

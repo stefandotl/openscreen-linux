@@ -227,6 +227,9 @@ function validateRequest(payload: NativeGpuExportRequest) {
 			webcam.sourceHeight <= 0 ||
 			webcam.sourceWidth % 2 !== 0 ||
 			webcam.sourceHeight % 2 !== 0 ||
+			!finiteNumber(webcam.durationMs) ||
+			webcam.durationMs <= 0 ||
+			!finiteNumber(webcam.videoOffsetMs) ||
 			!webcamRect ||
 			!finiteNumber(webcamRect.x) ||
 			!finiteNumber(webcamRect.y) ||
