@@ -32,6 +32,7 @@ describe("editor defaults SSOT", () => {
 			padding: DEFAULT_EDITOR_LAYOUT_SETTINGS.padding,
 			aspectRatio: DEFAULT_EDITOR_LAYOUT_SETTINGS.aspectRatio,
 			exportQuality: DEFAULT_EXPORT_SETTINGS.quality,
+			exportCompression: DEFAULT_EXPORT_SETTINGS.compression,
 			exportFormat: DEFAULT_EXPORT_SETTINGS.format,
 		});
 	});
@@ -50,6 +51,7 @@ describe("editor defaults SSOT", () => {
 			webcamSizePreset: DEFAULT_WEBCAM_SETTINGS.sizePreset,
 			webcamPosition: DEFAULT_WEBCAM_SETTINGS.position,
 			exportQuality: DEFAULT_EXPORT_SETTINGS.quality,
+			exportCompression: DEFAULT_EXPORT_SETTINGS.compression,
 			exportFormat: DEFAULT_EXPORT_SETTINGS.format,
 			gifFrameRate: DEFAULT_GIF_SETTINGS.frameRate,
 			gifLoop: DEFAULT_GIF_SETTINGS.loop,

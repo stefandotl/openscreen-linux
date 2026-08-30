@@ -46,6 +46,7 @@ import {
 	calculateEffectiveSourceDimensions,
 	calculateMp4ExportSettings,
 	calculateOutputDimensions,
+	type ExportCompression,
 	type ExportFormat,
 	type ExportProgress,
 	type ExportQuality,
@@ -339,6 +340,9 @@ export default function VideoEditor() {
 	const [isSceneStripOpen, setIsSceneStripOpen] = useState(true);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(
 		DEFAULT_EXPORT_SETTINGS.quality,
+	);
+	const [exportCompression, setExportCompression] = useState<ExportCompression>(
+		DEFAULT_EXPORT_SETTINGS.compression,
 	);
 	const [exportFormat, setExportFormat] = useState<ExportFormat>(DEFAULT_EXPORT_SETTINGS.format);
 	const [gifFrameRate, setGifFrameRate] = useState<GifFrameRate>(DEFAULT_GIF_SETTINGS.frameRate);
@@ -833,13 +837,22 @@ export default function VideoEditor() {
 		(sceneEditor: EditorState): ProjectEditorState => ({
 			...sceneEditor,
 			exportQuality,
+			exportCompression,
 			exportFormat,
 			gifFrameRate,
 			gifLoop,
 			gifSizePreset,
 			cursorTheme,
 		}),
-		[cursorTheme, exportFormat, exportQuality, gifFrameRate, gifLoop, gifSizePreset],
+		[
+			cursorTheme,
+			exportCompression,
+			exportFormat,
+			exportQuality,
+			gifFrameRate,
+			gifLoop,
+			gifSizePreset,
+		],
 	);
 
 	const projectScenes = useMemo<ProjectSceneData[]>(() => {
@@ -1103,6 +1116,7 @@ export default function VideoEditor() {
 				webcamPosition: normalizedEditor.webcamPosition,
 			});
 			setExportQuality(normalizedEditor.exportQuality);
+			setExportCompression(normalizedEditor.exportCompression);
 			setExportFormat(normalizedEditor.exportFormat);
 			setGifFrameRate(normalizedEditor.gifFrameRate);
 			setGifLoop(normalizedEditor.gifLoop);
@@ -1153,6 +1167,7 @@ export default function VideoEditor() {
 						editor: {
 							...scene.editor,
 							exportQuality: normalizedEditor.exportQuality,
+							exportCompression: normalizedEditor.exportCompression,
 							exportFormat: normalizedEditor.exportFormat,
 							gifFrameRate: normalizedEditor.gifFrameRate,
 							gifLoop: normalizedEditor.gifLoop,
@@ -1207,6 +1222,7 @@ export default function VideoEditor() {
 				webcamSizePreset,
 				webcamPosition,
 				exportQuality,
+				exportCompression,
 				exportFormat,
 				gifFrameRate,
 				gifLoop,
@@ -1246,6 +1262,7 @@ export default function VideoEditor() {
 		webcamSizePreset,
 		webcamPosition,
 		exportQuality,
+		exportCompression,
 		exportFormat,
 		gifFrameRate,
 		gifLoop,
@@ -1357,6 +1374,7 @@ export default function VideoEditor() {
 			aspectRatio: prefs.aspectRatio,
 		});
 		setExportQuality(prefs.exportQuality);
+		setExportCompression(prefs.exportCompression);
 		setExportFormat(prefs.exportFormat);
 		setPrefsHydrated(true);
 	}, [updateState]);
@@ -1364,8 +1382,14 @@ export default function VideoEditor() {
 	// Auto-save user preferences when settings change
 	useEffect(() => {
 		if (!prefsHydrated) return;
-		saveUserPreferences({ padding, aspectRatio, exportQuality, exportFormat });
-	}, [prefsHydrated, padding, aspectRatio, exportQuality, exportFormat]);
+		saveUserPreferences({
+			padding,
+			aspectRatio,
+			exportQuality,
+			exportCompression,
+			exportFormat,
+		});
+	}, [prefsHydrated, padding, aspectRatio, exportQuality, exportCompression, exportFormat]);
 
 	const saveProject = useCallback(
 		async (forceSaveAs: boolean) => {
@@ -1401,6 +1425,7 @@ export default function VideoEditor() {
 				webcamSizePreset,
 				webcamPosition,
 				exportQuality,
+				exportCompression,
 				exportFormat,
 				gifFrameRate,
 				gifLoop,
@@ -1482,6 +1507,7 @@ export default function VideoEditor() {
 			webcamSizePreset,
 			webcamPosition,
 			exportQuality,
+			exportCompression,
 			exportFormat,
 			gifFrameRate,
 			gifLoop,
@@ -3293,12 +3319,14 @@ export default function VideoEditor() {
 				} else {
 					// MP4 Export
 					const quality = settings.quality || exportQuality;
+					const compression = settings.compression || exportCompression;
 					const {
 						width: exportWidth,
 						height: exportHeight,
 						bitrate,
 					} = calculateMp4ExportSettings({
 						quality,
+						compression,
 						sourceWidth: effectiveSourceDimensions.width,
 						sourceHeight: effectiveSourceDimensions.height,
 						aspectRatioValue,
@@ -3582,6 +3610,7 @@ export default function VideoEditor() {
 			webcamSizePreset,
 			webcamPosition,
 			exportQuality,
+			exportCompression,
 			handleExportSaved,
 			cursorTelemetry,
 			cursorClickTimestamps,
@@ -3633,6 +3662,7 @@ export default function VideoEditor() {
 		const settings: ExportSettings = {
 			format: exportFormat,
 			quality: exportFormat === "mp4" ? exportQuality : undefined,
+			compression: exportFormat === "mp4" ? exportCompression : undefined,
 			gifConfig:
 				exportFormat === "gif"
 					? {
@@ -3655,6 +3685,7 @@ export default function VideoEditor() {
 		videoPath,
 		exportFormat,
 		exportQuality,
+		exportCompression,
 		gifFrameRate,
 		gifLoop,
 		gifSizePreset,
@@ -4607,6 +4638,8 @@ export default function VideoEditor() {
 										videoElement={videoPlaybackRef.current?.video || null}
 										exportQuality={exportQuality}
 										onExportQualityChange={setExportQuality}
+										exportCompression={exportCompression}
+										onExportCompressionChange={setExportCompression}
 										exportFormat={exportFormat}
 										onExportFormatChange={setExportFormat}
 										gifFrameRate={gifFrameRate}

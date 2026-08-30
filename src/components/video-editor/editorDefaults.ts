@@ -1,5 +1,11 @@
 import { DEFAULT_CURSOR_THEME_ID } from "@/lib/cursor/cursorThemes";
-import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
+import type {
+	ExportCompression,
+	ExportFormat,
+	ExportQuality,
+	GifFrameRate,
+	GifSizePreset,
+} from "@/lib/exporter";
 import { DEFAULT_WALLPAPER } from "@/lib/wallpaper";
 import { WEBCAM_VIDEO_OFFSET_DEFAULT_MS } from "@/lib/webcamSync";
 import type { AspectRatio } from "@/utils/aspectRatioUtils";
@@ -87,9 +93,11 @@ export const DEFAULT_CURSOR_SETTINGS: CursorVisualSettings & { show: boolean; th
 
 export const DEFAULT_EXPORT_SETTINGS: {
 	quality: ExportQuality;
+	compression: ExportCompression;
 	format: ExportFormat;
 } = {
 	quality: "good",
+	compression: "balanced",
 	format: "mp4",
 };
 

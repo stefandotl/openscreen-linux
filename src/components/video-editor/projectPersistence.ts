@@ -1,7 +1,13 @@
 import { normalizeTextAnimation } from "@/lib/annotationTextAnimation";
 import { normalizeBlurColor, normalizeBlurType } from "@/lib/blurEffects";
 import { normalizeCursorThemeId } from "@/lib/cursor/cursorThemes";
-import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
+import type {
+	ExportCompression,
+	ExportFormat,
+	ExportQuality,
+	GifFrameRate,
+	GifSizePreset,
+} from "@/lib/exporter";
 import type { ProjectMedia } from "@/lib/recordingSession";
 import { normalizeProjectMedia } from "@/lib/recordingSession";
 import { DEFAULT_WALLPAPER, WALLPAPER_PATHS } from "@/lib/wallpaper";
@@ -94,6 +100,7 @@ export interface ProjectEditorState {
 	webcamSizePreset: WebcamSizePreset;
 	webcamPosition: WebcamPosition | null;
 	exportQuality: ExportQuality;
+	exportCompression: ExportCompression;
 	exportFormat: ExportFormat;
 	gifFrameRate: GifFrameRate;
 	gifLoop: boolean;
@@ -581,6 +588,10 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 			editor.exportQuality === "medium" || editor.exportQuality === "source"
 				? editor.exportQuality
 				: DEFAULT_EXPORT_SETTINGS.quality,
+		exportCompression:
+			editor.exportCompression === "compact" || editor.exportCompression === "quality"
+				? editor.exportCompression
+				: DEFAULT_EXPORT_SETTINGS.compression,
 		exportFormat: editor.exportFormat === "gif" ? "gif" : DEFAULT_EXPORT_SETTINGS.format,
 		gifFrameRate:
 			editor.gifFrameRate === 15 ||

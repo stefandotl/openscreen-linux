@@ -98,6 +98,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "Dosya boyutu",
+		"compact": "Küçük",
+		"balanced": "Dengeli",
+		"quality": "En iyi"
+	},
 	"gifSettings": {
 		"frameRate": "GIF Kare Hızı",
 		"size": "GIF Boyutu",

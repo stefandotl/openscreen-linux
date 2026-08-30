@@ -96,6 +96,12 @@
 		"medium": "Média",
 		"high": "Alta"
 	},
+	"exportCompression": {
+		"title": "Tamanho do arquivo",
+		"compact": "Pequeno",
+		"balanced": "Equilibrado",
+		"quality": "Melhor"
+	},
 	"gifSettings": {
 		"frameRate": "Taxa de Quadros do GIF",
 		"size": "Tamanho do GIF",

@@ -1,4 +1,4 @@
-import type { ExportQuality } from "./types";
+import type { ExportCompression, ExportQuality } from "./types";
 
 export interface Mp4ExportSettings {
 	width: number;
@@ -25,6 +25,11 @@ function calculateSourceBitrate(width: number, height: number) {
 	if (totalPixels <= 2560 * 1440) return 18_000_000;
 	if (totalPixels <= 3840 * 2160) return 35_000_000;
 	return 50_000_000;
+}
+
+function applyCompressionPreset(bitrate: number, compression: ExportCompression) {
+	const multiplier = compression === "compact" ? 0.6 : compression === "quality" ? 1.5 : 1;
+	return Math.round((bitrate * multiplier) / 500_000) * 500_000;
 }
 
 function even(value: number) {
@@ -109,11 +114,13 @@ function calculateSourceDimensions(
 
 export function calculateMp4ExportSettings({
 	quality,
+	compression = "balanced",
 	sourceWidth,
 	sourceHeight,
 	aspectRatioValue,
 }: {
 	quality: ExportQuality;
+	compression?: ExportCompression;
 	sourceWidth: number;
 	sourceHeight: number;
 	aspectRatioValue: number;
@@ -122,7 +129,7 @@ export function calculateMp4ExportSettings({
 		const dimensions = calculateDimensionsForShortSide(MEDIUM_SHORT_SIDE, aspectRatioValue);
 		return {
 			...dimensions,
-			bitrate: MEDIUM_BITRATE,
+			bitrate: applyCompressionPreset(MEDIUM_BITRATE, compression),
 		};
 	}
 
@@ -130,13 +137,16 @@ export function calculateMp4ExportSettings({
 		const dimensions = calculateDimensionsForShortSide(HIGH_SHORT_SIDE, aspectRatioValue);
 		return {
 			...dimensions,
-			bitrate: GOOD_BITRATE,
+			bitrate: applyCompressionPreset(GOOD_BITRATE, compression),
 		};
 	}
 
 	const sourceDimensions = calculateSourceDimensions(sourceWidth, sourceHeight, aspectRatioValue);
 	return {
 		...sourceDimensions,
-		bitrate: calculateSourceBitrate(sourceDimensions.width, sourceDimensions.height),
+		bitrate: applyCompressionPreset(
+			calculateSourceBitrate(sourceDimensions.width, sourceDimensions.height),
+			compression,
+		),
 	};
 }

@@ -45,7 +45,13 @@ import { useScopedT } from "@/contexts/I18nContext";
 import { getAssetPath } from "@/lib/assetPath";
 import { isFullBleedWebcamLayout, WEBCAM_LAYOUT_PRESETS } from "@/lib/compositeLayout";
 import { CURSOR_THEMES, DEFAULT_CURSOR_THEME_ID } from "@/lib/cursor/cursorThemes";
-import type { ExportFormat, ExportQuality, GifFrameRate, GifSizePreset } from "@/lib/exporter";
+import type {
+	ExportCompression,
+	ExportFormat,
+	ExportQuality,
+	GifFrameRate,
+	GifSizePreset,
+} from "@/lib/exporter";
 import {
 	calculateEffectiveSourceDimensions,
 	GIF_FRAME_RATES,
@@ -287,6 +293,8 @@ interface SettingsPanelProps {
 	videoElement?: HTMLVideoElement | null;
 	exportQuality?: ExportQuality;
 	onExportQualityChange?: (quality: ExportQuality) => void;
+	exportCompression?: ExportCompression;
+	onExportCompressionChange?: (compression: ExportCompression) => void;
 	// Export format settings
 	exportFormat?: ExportFormat;
 	onExportFormatChange?: (format: ExportFormat) => void;
@@ -433,6 +441,8 @@ export function SettingsPanel({
 	videoElement,
 	exportQuality = DEFAULT_EXPORT_SETTINGS.quality,
 	onExportQualityChange,
+	exportCompression = DEFAULT_EXPORT_SETTINGS.compression,
+	onExportCompressionChange,
 	exportFormat = DEFAULT_EXPORT_SETTINGS.format,
 	onExportFormatChange,
 	gifFrameRate = DEFAULT_GIF_SETTINGS.frameRate,
@@ -2173,6 +2183,27 @@ export function SettingsPanel({
 											</span>
 										)}
 									</button>
+								</div>
+								<div className="flex items-center justify-between px-0.5 pt-1 text-[10px] leading-none text-slate-500">
+									<span>{t("exportCompression.title")}</span>
+								</div>
+								<div className="grid h-8 w-full grid-cols-3 rounded-lg border border-white/5 bg-white/5 p-0.5">
+									{(["compact", "balanced", "quality"] as const).map((compression) => (
+										<button
+											key={compression}
+											type="button"
+											aria-pressed={exportCompression === compression}
+											onClick={() => onExportCompressionChange?.(compression)}
+											className={cn(
+												"rounded-md text-[10px] font-medium transition-all",
+												exportCompression === compression
+													? "bg-white text-black"
+													: "text-slate-400 hover:text-slate-200",
+											)}
+										>
+											{t(`exportCompression.${compression}`)}
+										</button>
+									))}
 								</div>
 							</div>
 						)}

@@ -106,6 +106,17 @@ describe("user preferences", () => {
 		expect(loadUserPreferences().trayLayout).toBe("horizontal");
 	});
 
+	it("persists MP4 compression and rejects invalid values", () => {
+		saveUserPreferences({ exportCompression: "compact" });
+		expect(loadUserPreferences().exportCompression).toBe("compact");
+
+		localStorage.setItem(
+			"openscreen_user_preferences",
+			JSON.stringify({ exportCompression: "tiny" }),
+		);
+		expect(loadUserPreferences().exportCompression).toBe(DEFAULT_PREFS.exportCompression);
+	});
+
 	it("persists the last annotation style for new videos", () => {
 		saveUserPreferences({
 			lastAnnotationStyle: {

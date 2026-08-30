@@ -165,4 +165,19 @@ describe("calculateMp4ExportSettings", () => {
 			}),
 		).toMatchObject({ bitrate: 50_000_000 });
 	});
+
+	it("offers compact, balanced, and quality compression presets", () => {
+		const settings = (compression: "compact" | "balanced" | "quality") =>
+			calculateMp4ExportSettings({
+				quality: "good",
+				compression,
+				sourceWidth: 1920,
+				sourceHeight: 1080,
+				aspectRatioValue: 16 / 9,
+			});
+
+		expect(settings("compact").bitrate).toBe(5_000_000);
+		expect(settings("balanced").bitrate).toBe(8_000_000);
+		expect(settings("quality").bitrate).toBe(12_000_000);
+	});
 });

@@ -8,6 +8,7 @@ export {
 export { VideoMuxer } from "./muxer";
 export { StreamingVideoDecoder } from "./streamingDecoder";
 export type {
+	ExportCompression,
 	ExportConfig,
 	ExportFormat,
 	ExportProgress,

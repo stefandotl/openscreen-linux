@@ -98,6 +98,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "Kích thước tệp",
+		"compact": "Nhỏ",
+		"balanced": "Cân bằng",
+		"quality": "Tốt nhất"
+	},
 	"gifSettings": {
 		"frameRate": "Tốc độ khung hình GIF",
 		"size": "Kích thước GIF",

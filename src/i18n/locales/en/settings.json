@@ -99,6 +99,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "File size",
+		"compact": "Small",
+		"balanced": "Balanced",
+		"quality": "Best"
+	},
 	"gifSettings": {
 		"frameRate": "GIF Frame Rate",
 		"size": "GIF Size",

@@ -98,6 +98,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "Размер файла",
+		"compact": "Маленький",
+		"balanced": "Баланс",
+		"quality": "Лучшее"
+	},
 	"gifSettings": {
 		"frameRate": "Частота кадров GIF",
 		"size": "Размер GIF",

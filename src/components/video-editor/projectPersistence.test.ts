@@ -51,6 +51,7 @@ describe("projectPersistence media compatibility", () => {
 				webcamSizePreset: 25,
 				webcamPosition: null,
 				exportQuality: "good",
+				exportCompression: "compact",
 				exportFormat: "mp4",
 				gifFrameRate: 15,
 				gifLoop: true,
@@ -63,7 +64,15 @@ describe("projectPersistence media compatibility", () => {
 			screenVideoPath: "/tmp/screen.webm",
 			webcamVideoPath: "/tmp/webcam.webm",
 		});
+		expect(project.editor.exportCompression).toBe("compact");
 		expect(validateProjectData(project)).toBe(true);
+	});
+
+	it("defaults legacy and invalid compression settings to balanced", () => {
+		expect(normalizeProjectEditor({}).exportCompression).toBe("balanced");
+		expect(normalizeProjectEditor({ exportCompression: "tiny" as never }).exportCompression).toBe(
+			"balanced",
+		);
 	});
 
 	it("round-trips multiple ordered scenes without breaking legacy media", () => {
@@ -340,6 +349,7 @@ it("creates stable snapshots for identical project state", () => {
 		webcamLayoutPreset: "picture-in-picture",
 		webcamMaskShape: "circle",
 		exportQuality: "good",
+		exportCompression: "quality",
 		exportFormat: "mp4",
 		gifFrameRate: 15,
 		gifLoop: true,

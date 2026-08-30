@@ -98,6 +98,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "ファイルサイズ",
+		"compact": "小",
+		"balanced": "バランス",
+		"quality": "最高画質"
+	},
 	"gifSettings": {
 		"frameRate": "GIF フレームレート",
 		"size": "GIF サイズ",

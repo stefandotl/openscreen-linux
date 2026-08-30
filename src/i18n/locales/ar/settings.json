@@ -98,6 +98,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "حجم الملف",
+		"compact": "صغير",
+		"balanced": "متوازن",
+		"quality": "الأفضل"
+	},
 	"gifSettings": {
 		"frameRate": "معدل إطارات GIF",
 		"size": "حجم GIF",

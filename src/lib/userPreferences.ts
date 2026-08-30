@@ -7,7 +7,7 @@ import {
 	DEFAULT_ANNOTATION_STYLE,
 } from "@/components/video-editor/types";
 import { normalizeTextAnimation } from "@/lib/annotationTextAnimation";
-import type { ExportFormat, ExportQuality } from "@/lib/exporter";
+import type { ExportCompression, ExportFormat, ExportQuality } from "@/lib/exporter";
 import {
 	DEFAULT_RECORDING_PREFS,
 	normalizeRecordingPreferences,
@@ -41,6 +41,8 @@ export interface UserPreferences {
 	aspectRatio: AspectRatio;
 	/** Default export quality */
 	exportQuality: ExportQuality;
+	/** Default MP4 compression */
+	exportCompression: ExportCompression;
 	/** Default export format */
 	exportFormat: ExportFormat;
 	/** Folder used for the most recent successful export, if any */
@@ -59,6 +61,7 @@ export const DEFAULT_PREFS: UserPreferences = {
 	padding: DEFAULT_EDITOR_LAYOUT_SETTINGS.padding,
 	aspectRatio: DEFAULT_EDITOR_LAYOUT_SETTINGS.aspectRatio,
 	exportQuality: DEFAULT_EXPORT_SETTINGS.quality,
+	exportCompression: DEFAULT_EXPORT_SETTINGS.compression,
 	exportFormat: DEFAULT_EXPORT_SETTINGS.format,
 	exportFolder: null,
 	projectFolder: null,
@@ -161,6 +164,12 @@ export function loadUserPreferences(): UserPreferences {
 			raw.exportQuality === "source"
 				? (raw.exportQuality as ExportQuality)
 				: DEFAULT_PREFS.exportQuality,
+		exportCompression:
+			raw.exportCompression === "compact" ||
+			raw.exportCompression === "balanced" ||
+			raw.exportCompression === "quality"
+				? (raw.exportCompression as ExportCompression)
+				: DEFAULT_PREFS.exportCompression,
 		exportFormat:
 			raw.exportFormat === "gif" || raw.exportFormat === "mp4"
 				? (raw.exportFormat as ExportFormat)

@@ -98,6 +98,12 @@
 		"medium": "1080p",
 		"high": "Source"
 	},
+	"exportCompression": {
+		"title": "文件大小",
+		"compact": "小",
+		"balanced": "均衡",
+		"quality": "最佳"
+	},
 	"gifSettings": {
 		"frameRate": "GIF 帧率",
 		"size": "GIF 尺寸",
