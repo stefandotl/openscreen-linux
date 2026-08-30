@@ -14,6 +14,19 @@ interface SourceCropRegion {
 const MEDIUM_SHORT_SIDE = 720;
 const HIGH_SHORT_SIDE = 1080;
 
+const MEDIUM_BITRATE = 5_000_000;
+const GOOD_BITRATE = 8_000_000;
+
+function calculateSourceBitrate(width: number, height: number) {
+	const totalPixels = width * height;
+
+	if (totalPixels <= 1280 * 720) return 4_000_000;
+	if (totalPixels <= 1920 * 1080) return 10_000_000;
+	if (totalPixels <= 2560 * 1440) return 18_000_000;
+	if (totalPixels <= 3840 * 2160) return 35_000_000;
+	return 50_000_000;
+}
+
 function even(value: number) {
 	return Math.floor(value / 2) * 2;
 }
@@ -94,20 +107,6 @@ function calculateSourceDimensions(
 	};
 }
 
-function calculateBitrate(width: number, height: number, quality: ExportQuality) {
-	const totalPixels = width * height;
-
-	if (quality === "source") {
-		if (totalPixels > 2560 * 1440) return 80_000_000;
-		if (totalPixels > 1920 * 1080) return 50_000_000;
-		return 30_000_000;
-	}
-
-	if (totalPixels <= 1280 * 720) return 10_000_000;
-	if (totalPixels <= 1920 * 1080) return 20_000_000;
-	return 30_000_000;
-}
-
 export function calculateMp4ExportSettings({
 	quality,
 	sourceWidth,
@@ -123,7 +122,7 @@ export function calculateMp4ExportSettings({
 		const dimensions = calculateDimensionsForShortSide(MEDIUM_SHORT_SIDE, aspectRatioValue);
 		return {
 			...dimensions,
-			bitrate: calculateBitrate(dimensions.width, dimensions.height, quality),
+			bitrate: MEDIUM_BITRATE,
 		};
 	}
 
@@ -131,13 +130,13 @@ export function calculateMp4ExportSettings({
 		const dimensions = calculateDimensionsForShortSide(HIGH_SHORT_SIDE, aspectRatioValue);
 		return {
 			...dimensions,
-			bitrate: calculateBitrate(dimensions.width, dimensions.height, quality),
+			bitrate: GOOD_BITRATE,
 		};
 	}
 
 	const sourceDimensions = calculateSourceDimensions(sourceWidth, sourceHeight, aspectRatioValue);
 	return {
 		...sourceDimensions,
-		bitrate: calculateBitrate(sourceDimensions.width, sourceDimensions.height, quality),
+		bitrate: calculateSourceBitrate(sourceDimensions.width, sourceDimensions.height),
 	};
 }

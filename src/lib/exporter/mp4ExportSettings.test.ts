@@ -18,7 +18,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 2008,
 			height: 1080,
-			bitrate: 30_000_000,
+			bitrate: 8_000_000,
 		});
 
 		expect(
@@ -31,7 +31,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 1920,
 			height: 1032,
-			bitrate: 30_000_000,
+			bitrate: 10_000_000,
 		});
 	});
 
@@ -46,7 +46,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 1338,
 			height: 720,
-			bitrate: 20_000_000,
+			bitrate: 5_000_000,
 		});
 	});
 
@@ -61,7 +61,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 1920,
 			height: 1080,
-			bitrate: 20_000_000,
+			bitrate: 8_000_000,
 		});
 	});
 
@@ -76,7 +76,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 1920,
 			height: 1080,
-			bitrate: 30_000_000,
+			bitrate: 10_000_000,
 		});
 
 		expect(
@@ -89,7 +89,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 3840,
 			height: 2160,
-			bitrate: 80_000_000,
+			bitrate: 35_000_000,
 		});
 	});
 
@@ -104,7 +104,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 1080,
 			height: 1920,
-			bitrate: 20_000_000,
+			bitrate: 8_000_000,
 		});
 	});
 
@@ -129,7 +129,7 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 854,
 			height: 480,
-			bitrate: 30_000_000,
+			bitrate: 4_000_000,
 		});
 
 		expect(
@@ -142,7 +142,27 @@ describe("calculateMp4ExportSettings", () => {
 		).toMatchObject({
 			width: 1920,
 			height: 1080,
-			bitrate: 20_000_000,
+			bitrate: 8_000_000,
 		});
+	});
+
+	it("scales source bitrate across common resolutions", () => {
+		expect(
+			calculateMp4ExportSettings({
+				quality: "source",
+				sourceWidth: 2560,
+				sourceHeight: 1440,
+				aspectRatioValue: 16 / 9,
+			}),
+		).toMatchObject({ bitrate: 18_000_000 });
+
+		expect(
+			calculateMp4ExportSettings({
+				quality: "source",
+				sourceWidth: 5120,
+				sourceHeight: 2880,
+				aspectRatioValue: 16 / 9,
+			}),
+		).toMatchObject({ bitrate: 50_000_000 });
 	});
 });

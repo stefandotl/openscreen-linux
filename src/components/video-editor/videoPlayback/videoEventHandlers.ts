@@ -151,12 +151,14 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		}
 	}
 
-	const handlePlay = () => {
-		if (isSeekingRef.current) {
-			video.pause();
-			return;
+	const startTimeUpdates = () => {
+		if (timeUpdateAnimationRef.current) {
+			cancelAnimationFrame(timeUpdateAnimationRef.current);
 		}
+		timeUpdateAnimationRef.current = requestAnimationFrame(updateTime);
+	};
 
+	const handlePlay = () => {
 		if (!allowPlaybackRef.current) {
 			video.pause();
 			return;
@@ -164,14 +166,22 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 		isPlayingRef.current = true;
 		onPlayStateChange(true);
-		if (timeUpdateAnimationRef.current) {
-			cancelAnimationFrame(timeUpdateAnimationRef.current);
+		if (isSeekingRef.current) {
+			return;
 		}
-		timeUpdateAnimationRef.current = requestAnimationFrame(updateTime);
+		startTimeUpdates();
 	};
 
 	const handlePause = () => {
 		if (pendingTrimSkipEndSeconds !== null && allowPlaybackRef.current) {
+			emitTime(video.currentTime);
+			return;
+		}
+		if (isSeekingRef.current && allowPlaybackRef.current && isPlayingRef.current) {
+			if (timeUpdateAnimationRef.current) {
+				cancelAnimationFrame(timeUpdateAnimationRef.current);
+				timeUpdateAnimationRef.current = null;
+			}
 			emitTime(video.currentTime);
 			return;
 		}
@@ -189,6 +199,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 
 	const handleSeeked = () => {
 		isSeekingRef.current = false;
+		let issuedFollowupSeek = false;
 
 		if (isScrubbingRef && scrubEndTimerRef) {
 			clearScrubEndTimer();
@@ -215,6 +226,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 				}
 			} else {
 				seekPastTrim(trimSkipEndSeconds);
+				issuedFollowupSeek = true;
 			}
 		} else {
 			if (!isPlayingRef.current && !video.paused) {
@@ -223,7 +235,19 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			emitTime(video.currentTime);
 			if (completedTrimSkip) {
 				resumeAfterTrimSeek();
+			} else if (allowPlaybackRef.current && isPlayingRef.current && video.paused) {
+				void video.play().catch((error) => {
+					allowPlaybackRef.current = false;
+					isPlayingRef.current = false;
+					onPlayStateChange(false);
+					const detail = error instanceof Error ? error.message : String(error);
+					onPlaybackError?.(`Video playback failed after seeking: ${detail}`);
+				});
 			}
+		}
+
+		if (!issuedFollowupSeek && isPlayingRef.current && !video.paused) {
+			startTimeUpdates();
 		}
 	};
 

@@ -59,6 +59,41 @@ describe("video seeking playback intent", () => {
 		expect(pause).not.toHaveBeenCalled();
 	});
 
+	it("preserves an intentional play request that starts after seeking begins", () => {
+		const { handlers, pause } = createHandlers(true);
+
+		handlers.handleSeeking();
+		handlers.handlePlay();
+
+		expect(pause).not.toHaveBeenCalled();
+	});
+
+	it("resumes after the browser pauses during an active user seek", () => {
+		const { handlers, play, setPaused } = createHandlers(true, {
+			currentTime: 4,
+			isPlaying: true,
+		});
+
+		handlers.handleSeeking();
+		setPaused(true);
+		handlers.handlePause();
+		handlers.handleSeeked();
+
+		expect(play).toHaveBeenCalledOnce();
+	});
+
+	it("keeps an explicitly paused video paused after seeking", () => {
+		const { handlers, play, setPaused, video } = createHandlers(false);
+
+		setPaused(true);
+		handlers.handleSeeking();
+		handlers.handlePause();
+		handlers.handleSeeked();
+
+		expect(video.paused).toBe(true);
+		expect(play).not.toHaveBeenCalled();
+	});
+
 	it("still stops an unsolicited browser play while paused", () => {
 		const { handlers, pause } = createHandlers(false);
 

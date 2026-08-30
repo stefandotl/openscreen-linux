@@ -178,6 +178,7 @@ describe("user preferences", () => {
 			webcamEnabled: true,
 			webcamDeviceId: "camera-1",
 			webcamDeviceName: "Desk Camera",
+			webcamVideoOffsetMs: 280,
 			cursorCaptureMode: "system",
 			captureSource: {
 				id: "screen:7:0",
@@ -195,6 +196,7 @@ describe("user preferences", () => {
 			webcamEnabled: true,
 			webcamDeviceId: "camera-1",
 			webcamDeviceName: "Desk Camera",
+			webcamVideoOffsetMs: 280,
 			cursorCaptureMode: "system",
 			captureSource: {
 				id: "screen:7:0",

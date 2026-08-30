@@ -68,6 +68,7 @@ import {
 	getProjectFolder,
 	loadUserPreferences,
 	parentDirectoryOf,
+	saveRecordingPreferences,
 	saveUserPreferences,
 } from "@/lib/userPreferences";
 import { BackgroundLoadError } from "@/lib/wallpaper";
@@ -494,6 +495,14 @@ export default function VideoEditor() {
 		pendingProjectPlaybackPositionRef.current = null;
 		setProjectControllerState("paused");
 	}, [setProjectControllerState]);
+
+	const commitWebcamVideoOffset = useCallback(() => {
+		commitState();
+		saveRecordingPreferences({ webcamVideoOffsetMs });
+		void window.electronAPI.updateRecordingPreferences({ webcamVideoOffsetMs }).catch((error) => {
+			console.error("Failed to persist webcam A/V sync calibration:", error);
+		});
+	}, [commitState, webcamVideoOffsetMs]);
 
 	useEffect(() => {
 		scenesRef.current = scenes;
@@ -4588,7 +4597,7 @@ export default function VideoEditor() {
 										onWebcamVideoOffsetChange={(offsetMs) =>
 											updateState({ webcamVideoOffsetMs: offsetMs })
 										}
-										onWebcamVideoOffsetCommit={commitState}
+										onWebcamVideoOffsetCommit={commitWebcamVideoOffset}
 										onWebcamReactiveZoomChange={(reactive) =>
 											pushState({ webcamReactiveZoom: reactive })
 										}

@@ -117,7 +117,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [webcamDeviceName, setWebcamDeviceName] = useState<string | undefined>(
 		initialRecordingPreferences.webcamDeviceName ?? undefined,
 	);
-	const webcamVideoOffsetMs = getRecommendedWebcamVideoOffsetMs(webcamDeviceName);
+	const [preferredWebcamVideoOffsetMs, setPreferredWebcamVideoOffsetMs] = useState<number | null>(
+		initialRecordingPreferences.webcamVideoOffsetMs,
+	);
+	const webcamVideoOffsetMs =
+		preferredWebcamVideoOffsetMs ?? getRecommendedWebcamVideoOffsetMs(webcamDeviceName);
 	const [systemAudioEnabled, setSystemAudioEnabled] = useState(
 		initialRecordingPreferences.systemAudioEnabled,
 	);
@@ -170,6 +174,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				setSystemAudioEnabled(preferences.systemAudioEnabled);
 				setWebcamDeviceId(preferences.webcamDeviceId ?? undefined);
 				setWebcamDeviceName(preferences.webcamDeviceName ?? undefined);
+				setPreferredWebcamVideoOffsetMs(preferences.webcamVideoOffsetMs);
 				setWebcamEnabledState(preferences.webcamEnabled);
 				setCursorCaptureMode(preferences.cursorCaptureMode);
 				setRecordingPreferencesHydrated(true);
@@ -824,7 +829,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		[cursorCaptureMode, getRecordingDurationMs, webcamVideoOffsetMs],
 	);
 
-	const stopRecording = useRef(() => {
+	const stopRecording = useRef<() => void>(() => undefined);
+	stopRecording.current = () => {
 		if (nativeWindowsRecording.current) {
 			void finalizeNativeWindowsRecording(false);
 			return;
@@ -872,7 +878,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 			}
 		}
-	});
+	};
 
 	const safeHideCountdownOverlay = useCallback(async (runId: number) => {
 		try {

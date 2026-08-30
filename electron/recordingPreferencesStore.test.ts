@@ -32,6 +32,7 @@ describe("RecordingPreferencesStore", () => {
 			webcamEnabled: false,
 			webcamDeviceId: null,
 			webcamDeviceName: null,
+			webcamVideoOffsetMs: 320,
 			cursorCaptureMode: "editable-overlay",
 			captureSource: {
 				id: "screen:355:0",

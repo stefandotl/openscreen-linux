@@ -81,7 +81,7 @@ import { clampFocusToScale } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { clamp01 } from "./videoPlayback/mathUtils";
 import { seekMediaElement } from "./videoPlayback/mediaElementPlayback";
-import { getOffsetMediaTime, synchronizeMediaFollower } from "./videoPlayback/mediaElementSync";
+import { synchronizeMediaFollowerPlayback } from "./videoPlayback/mediaElementSync";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
@@ -347,6 +347,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const isPlayingRef = useRef(isPlaying);
 		const isSeekingRef = useRef(false);
 		const isScrubbingRef = useRef(false);
+		const webcamVideoOffsetMsRef = useRef(webcamVideoOffsetMs);
 		const scrubEndTimerRef = useRef<number | null>(null);
 		const [isScrubbing, setIsScrubbing] = useState(false);
 		const allowPlaybackRef = useRef(false);
@@ -627,6 +628,52 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			return zoomRegions.find((region) => region.id === selectedZoomId) ?? null;
 		}, [zoomRegions, selectedZoomId]);
 
+		const syncWebcamPlayback = useCallback(
+			(snapshot?: {
+				masterTimeSeconds: number;
+				playing: boolean;
+				scrubbing: boolean;
+				offsetMs: number;
+				speedRegions: SpeedRegion[];
+			}) => {
+				const primaryVideo = videoRef.current;
+				const webcamVideo = webcamVideoRef.current;
+				if (
+					!primaryVideo ||
+					!webcamVideo ||
+					webcamVideo.readyState < HTMLMediaElement.HAVE_METADATA
+				) {
+					return;
+				}
+
+				const masterTimeSeconds = snapshot?.masterTimeSeconds ?? primaryVideo.currentTime;
+				const playing = snapshot?.playing ?? isPlayingRef.current;
+				const scrubbing = snapshot?.scrubbing ?? isScrubbingRef.current;
+				const offsetMs = snapshot?.offsetMs ?? webcamVideoOffsetMsRef.current;
+				const currentSpeedRegions = snapshot?.speedRegions ?? speedRegionsRef.current;
+				const activeSpeedRegion =
+					currentSpeedRegions.find(
+						(region) =>
+							masterTimeSeconds * 1000 >= region.startMs && masterTimeSeconds * 1000 < region.endMs,
+					) ?? null;
+				synchronizeMediaFollowerPlayback(
+					{
+						currentTime: masterTimeSeconds,
+						duration: primaryVideo.duration,
+						playbackRate: primaryVideo.playbackRate,
+					},
+					webcamVideo,
+					offsetMs,
+					{
+						playing,
+						scrubbing,
+						heldPlaybackRate: activeSpeedRegion?.speed,
+					},
+				);
+			},
+			[],
+		);
+
 		useImperativeHandle(ref, () => ({
 			video: videoRef.current,
 			app: appRef.current,
@@ -638,14 +685,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				const video = videoRef.current;
 				if (!video) return;
 				await seekMediaElement(video, timeSeconds);
-				const webcam = webcamVideoRef.current;
-				if (webcam && webcam.readyState >= HTMLMediaElement.HAVE_METADATA) {
-					webcam.currentTime = getOffsetMediaTime(
-						video.currentTime,
-						webcamVideoOffsetMs,
-						webcam.duration,
-					);
-				}
+				syncWebcamPlayback();
 			},
 			play: async () => {
 				const vid = videoRef.current;
@@ -653,16 +693,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				try {
 					allowPlaybackRef.current = true;
 					enableAllPreviewAudioTracks(vid);
-					const webcam = webcamVideoRef.current;
-					if (webcam && webcam.readyState >= HTMLMediaElement.HAVE_METADATA) {
-						synchronizeMediaFollower(vid, webcam, webcamVideoOffsetMs);
-					}
-					const videoPlayPromise = vid.play();
-					const webcamPlayPromise = webcam?.play();
-					await videoPlayPromise;
-					await webcamPlayPromise?.catch(() => {
-						// The primary video remains playable if the muted sidecar cannot resume.
-					});
+					await vid.play();
+					syncWebcamPlayback();
 					const supplementalAudio = supplementalAudioRef.current;
 					if (supplementalAudio) {
 						supplementalAudio.currentTime = vid.currentTime;
@@ -826,6 +858,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		useEffect(() => {
 			isPlayingRef.current = isPlaying;
 		}, [isPlaying]);
+
+		useEffect(() => {
+			webcamVideoOffsetMsRef.current = webcamVideoOffsetMs;
+		}, [webcamVideoOffsetMs]);
 
 		useEffect(() => {
 			trimRegionsRef.current = trimRegions;
@@ -1876,63 +1912,43 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						width: webcamVideo.videoWidth,
 						height: webcamVideo.videoHeight,
 					});
-					webcamVideo.currentTime = getOffsetMediaTime(
-						videoRef.current?.currentTime ?? 0,
-						webcamVideoOffsetMs,
-						webcamVideo.duration,
-					);
+					syncWebcamPlayback();
 				} else if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
-					onError("Webcam video metadata has invalid dimensions");
+					onErrorRef.current("Webcam video metadata has invalid dimensions");
 				}
 			};
-			const handleError = () => onError("Failed to load webcam video");
+			const handleSeeked = () => syncWebcamPlayback();
+			const handleError = () => onErrorRef.current("Failed to load webcam video");
 
 			webcamVideo.addEventListener("loadedmetadata", handleLoadedMetadata);
+			webcamVideo.addEventListener("seeked", handleSeeked);
 			webcamVideo.addEventListener("error", handleError);
 			handleLoadedMetadata();
 			return () => {
 				webcamVideo.removeEventListener("loadedmetadata", handleLoadedMetadata);
+				webcamVideo.removeEventListener("seeked", handleSeeked);
 				webcamVideo.removeEventListener("error", handleError);
 			};
-		}, [onError, webcamVideoOffsetMs, webcamVideoPath]);
+		}, [syncWebcamPlayback, webcamVideoPath]);
 
 		useEffect(() => {
-			const webcamVideo = webcamVideoRef.current;
-			if (!webcamVideo || !webcamVideoPath) {
-				return;
-			}
-
-			if (!isPlaying) {
-				webcamVideo.pause();
-				const activeSpeedRegion =
-					speedRegions.find(
-						(region) => currentTime * 1000 >= region.startMs && currentTime * 1000 < region.endMs,
-					) ?? null;
-				webcamVideo.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
-				if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
-					const targetTime = getOffsetMediaTime(
-						currentTime,
-						webcamVideoOffsetMs,
-						webcamVideo.duration,
-					);
-					if (Math.abs(webcamVideo.currentTime - targetTime) > 0.015) {
-						webcamVideo.currentTime = targetTime;
-					}
-				}
-				return;
-			}
-
-			const primaryVideo = videoRef.current;
-			if (primaryVideo && webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
-				synchronizeMediaFollower(primaryVideo, webcamVideo, webcamVideoOffsetMs);
-			}
-
-			if (webcamVideo.paused && !webcamVideo.ended) {
-				webcamVideo.play().catch(() => {
-					// Ignore webcam autoplay restoration failures.
-				});
-			}
-		}, [currentTime, isPlaying, speedRegions, webcamVideoOffsetMs, webcamVideoPath]);
+			if (!webcamVideoPath) return;
+			syncWebcamPlayback({
+				masterTimeSeconds: currentTime,
+				playing: isPlaying,
+				scrubbing: isScrubbing,
+				offsetMs: webcamVideoOffsetMs,
+				speedRegions,
+			});
+		}, [
+			currentTime,
+			isPlaying,
+			isScrubbing,
+			speedRegions,
+			syncWebcamPlayback,
+			webcamVideoOffsetMs,
+			webcamVideoPath,
+		]);
 
 		useEffect(() => {
 			const primaryVideo = videoRef.current;
@@ -1946,9 +1962,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			let animationFrameId: number | null = null;
 			const syncNextFrame = () => {
 				if (stopped) return;
-				if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
-					synchronizeMediaFollower(primaryVideo, webcamVideo, webcamVideoOffsetMs);
-				}
+				syncWebcamPlayback();
 
 				if (typeof primaryVideo.requestVideoFrameCallback === "function") {
 					videoFrameCallbackId = primaryVideo.requestVideoFrameCallback(syncNextFrame);
@@ -1970,23 +1984,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					cancelAnimationFrame(animationFrameId);
 				}
 			};
-		}, [isPlaying, webcamVideoOffsetMs, webcamVideoPath]);
-
-		useEffect(() => {
-			const webcamVideo = webcamVideoRef.current;
-			if (!webcamVideo || !webcamVideoPath) {
-				return;
-			}
-
-			webcamVideo.pause();
-			if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
-				webcamVideo.currentTime = getOffsetMediaTime(
-					videoRef.current?.currentTime ?? 0,
-					webcamVideoOffsetMs,
-					webcamVideo.duration,
-				);
-			}
-		}, [webcamVideoOffsetMs, webcamVideoPath]);
+		}, [isPlaying, syncWebcamPlayback, webcamVideoPath]);
 
 		useEffect(() => {
 			return () => {

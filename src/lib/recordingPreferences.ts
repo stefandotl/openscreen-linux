@@ -1,4 +1,5 @@
 import type { CursorCaptureMode } from "@/lib/recordingSession";
+import { normalizeWebcamVideoOffsetMs } from "./webcamSync";
 
 export interface PreferredCaptureSource {
 	id: string;
@@ -15,6 +16,8 @@ export interface RecordingPreferences {
 	webcamEnabled: boolean;
 	webcamDeviceId: string | null;
 	webcamDeviceName: string | null;
+	/** Last manual A/V calibration. Null lets the selected camera use its recommendation. */
+	webcamVideoOffsetMs: number | null;
 	cursorCaptureMode: CursorCaptureMode;
 	captureSource: PreferredCaptureSource | null;
 }
@@ -27,6 +30,7 @@ export const DEFAULT_RECORDING_PREFS: RecordingPreferences = {
 	webcamEnabled: false,
 	webcamDeviceId: null,
 	webcamDeviceName: null,
+	webcamVideoOffsetMs: null,
 	cursorCaptureMode: "editable-overlay",
 	captureSource: null,
 };
@@ -78,6 +82,11 @@ export function normalizeRecordingPreferences(value: unknown): RecordingPreferen
 				: DEFAULT_RECORDING_PREFS.webcamEnabled,
 		webcamDeviceId: optionalStoredString(recording.webcamDeviceId),
 		webcamDeviceName: optionalStoredString(recording.webcamDeviceName),
+		webcamVideoOffsetMs:
+			typeof recording.webcamVideoOffsetMs === "number" &&
+			Number.isFinite(recording.webcamVideoOffsetMs)
+				? normalizeWebcamVideoOffsetMs(recording.webcamVideoOffsetMs)
+				: DEFAULT_RECORDING_PREFS.webcamVideoOffsetMs,
 		cursorCaptureMode:
 			recording.cursorCaptureMode === "system" || recording.cursorCaptureMode === "editable-overlay"
 				? recording.cursorCaptureMode

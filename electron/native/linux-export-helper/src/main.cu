@@ -1125,6 +1125,8 @@ void initializeOutput(ExportState &state, const std::string &outputPath, const E
 	av_dict_set(&encoderOptions, "preset", "p4", 0);
 	av_dict_set(&encoderOptions, "tune", "hq", 0);
 	av_dict_set(&encoderOptions, "rc", "vbr", 0);
+	av_dict_set(&encoderOptions, "cq", "21", 0);
+	av_dict_set(&encoderOptions, "spatial-aq", "1", 0);
 	const int openResult = avcodec_open2(state.encoder, encoder, &encoderOptions);
 	av_dict_free(&encoderOptions);
 	requireAv(openResult, "open h264_nvenc");
