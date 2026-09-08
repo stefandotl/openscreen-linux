@@ -109,7 +109,7 @@ async function recognizeInWorker(options: {
 				sherpaModulePath: require.resolve("sherpa-onnx-node"),
 				wavPath: options.wavPath,
 				modelFiles: options.modelFiles,
-				numThreads: Math.max(1, Math.min(4, Number(process.env.OPENSCREEN_CAPTION_THREADS) || 2)),
+				numThreads: Math.max(1, Math.min(4, Number(process.env.VIDETIO_CAPTION_THREADS) || 2)),
 			},
 			(error) => {
 				if (error) {
@@ -264,7 +264,7 @@ export class ParakeetTranscriptionService {
 		trimRegions: TrimRegion[];
 		sourceDurationSec?: number;
 	}): Promise<CaptionTranscriptionResult> {
-		const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "openscreen-captions-"));
+		const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "videtio-captions-"));
 		const wavPath = path.join(tempDirectory, "caption-audio.wav");
 		try {
 			await extractCaptionAudio(options.ffmpegBinary, options.videoPath, wavPath);

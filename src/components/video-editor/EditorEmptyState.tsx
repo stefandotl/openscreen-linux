@@ -27,6 +27,7 @@ const SUPPORTED_VIDEO_EXTENSIONS = new Set([
 	".flv",
 	".ts",
 ]);
+const SUPPORTED_PROJECT_EXTENSIONS = new Set([".videtio", ".videtly", ".openscreen"]);
 
 function fileExtension(fileName: string) {
 	const extensionStart = fileName.lastIndexOf(".");
@@ -97,7 +98,7 @@ export function EditorEmptyState({
 
 			const droppedFile = files[0];
 			const extension = fileExtension(droppedFile.name);
-			const isProjectFile = extension === ".openscreen";
+			const isProjectFile = SUPPORTED_PROJECT_EXTENSIONS.has(extension);
 			if (!isProjectFile && !SUPPORTED_VIDEO_EXTENSIONS.has(extension)) {
 				setDropError("unsupported-format");
 				return;
@@ -157,7 +158,7 @@ export function EditorEmptyState({
 					<DialogHeader className="mb-4">
 						<div className="flex items-center gap-3">
 							<img
-								src="./openscreen.png"
+								src="./videtio.png"
 								alt=""
 								aria-hidden="true"
 								className="w-9 h-9 rounded-xl flex-shrink-0"
@@ -195,7 +196,7 @@ export function EditorEmptyState({
 			<div className="relative flex flex-col items-center gap-8 px-6 text-center">
 				{/* Logo */}
 				<img
-					src="./openscreen.png"
+					src="./videtio.png"
 					alt=""
 					aria-hidden="true"
 					className="h-16 w-16 rounded-2xl opacity-90"

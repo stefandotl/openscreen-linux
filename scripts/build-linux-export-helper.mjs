@@ -19,9 +19,9 @@ const scriptPath = fileURLToPath(import.meta.url);
 const root = path.resolve(path.dirname(scriptPath), "..");
 const sourcePath = path.join(root, "electron", "native", "linux-export-helper", "src", "main.cu");
 const buildDir = path.join(root, "electron", "native", "linux-export-helper", "build");
-const outputPath = path.join(buildDir, "openscreen-linux-export-helper");
+const outputPath = path.join(buildDir, "videtio-linux-export-helper");
 const distributableDir = path.join(root, "electron", "native", "bin", "linux-x64");
-const distributablePath = path.join(distributableDir, "openscreen-linux-export-helper");
+const distributablePath = path.join(distributableDir, "videtio-linux-export-helper");
 
 function resolveCommand(command) {
 	if (path.isAbsolute(command)) return command;
@@ -44,10 +44,10 @@ function run(command, args) {
 	if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-const ffmpegCommand = process.env.OPENSCREEN_FFMPEG_PATH || "ffmpeg";
+const ffmpegCommand = process.env.VIDETIO_FFMPEG_PATH || "ffmpeg";
 const ffmpegPath = resolveCommand(ffmpegCommand);
-const ffmpegPrefix = process.env.OPENSCREEN_FFMPEG_PREFIX
-	? path.resolve(process.env.OPENSCREEN_FFMPEG_PREFIX)
+const ffmpegPrefix = process.env.VIDETIO_FFMPEG_PREFIX
+	? path.resolve(process.env.VIDETIO_FFMPEG_PREFIX)
 	: path.dirname(path.dirname(fs.realpathSync(ffmpegPath)));
 const includeDir = path.join(ffmpegPrefix, "include");
 const libraryDir = path.join(ffmpegPrefix, "lib");
@@ -59,7 +59,7 @@ const requiredPaths = [
 for (const requiredPath of requiredPaths) {
 	if (!fs.existsSync(requiredPath)) {
 		console.error(
-			`Missing native export dependency: ${requiredPath}\nSet OPENSCREEN_FFMPEG_PREFIX to the FFmpeg development prefix.`,
+			`Missing native export dependency: ${requiredPath}\nSet VIDETIO_FFMPEG_PREFIX to the FFmpeg development prefix.`,
 		);
 		process.exit(1);
 	}

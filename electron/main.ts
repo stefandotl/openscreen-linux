@@ -92,7 +92,7 @@ const isMac = process.platform === "darwin";
 const trayIconSize = isMac ? 16 : 24;
 
 // Tray Icons
-const defaultTrayIcon = getTrayIcon("openscreen.png", trayIconSize);
+const defaultTrayIcon = getTrayIcon("videtio.png", trayIconSize);
 const recordingTrayIcon = getTrayIcon("rec-button.png", trayIconSize);
 
 function createWindow() {
@@ -146,7 +146,7 @@ function setupApplicationMenu() {
 			submenu: [
 				{
 					role: "about",
-					label: mainT("common", "actions.about") || "About OpenScreen Linux",
+					label: mainT("common", "actions.about") || "About Videtio",
 				},
 				{ type: "separator" },
 				{
@@ -156,7 +156,7 @@ function setupApplicationMenu() {
 				{ type: "separator" },
 				{
 					role: "hide",
-					label: mainT("common", "actions.hide") || "Hide OpenScreen Linux",
+					label: mainT("common", "actions.hide") || "Hide Videtio",
 				},
 				{
 					role: "hideOthers",
@@ -314,7 +314,7 @@ function updateTrayMenu(recording: boolean = false) {
 		? mainT("common", "actions.recordingStatus", {
 				source: selectedSourceName,
 			}) || `Recording: ${selectedSourceName}`
-		: "OpenScreen Linux";
+		: "Videtio";
 	const menuTemplate = recording
 		? [
 				{

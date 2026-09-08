@@ -29,7 +29,7 @@ function runNode(relativeScript, args = [], env = process.env) {
 
 runNode("scripts/build-macos-screencapturekit-helper.mjs", [], {
 	...process.env,
-	OPENSCREEN_MAC_HELPER_ARCHS: targetArch,
+	VIDETIO_MAC_HELPER_ARCHS: targetArch,
 });
 runNode("node_modules/typescript/bin/tsc");
 runNode("node_modules/vite/bin/vite.js", ["build"]);

@@ -1,11 +1,11 @@
-# NixOS module for OpenScreen
+# NixOS module for Videtio
 # Usage in flake-based NixOS config:
 #
-#   inputs.openscreen.url = "github:stefandotl/openscreen-linux";
+#   inputs.videtio.url = "github:YOUR_ORG/YOUR_REPOSITORY";
 #
 #   { inputs, ... }: {
-#     imports = [ inputs.openscreen.nixosModules.default ];
-#     programs.openscreen.enable = true;
+#     imports = [ inputs.videtio.nixosModules.default ];
+#     programs.videtio.enable = true;
 #   }
 self:
 {
@@ -16,17 +16,17 @@ self:
 }:
 
 let
-  cfg = config.programs.openscreen;
+  cfg = config.programs.videtio;
 in
 {
-  options.programs.openscreen = {
-    enable = lib.mkEnableOption "OpenScreen screen recorder";
+  options.programs.videtio = {
+    enable = lib.mkEnableOption "Videtio screen recorder";
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = self.packages.${pkgs.stdenv.hostPlatform.system}.openscreen;
-      defaultText = lib.literalExpression "inputs.openscreen.packages.\${pkgs.stdenv.hostPlatform.system}.openscreen";
-      description = "The OpenScreen package to use.";
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.videtio;
+      defaultText = lib.literalExpression "inputs.videtio.packages.\${pkgs.stdenv.hostPlatform.system}.videtio";
+      description = "The Videtio package to use.";
     };
   };
 

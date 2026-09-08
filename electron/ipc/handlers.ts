@@ -77,7 +77,14 @@ import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
-const PROJECT_FILE_EXTENSION = "openscreen";
+const PROJECT_FILE_EXTENSION = "videtio";
+const PREVIOUS_PROJECT_FILE_EXTENSION = "videtly";
+const LEGACY_PROJECT_FILE_EXTENSION = "openscreen";
+const PROJECT_FILE_EXTENSIONS = new Set([
+	`.${PROJECT_FILE_EXTENSION}`,
+	`.${PREVIOUS_PROJECT_FILE_EXTENSION}`,
+	`.${LEGACY_PROJECT_FILE_EXTENSION}`,
+]);
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_FILE_PREFIX = "recording-";
 const RECORDING_SESSION_SUFFIX = ".session.json";
@@ -105,7 +112,7 @@ const TIMELINE_EPSILON_SEC = 0.0001;
 
 function getFfmpegBinary() {
 	return resolveFfmpegBinary({
-		explicitPath: process.env.OPENSCREEN_FFMPEG_PATH,
+		explicitPath: process.env.VIDETIO_FFMPEG_PATH,
 		platform: process.platform,
 		resourcesPath: process.resourcesPath,
 	});
@@ -900,7 +907,7 @@ function resolvePackagedResourcePath(...segments: string[]) {
 }
 
 function getNativeWindowsCaptureHelperCandidates() {
-	const envPath = process.env.OPENSCREEN_WGC_CAPTURE_EXE?.trim();
+	const envPath = process.env.VIDETIO_WGC_CAPTURE_EXE?.trim();
 	const archTag = process.arch === "arm64" ? "win32-arm64" : "win32-x64";
 	return [
 		envPath,
@@ -936,9 +943,9 @@ async function findNativeWindowsCaptureHelperPath() {
 }
 
 function getNativeMacCaptureHelperCandidates() {
-	const envPath = process.env.OPENSCREEN_SCK_CAPTURE_EXE?.trim();
+	const envPath = process.env.VIDETIO_SCK_CAPTURE_EXE?.trim();
 	const archTag = process.arch === "arm64" ? "darwin-arm64" : "darwin-x64";
-	const helperName = "openscreen-screencapturekit-helper";
+	const helperName = "videtio-screencapturekit-helper";
 	return [
 		envPath,
 		resolveUnpackedAppPath("electron", "native", "screencapturekit", "build", helperName),
@@ -1638,7 +1645,7 @@ export function registerIpcHandlers(
 			}
 
 			// Screen recording has no askForMediaAccess equivalent, so trigger the
-			// TCC prompt without opening OpenScreen's source selector above it.
+			// TCC prompt without opening Videtio's source selector above it.
 			if (status === "not-determined") {
 				const mainWin = getMainWindow();
 				if (mainWin && !mainWin.isDestroyed()) {
@@ -1781,7 +1788,7 @@ export function registerIpcHandlers(
 			const detail =
 				access.status === "missing-helper"
 					? "The cursor helper couldn't be found in this build, so the editable cursor can't be enabled. Rebuild the native helper (npm run build:native:mac) or switch the HUD cursor mode to system."
-					: "Allow OpenScreen under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
+					: "Allow Videtio under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
 			const messageOptions = {
 				type: "warning",
 				buttons: ["Open Accessibility Settings", "Cancel"],
@@ -1816,7 +1823,7 @@ export function registerIpcHandlers(
 					cancelId: 1,
 					message: "Screen Recording permission is required",
 					detail:
-						"Allow OpenScreen under System Settings → Privacy & Security → Screen & System Audio Recording. If it is already enabled, quit OpenScreen completely and launch this exact build directly from Finder. Development builds started by VS Code or a terminal may require permission for that host app instead.",
+						"Allow Videtio under System Settings → Privacy & Security → Screen & System Audio Recording. If it is already enabled, quit Videtio completely and launch this exact build directly from Finder. Development builds started by VS Code or a terminal may require permission for that host app instead.",
 				} satisfies Electron.MessageBoxOptions;
 				const result =
 					mainWin && !mainWin.isDestroyed()
@@ -2885,7 +2892,7 @@ export function registerIpcHandlers(
 			const normalizedSegments = segments.map((segment) => path.normalize(segment));
 			const listPath = path.join(
 				os.tmpdir(),
-				`openscreen-export-concat-${process.pid}-${Date.now()}.txt`,
+				`videtio-export-concat-${process.pid}-${Date.now()}.txt`,
 			);
 			try {
 				for (const segment of normalizedSegments) {
@@ -3201,8 +3208,12 @@ export function registerIpcHandlers(
 					defaultPath: path.join(RECORDINGS_DIR, defaultName),
 					filters: [
 						{
-							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION],
+							name: mainT("dialogs", "fileDialogs.videtioProject"),
+							extensions: [
+								PROJECT_FILE_EXTENSION,
+								PREVIOUS_PROJECT_FILE_EXTENSION,
+								LEGACY_PROJECT_FILE_EXTENSION,
+							],
 						},
 						{ name: "JSON", extensions: ["json"] },
 					],
@@ -3268,8 +3279,12 @@ export function registerIpcHandlers(
 					defaultPath: defaultDir,
 					filters: [
 						{
-							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION],
+							name: mainT("dialogs", "fileDialogs.videtioProject"),
+							extensions: [
+								PROJECT_FILE_EXTENSION,
+								PREVIOUS_PROJECT_FILE_EXTENSION,
+								LEGACY_PROJECT_FILE_EXTENSION,
+							],
 						},
 						{ name: "JSON", extensions: ["json"] },
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
@@ -3315,8 +3330,8 @@ export function registerIpcHandlers(
 				return { success: false, message: "Invalid file path" };
 			}
 			// Validate extension and readability
-			if (path.extname(filePath).toLowerCase() !== `.${PROJECT_FILE_EXTENSION}`) {
-				return { success: false, message: "Not an Openscreen project file" };
+			if (!PROJECT_FILE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+				return { success: false, message: "Not a Videtio project file" };
 			}
 			const stats = await fs.stat(filePath).catch(() => null);
 			if (!stats?.isFile()) {
@@ -3518,7 +3533,7 @@ export function registerIpcHandlers(
 		) => {
 			const { filePath, canceled } = await dialog.showSaveDialog({
 				title: "Save Diagnostic File",
-				defaultPath: `openscreen-diagnostic-${Date.now()}.json`,
+				defaultPath: `videtio-diagnostic-${Date.now()}.json`,
 				filters: [{ name: "JSON", extensions: ["json"] }],
 			});
 

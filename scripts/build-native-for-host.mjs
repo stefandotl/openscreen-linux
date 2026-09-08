@@ -15,7 +15,7 @@ const scriptsByPlatform = {
 
 const scripts = scriptsByPlatform[process.platform];
 if (!scripts) {
-	console.error(`OpenScreen does not have native helpers for platform ${process.platform}.`);
+	console.error(`Videtio does not have native helpers for platform ${process.platform}.`);
 	process.exit(1);
 }
 

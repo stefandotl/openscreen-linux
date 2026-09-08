@@ -15,10 +15,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const sourceDir = path.join(root, "electron", "native", "linux-cursor-helper");
 const buildDir = path.join(sourceDir, "build");
-const outputPath = path.join(buildDir, "openscreen-linux-cursor-helper");
+const outputPath = path.join(buildDir, "videtio-linux-cursor-helper");
 const archTag = process.arch === "arm64" ? "linux-arm64" : "linux-x64";
 const distributableDir = path.join(root, "electron", "native", "bin", archTag);
-const distributablePath = path.join(distributableDir, "openscreen-linux-cursor-helper");
+const distributablePath = path.join(distributableDir, "videtio-linux-cursor-helper");
 const compiler = process.env.CXX ?? "g++";
 
 function run(command, args) {

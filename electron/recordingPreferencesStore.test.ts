@@ -7,7 +7,7 @@ import { RecordingPreferencesStore } from "./recordingPreferencesStore";
 const temporaryDirectories: string[] = [];
 
 async function createStore() {
-	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "openscreen-recording-prefs-"));
+	const directory = await fs.mkdtemp(path.join(os.tmpdir(), "videtio-recording-prefs-"));
 	temporaryDirectories.push(directory);
 	const filePath = path.join(directory, "recording-preferences.json");
 	return { filePath, store: new RecordingPreferencesStore(filePath) };

@@ -59,12 +59,12 @@
 		"saveGif": "Salva GIF esportata",
 		"saveVideo": "Salva video esportato",
 		"selectVideo": "Seleziona file video",
-		"saveProject": "Salva progetto OpenScreen",
-		"openProject": "Apri progetto OpenScreen",
+		"saveProject": "Salva progetto Videtio",
+		"openProject": "Apri progetto Videtio",
 		"gifImage": "Immagine GIF",
 		"mp4Video": "Video MP4",
 		"videoFiles": "File video",
-		"openscreenProject": "Progetto OpenScreen",
+		"videtioProject": "Progetto Videtio",
 		"allFiles": "Tutti i file"
 	}
 }

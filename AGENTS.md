@@ -1,4 +1,4 @@
-# OpenScreen Linux - AGENTS.md
+# Videtio - AGENTS.md
 
 ## Quick commands
 

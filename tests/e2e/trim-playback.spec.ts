@@ -10,27 +10,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "../..");
 const MAIN_JS = path.join(ROOT, "dist-electron/main.js");
 const TEST_VIDEO =
-	process.env["OPENSCREEN_E2E_VIDEO"] ?? path.join(__dirname, "../fixtures/sample.webm");
-const MIDDLE_TRIM_START_SECONDS = Number(process.env["OPENSCREEN_E2E_TRIM_START_SECONDS"] ?? "0.5");
-const USE_TERMINAL_TRIM = !process.env["OPENSCREEN_E2E_VIDEO"];
-const HANDOFF_FIRST_VIDEO = process.env["OPENSCREEN_E2E_HANDOFF_FIRST_VIDEO"];
-const HANDOFF_SECOND_VIDEO = process.env["OPENSCREEN_E2E_HANDOFF_SECOND_VIDEO"];
-const HANDOFF_WEBCAM_VIDEO = process.env["OPENSCREEN_E2E_HANDOFF_WEBCAM_VIDEO"];
-const HANDOFF_PROJECT_PATH = process.env["OPENSCREEN_E2E_HANDOFF_PROJECT"];
+	process.env["VIDETIO_E2E_VIDEO"] ?? path.join(__dirname, "../fixtures/sample.webm");
+const MIDDLE_TRIM_START_SECONDS = Number(process.env["VIDETIO_E2E_TRIM_START_SECONDS"] ?? "0.5");
+const USE_TERMINAL_TRIM = !process.env["VIDETIO_E2E_VIDEO"];
+const HANDOFF_FIRST_VIDEO = process.env["VIDETIO_E2E_HANDOFF_FIRST_VIDEO"];
+const HANDOFF_SECOND_VIDEO = process.env["VIDETIO_E2E_HANDOFF_SECOND_VIDEO"];
+const HANDOFF_WEBCAM_VIDEO = process.env["VIDETIO_E2E_HANDOFF_WEBCAM_VIDEO"];
+const HANDOFF_PROJECT_PATH = process.env["VIDETIO_E2E_HANDOFF_PROJECT"];
 const HANDOFF_FIRST_DURATION_SECONDS = Number(
-	process.env["OPENSCREEN_E2E_HANDOFF_FIRST_DURATION_SECONDS"] ?? "2",
+	process.env["VIDETIO_E2E_HANDOFF_FIRST_DURATION_SECONDS"] ?? "2",
 );
 const HANDOFF_SECOND_DURATION_SECONDS = Number(
-	process.env["OPENSCREEN_E2E_HANDOFF_SECOND_DURATION_SECONDS"] ?? "2",
+	process.env["VIDETIO_E2E_HANDOFF_SECOND_DURATION_SECONDS"] ?? "2",
 );
 const HANDOFF_SPLIT_TIME_SECONDS = Number(
-	process.env["OPENSCREEN_E2E_HANDOFF_SPLIT_TIME_SECONDS"] ?? "0.8",
+	process.env["VIDETIO_E2E_HANDOFF_SPLIT_TIME_SECONDS"] ?? "0.8",
 );
 
 type ElectronApplication = Awaited<ReturnType<typeof electron.launch>>;
 
 async function launchApp() {
-	const testUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openscreen-trim-e2e-"));
+	const testUserDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "videtio-trim-e2e-"));
 	const app = await electron.launch({
 		args: [
 			MAIN_JS,
@@ -451,7 +451,7 @@ test("continues project playback from split scenes into a different recording wi
 						ok: true,
 						data: {
 							success: true,
-							path: "/tmp/handoff.openscreen",
+							path: "/tmp/handoff.videtio",
 							project: loadedProject,
 						},
 						meta: {

@@ -51,7 +51,7 @@
 		"cameraDisconnected": "تم فصل كاميرا الويب.",
 		"cameraNotFound": "لم يتم العثور على كاميرا.",
 		"permissionDenied": "تم رفض إذن التسجيل. يرجى السماح بتسجيل الشاشة.",
-		"accessibilityAllowAndRetry": "اسمح بوصول تسهيلات الاستخدام لـ OpenScreen، ثم اضغط على التسجيل مرة أخرى لبدء العد التنازلي."
+		"accessibilityAllowAndRetry": "اسمح بوصول تسهيلات الاستخدام لـ Videtio، ثم اضغط على التسجيل مرة أخرى لبدء العد التنازلي."
 	},
 	"autoCaptions": {
 		"button": "التسميات التوضيحية التلقائية",
@@ -95,19 +95,19 @@
 	},
 	"emptyState": {
 		"title": "لا يوجد مشروع مفتوح",
-		"description": "استورد مقطع فيديو للبدء في التحرير، أو حمّل مشروع OpenScreen موجود.",
+		"description": "استورد مقطع فيديو للبدء في التحرير، أو حمّل مشروع Videtio موجود.",
 		"sceneTitle": "هذا المشهد فارغ",
 		"sceneDescription": "سجّل فيديو جديدًا لهذا المشهد أو استورد ملف فيديو موجودًا.",
 		"recordSceneButton": "تسجيل المشهد",
 		"importVideoButton": "استيراد ملف فيديو...",
 		"loadProjectButton": "تحميل مشروع...",
 		"supportedFormats": "الصيغ المدعومة: MP4، MOV، WebM، MKV، AVI، M4V، WMV",
-		"dragDropHint": "ملف فيديو أو مشروع .openscreen",
+		"dragDropHint": "ملف فيديو أو مشروع .videtio",
 		"dropOverlay": "أفلت الفيديو أو المشروع هنا",
 		"dropErrors": {
 			"unsupportedFormatTitle": "تنسيق غير مدعوم",
-			"unsupportedFormatMessage": "يمكن إسقاط ملفات مشروع .openscreen فقط هنا. لاستيراد مقطع فيديو، استخدم زر \"استيراد ملف فيديو...\" بدلاً من ذلك.",
-			"unsupportedVideoOrProjectMessage": "أفلت ملف فيديو مدعومًا أو مشروع .openscreen هنا.",
+			"unsupportedFormatMessage": "يمكن إسقاط ملفات مشروع .videtio فقط هنا. لاستيراد مقطع فيديو، استخدم زر \"استيراد ملف فيديو...\" بدلاً من ذلك.",
+			"unsupportedVideoOrProjectMessage": "أفلت ملف فيديو مدعومًا أو مشروع .videtio هنا.",
 			"couldNotOpenTitle": "تعذّر فتح الملف",
 			"couldNotOpenMessage": "تعذّر فتح ملف المشروع. ربما تم نقل الفيديو المرجعي أو حذفه.",
 			"couldNotOpenDroppedMessage": "تعذّر فتح الملف المُسقط. ربما تم نقله أو حذفه أو تعذّرت قراءته."

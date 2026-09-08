@@ -1,4 +1,4 @@
-# OpenScreen veröffentlichen
+# Videtio veröffentlichen
 
 Git-Tags für Releases nicht manuell anlegen. `npm version` aktualisiert
 `package.json` und `package-lock.json`, erstellt den Release-Commit und setzt den

@@ -45,11 +45,11 @@ type LinuxCursorEvent =
 			type: "stopped";
 	  };
 
-const HELPER_NAME = "openscreen-linux-cursor-helper";
+const HELPER_NAME = "videtio-linux-cursor-helper";
 const READY_TIMEOUT_MS = 5_000;
 
 function helperCandidates() {
-	const envPath = process.env.OPENSCREEN_LINUX_CURSOR_HELPER_EXE?.trim();
+	const envPath = process.env.VIDETIO_LINUX_CURSOR_HELPER_EXE?.trim();
 	const appRoot = process.env.APP_ROOT ? path.resolve(process.env.APP_ROOT) : process.cwd();
 	const archTag = process.arch === "arm64" ? "linux-arm64" : "linux-x64";
 	const resourceRoot =

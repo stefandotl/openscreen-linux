@@ -34,7 +34,7 @@
 		"cameraDisconnected": "Cámara web desconectada.",
 		"cameraNotFound": "Cámara no encontrada.",
 		"permissionDenied": "Permiso de grabación denegado. Por favor permite la grabación de pantalla.",
-		"accessibilityAllowAndRetry": "Permite el acceso de accesibilidad para OpenScreen y luego pulsa grabar de nuevo para iniciar la cuenta atrás."
+		"accessibilityAllowAndRetry": "Permite el acceso de accesibilidad para Videtio y luego pulsa grabar de nuevo para iniciar la cuenta atrás."
 	},
 	"loadingVideo": "Cargando video...",
 	"loadingEditor": "Cargando editor...",
@@ -95,19 +95,19 @@
 	},
 	"emptyState": {
 		"title": "No hay proyecto abierto",
-		"description": "Importa un video para empezar a editar o carga un proyecto de OpenScreen existente.",
+		"description": "Importa un video para empezar a editar o carga un proyecto de Videtio existente.",
 		"sceneTitle": "Esta escena está vacía",
 		"sceneDescription": "Graba un video nuevo para esta escena o importa un archivo de video existente.",
 		"recordSceneButton": "Grabar escena",
 		"importVideoButton": "Importar archivo de video…",
 		"loadProjectButton": "Cargar proyecto…",
 		"supportedFormats": "Formatos compatibles: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "Archivo de video o proyecto .openscreen",
+		"dragDropHint": "Archivo de video o proyecto .videtio",
 		"dropOverlay": "Suelta el video o proyecto aquí",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Formato no compatible",
-			"unsupportedFormatMessage": "Solo se pueden soltar aquí archivos de proyecto .openscreen. Para importar un video, usa el botón \"Importar archivo de video...\" en su lugar.",
-			"unsupportedVideoOrProjectMessage": "Suelta aquí un archivo de video compatible o un proyecto .openscreen.",
+			"unsupportedFormatMessage": "Solo se pueden soltar aquí archivos de proyecto .videtio. Para importar un video, usa el botón \"Importar archivo de video...\" en su lugar.",
+			"unsupportedVideoOrProjectMessage": "Suelta aquí un archivo de video compatible o un proyecto .videtio.",
 			"couldNotOpenTitle": "No se pudo abrir el archivo",
 			"couldNotOpenMessage": "No se pudo abrir el archivo de proyecto. El video al que hace referencia puede haber sido movido o eliminado.",
 			"couldNotOpenDroppedMessage": "No se pudo abrir el archivo soltado. Puede haberse movido, eliminado o no ser legible."

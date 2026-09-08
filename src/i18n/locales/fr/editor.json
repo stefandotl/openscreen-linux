@@ -49,7 +49,7 @@
 		"cameraDisconnected": "Webcam déconnectée.",
 		"cameraNotFound": "Caméra introuvable.",
 		"permissionDenied": "Permission d'enregistrement refusée. Veuillez autoriser l'enregistrement d'écran.",
-		"accessibilityAllowAndRetry": "Autorisez l'accès Accessibilité pour OpenScreen, puis appuyez de nouveau sur enregistrer pour lancer le compte à rebours."
+		"accessibilityAllowAndRetry": "Autorisez l'accès Accessibilité pour Videtio, puis appuyez de nouveau sur enregistrer pour lancer le compte à rebours."
 	},
 	"loadingVideo": "Chargement de la vidéo...",
 	"loadingEditor": "Chargement de l'éditeur...",
@@ -95,19 +95,19 @@
 	},
 	"emptyState": {
 		"title": "Aucun projet ouvert",
-		"description": "Importez une vidéo pour commencer à éditer, ou chargez un projet OpenScreen existant.",
+		"description": "Importez une vidéo pour commencer à éditer, ou chargez un projet Videtio existant.",
 		"sceneTitle": "Cette scène est vide",
 		"sceneDescription": "Enregistrez une nouvelle vidéo pour cette scène ou importez un fichier vidéo existant.",
 		"recordSceneButton": "Enregistrer la scène",
 		"importVideoButton": "Importer un fichier vidéo…",
 		"loadProjectButton": "Charger un projet…",
 		"supportedFormats": "Formats pris en charge : MP4, MOV, WebM, MKV, AVI, M4V, WMV",
-		"dragDropHint": "Fichier vidéo ou projet .openscreen",
+		"dragDropHint": "Fichier vidéo ou projet .videtio",
 		"dropOverlay": "Déposez la vidéo ou le projet ici",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Format non pris en charge",
-			"unsupportedFormatMessage": "Seuls les fichiers .openscreen peuvent être déposés ici. Pour importer une vidéo, utilisez plutôt le bouton \"Importer un fichier vidéo...\".",
-			"unsupportedVideoOrProjectMessage": "Déposez ici un fichier vidéo pris en charge ou un projet .openscreen.",
+			"unsupportedFormatMessage": "Seuls les fichiers .videtio peuvent être déposés ici. Pour importer une vidéo, utilisez plutôt le bouton \"Importer un fichier vidéo...\".",
+			"unsupportedVideoOrProjectMessage": "Déposez ici un fichier vidéo pris en charge ou un projet .videtio.",
 			"couldNotOpenTitle": "Impossible d'ouvrir le fichier",
 			"couldNotOpenMessage": "Le fichier de projet n'a pas pu être ouvert. La vidéo qu'il référence a peut-être été déplacée ou supprimée.",
 			"couldNotOpenDroppedMessage": "Le fichier déposé n’a pas pu être ouvert. Il a peut-être été déplacé, supprimé ou est illisible."

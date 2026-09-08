@@ -3,28 +3,28 @@
 import PackageDescription
 
 let package = Package(
-	name: "OpenScreenScreenCaptureKitHelper",
+	name: "VidetioScreenCaptureKitHelper",
 	platforms: [
 		.macOS(.v13)
 	],
 	products: [
 		.executable(
-			name: "openscreen-screencapturekit-helper",
-			targets: ["OpenScreenScreenCaptureKitHelper"]
+			name: "videtio-screencapturekit-helper",
+			targets: ["VidetioScreenCaptureKitHelper"]
 		),
 		.executable(
-			name: "openscreen-macos-cursor-helper",
-			targets: ["OpenScreenMacOSCursorHelper"]
+			name: "videtio-macos-cursor-helper",
+			targets: ["VidetioMacOSCursorHelper"]
 		)
 	],
 	targets: [
 		.executableTarget(
-			name: "OpenScreenScreenCaptureKitHelper",
-			path: "Sources/OpenScreenScreenCaptureKitHelper"
+			name: "VidetioScreenCaptureKitHelper",
+			path: "Sources/VidetioScreenCaptureKitHelper"
 		),
 		.executableTarget(
-			name: "OpenScreenMacOSCursorHelper",
-			path: "Sources/OpenScreenMacOSCursorHelper"
+			name: "VidetioMacOSCursorHelper",
+			path: "Sources/VidetioMacOSCursorHelper"
 		)
 	]
 )

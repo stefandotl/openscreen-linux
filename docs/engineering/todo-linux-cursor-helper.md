@@ -37,7 +37,7 @@ The target is:
 4. Tried enabling the editable cursor path on Linux.
    - Added the Linux cursor mode toggle.
    - Tried `cursor: "never"` for Chromium desktop capture.
-   - Allowed Linux telemetry recordings to render OpenScreen's editable cursor
+   - Allowed Linux telemetry recordings to render Videtio's editable cursor
      overlay.
 
 ## What Went Wrong
@@ -66,7 +66,7 @@ The target is:
 4. Editable cursor styling is not currently viable on Linux.
    - Chromium/Electron did not reliably remove the system cursor with
      `cursor: "never"` on this setup.
-   - Result: the real cursor stayed in the video and OpenScreen rendered a
+   - Result: the real cursor stayed in the video and Videtio rendered a
      second projected cursor on top.
    - Because the real cursor is baked into the video, post-recording cursor
      styling would create duplicate cursors unless the real cursor is hidden or

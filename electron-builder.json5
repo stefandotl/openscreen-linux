@@ -1,7 +1,7 @@
 // @see - https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "com.siddharthvaddem.openscreen",
+  "appId": "com.videtio.app",
   "asar": true,
   // Native addons and their shared libraries can't be loaded from inside an asar.
   "asarUnpack": [
@@ -9,7 +9,7 @@
     "node_modules/sherpa-onnx-node/**/*",
     "node_modules/sherpa-onnx-*/**/*"
   ],
-  "productName": "OpenScreen Linux",
+  "productName": "Videtio",
   // Fetch the optional Whisper model + ORT wasm before packaging (idempotent).
   "beforePack": "scripts/before-pack.cjs",
   "npmRebuild": true,
@@ -47,6 +47,11 @@
       "to": "caption-assets"
     },
     {
+      // Keep the upstream MIT notice available in every packaged application.
+      "from": "LICENSE",
+      "to": "LICENSE"
+    },
+    {
       // Keep the crash-isolated caption worker outside app.asar so Electron can
       // execute it in Node mode on every packaged platform.
       "from": "dist-electron/parakeetWorker.js",
@@ -71,31 +76,32 @@
       {
         "from": "electron/native/bin",
         "to": "electron/native/bin",
-        "filter": ["darwin-*/*"]
+        "filter": ["darwin-*/videtio-*"]
       }
     ],
     "extendInfo": {
-      "NSAudioCaptureUsageDescription": "OpenScreen needs audio capture permission to record system audio.",
-      "NSMicrophoneUsageDescription": "OpenScreen needs microphone access to record voice audio.",
-      "NSCameraUsageDescription": "OpenScreen needs camera access to record webcam video.",
-      "NSScreenCaptureUsageDescription": "OpenScreen needs screen recording permission to detect and capture windows.",
+      "NSAudioCaptureUsageDescription": "Videtio needs audio capture permission to record system audio.",
+      "NSMicrophoneUsageDescription": "Videtio needs microphone access to record voice audio.",
+      "NSCameraUsageDescription": "Videtio needs camera access to record webcam video.",
+      "NSScreenCaptureUsageDescription": "Videtio needs screen recording permission to detect and capture windows.",
       "NSCameraUseContinuityCameraDeviceType": true
     }
   },
   "linux": {
+    "maintainer": "Videtio contributors",
     "target": [
       "AppImage",
       "deb",
       "pacman"
     ],
     "icon": "icons/icons/png",
-    "artifactName": "OpenScreen-Linux-${version}.${ext}",
+    "artifactName": "Videtio-${version}.${ext}",
     "category": "AudioVideo",
     "extraResources": [
       {
         "from": "electron/native/bin",
         "to": "electron/native/bin",
-        "filter": ["linux-*/*"]
+        "filter": ["linux-*/videtio-*"]
       }
     ]
   },

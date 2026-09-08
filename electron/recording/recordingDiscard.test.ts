@@ -2,7 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getDiscardDeletionTargets } from "./recordingDiscard";
 
-const recordingsDir = "/home/user/.config/openscreen/recordings";
+const recordingsDir = "/home/user/.config/videtio/recordings";
 
 describe("getDiscardDeletionTargets", () => {
 	it("returns screen video, cursor sidecar, and session manifest for a plain recording", () => {

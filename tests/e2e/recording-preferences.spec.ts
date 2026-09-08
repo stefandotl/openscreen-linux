@@ -46,7 +46,7 @@ test.describe("recording preferences", () => {
 	test.skip(process.platform !== "linux", "The restart regression covers the primary Linux HUD.");
 
 	test("restores microphone and selected screen after a full app restart", async () => {
-		const configRoot = fs.mkdtempSync(path.join(os.tmpdir(), "openscreen-recording-restart-"));
+		const configRoot = fs.mkdtempSync(path.join(os.tmpdir(), "videtio-recording-restart-"));
 		let firstApp: ElectronApplication | null = null;
 		let secondApp: ElectronApplication | null = null;
 

@@ -19,7 +19,7 @@
 		"sceneDescription": "Registra un nuovo video per questa scena o importa un file video esistente.",
 		"recordSceneButton": "Registra scena",
 		"dropErrors": {
-			"unsupportedVideoOrProjectMessage": "Trascina qui un file video supportato o un progetto .openscreen.",
+			"unsupportedVideoOrProjectMessage": "Trascina qui un file video supportato o un progetto .videtio.",
 			"couldNotOpenDroppedMessage": "Impossibile aprire il file trascinato. Potrebbe essere stato spostato, eliminato o non essere leggibile."
 		}
 	},
@@ -59,7 +59,7 @@
 		"cameraDisconnected": "Webcam disconnessa.",
 		"cameraNotFound": "Fotocamera non trovata.",
 		"permissionDenied": "Autorizzazione di registrazione negata. Consenti la registrazione dello schermo.",
-		"accessibilityAllowAndRetry": "Consenti l'accesso all'accessibilità per OpenScreen, poi premi di nuovo registra per avviare il conto alla rovescia."
+		"accessibilityAllowAndRetry": "Consenti l'accesso all'accessibilità per Videtio, poi premi di nuovo registra per avviare il conto alla rovescia."
 	},
 	"autoCaptions": {
 		"button": "Sottotitoli automatici",

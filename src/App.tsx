@@ -103,7 +103,7 @@ export default function App() {
 			default:
 				return (
 					<div className="w-full h-full bg-background text-foreground">
-						<h1>OpenScreen Linux</h1>
+						<h1>Videtio</h1>
 					</div>
 				);
 		}

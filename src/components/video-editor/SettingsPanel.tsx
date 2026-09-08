@@ -1,7 +1,6 @@
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
 	Brackets,
-	Bug,
 	Crop,
 	Download,
 	FileDown,
@@ -14,7 +13,6 @@ import {
 	Palette,
 	SlidersHorizontal,
 	Sparkles,
-	Star,
 	Trash2,
 	Unlock,
 	Upload,
@@ -768,42 +766,18 @@ export function SettingsPanel({
 	const selectedBlur = selectedBlurId
 		? blurRegions.find((region) => region.id === selectedBlurId)
 		: null;
-	const commonFooterLinks = (
+	const commonFooterLinks = onSaveDiagnostic ? (
 		<div className="flex gap-2 mt-3">
 			<button
 				type="button"
-				onClick={() => {
-					window.electronAPI?.openExternalUrl(
-						"https://github.com/stefandotl/openscreen-linux/issues/new/choose",
-					);
-				}}
+				onClick={onSaveDiagnostic}
 				className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
 			>
-				<Bug className="w-3 h-3 text-[#34B27B]" />
-				{t("support.reportBug")}
-			</button>
-			{onSaveDiagnostic && (
-				<button
-					type="button"
-					onClick={onSaveDiagnostic}
-					className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
-				>
-					<FileDown className="w-3 h-3 text-slate-400" />
-					{t("support.saveDiagnostics")}
-				</button>
-			)}
-			<button
-				type="button"
-				onClick={() => {
-					window.electronAPI?.openExternalUrl("https://github.com/stefandotl/openscreen-linux");
-				}}
-				className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
-			>
-				<Star className="w-3 h-3 text-yellow-400" />
-				{t("support.starOnGithub")}
+				<FileDown className="w-3 h-3 text-slate-400" />
+				{t("support.saveDiagnostics")}
 			</button>
 		</div>
-	);
+	) : null;
 
 	// Annotation selected: show its settings panel instead.
 	if (

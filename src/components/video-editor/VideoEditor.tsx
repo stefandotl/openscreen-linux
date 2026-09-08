@@ -407,7 +407,7 @@ export default function VideoEditor() {
 	const { shortcuts, isMac } = useShortcuts();
 	// Windows recordings include captured cursor assets. macOS hides the system
 	// cursor in ScreenCaptureKit and can render telemetry-only samples with
-	// OpenScreen's default arrow asset. Linux telemetry stays available for
+	// Videtio's default arrow asset. Linux telemetry stays available for
 	// auto-zoom, but browser capture may already contain the original cursor.
 	const hasEditableCursorRecording =
 		recordingCursorCaptureMode === "editable-overlay" &&

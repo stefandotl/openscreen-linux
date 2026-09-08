@@ -1,17 +1,16 @@
 {
-	"name": "openscreen",
+	"name": "videtio",
 	"private": true,
 	"version": "2.3.1",
+	"description": "Videtio — desktop screen recorder with a built-in editor",
 	"type": "module",
 	"packageManager": "npm@10.9.4",
 	"engines": {
 		"node": "22.22.1",
 		"npm": "10.9.4"
 	},
-	"author": {
-		"name": "Sid",
-		"email": "svaddem@asu.edu"
-	},
+	"author": "Videtio contributors",
+	"license": "MIT",
 	"scripts": {
 		"dev": "npm run build:native && vite",
 		"prebuild": "npm run version:sync",
@@ -44,7 +43,7 @@
 		"test:wgc-mixed-audio:win": "node scripts/test-windows-wgc-helper.mjs --system-audio --microphone",
 		"test:wgc-webcam:win": "node scripts/test-windows-wgc-helper.mjs --webcam",
 		"test:wgc-full:win": "node scripts/test-windows-wgc-helper.mjs --webcam --system-audio --microphone",
-		"capture:openscreen-preview": "node scripts/capture-openscreen-preview.mjs",
+		"capture:videtio-preview": "node scripts/capture-videtio-preview.mjs",
 		"inspect:cursor-click-bounce": "node scripts/inspect-native-cursor-click-bounce.mjs",
 		"build-vite": "tsc && vite build",
 		"test:browser": "vitest --config vitest.browser.config.ts --run",

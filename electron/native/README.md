@@ -11,11 +11,11 @@ macOS native recording will use a ScreenCaptureKit helper with the same process 
 
 Helper locations:
 
-1. `OPENSCREEN_SCK_CAPTURE_EXE`, for local development and diagnostics.
-2. `electron/native/screencapturekit/build/openscreen-screencapturekit-helper`, for locally built Swift output.
-3. `electron/native/bin/darwin-arm64/openscreen-screencapturekit-helper` or `electron/native/bin/darwin-x64/openscreen-screencapturekit-helper`, for packaged prebuilt helpers.
+1. `VIDETIO_SCK_CAPTURE_EXE`, for local development and diagnostics.
+2. `electron/native/screencapturekit/build/videtio-screencapturekit-helper`, for locally built Swift output.
+3. `electron/native/bin/darwin-arm64/videtio-screencapturekit-helper` or `electron/native/bin/darwin-x64/videtio-screencapturekit-helper`, for packaged prebuilt helpers.
 
-The macOS cursor-shape helper is resolved from `OPENSCREEN_MAC_CURSOR_HELPER_EXE` first, then the matching `openscreen-macos-cursor-helper` binary in the same local build and packaged `electron/native/bin/darwin-${arch}` directories.
+The macOS cursor-shape helper is resolved from `VIDETIO_MAC_CURSOR_HELPER_EXE` first, then the matching `videtio-macos-cursor-helper` binary in the same local build and packaged `electron/native/bin/darwin-${arch}` directories.
 
 Build the macOS helper with:
 
@@ -35,7 +35,7 @@ See `docs/engineering/macos-native-recorder-roadmap.md` for the contract, rollou
 
 Windows native recording is resolved from one of these locations:
 
-1. `OPENSCREEN_WGC_CAPTURE_EXE`, for local development and diagnostics.
+1. `VIDETIO_WGC_CAPTURE_EXE`, for local development and diagnostics.
 2. `electron/native/wgc-capture/build/wgc-capture.exe`, for a locally built Ninja helper.
 3. `electron/native/wgc-capture/build/Release/wgc-capture.exe`, for a locally built multi-config helper.
 4. `electron/native/bin/win32-x64/wgc-capture.exe` or `electron/native/bin/win32-arm64/wgc-capture.exe`, for packaged prebuilt helpers.
@@ -97,17 +97,17 @@ npm run test:wgc-webcam:win
 To validate a specific native webcam manually:
 
 ```powershell
-$env:OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_NAME = "NVIDIA Broadcast"
+$env:VIDETIO_WGC_TEST_WEBCAM_DEVICE_NAME = "NVIDIA Broadcast"
 npm run test:wgc-webcam:win
-Remove-Item Env:OPENSCREEN_WGC_TEST_WEBCAM_DEVICE_NAME
+Remove-Item Env:VIDETIO_WGC_TEST_WEBCAM_DEVICE_NAME
 ```
 
 To validate a specific native microphone manually:
 
 ```powershell
-$env:OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID = "the Chromium deviceId shown by OpenScreen"
-$env:OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME = "Microphone (NVIDIA Broadcast)"
+$env:VIDETIO_WGC_TEST_MICROPHONE_DEVICE_ID = "the Chromium deviceId shown by Videtio"
+$env:VIDETIO_WGC_TEST_MICROPHONE_DEVICE_NAME = "Microphone (NVIDIA Broadcast)"
 npm run test:wgc-mic:win
-Remove-Item Env:OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_ID
-Remove-Item Env:OPENSCREEN_WGC_TEST_MICROPHONE_DEVICE_NAME
+Remove-Item Env:VIDETIO_WGC_TEST_MICROPHONE_DEVICE_ID
+Remove-Item Env:VIDETIO_WGC_TEST_MICROPHONE_DEVICE_NAME
 ```

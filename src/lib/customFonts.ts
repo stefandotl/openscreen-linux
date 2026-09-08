@@ -7,7 +7,7 @@ export interface CustomFont {
 	importUrl: string; // Google Fonts @import URL
 }
 
-const STORAGE_KEY = "openscreen_custom_fonts";
+const STORAGE_KEY = "videtio_custom_fonts";
 const loadedFonts = new Set<string>();
 
 function isCustomFont(value: unknown): value is CustomFont {

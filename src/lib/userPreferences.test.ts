@@ -71,12 +71,12 @@ describe("projectFolder preference", () => {
 	});
 
 	it("ignores non-string persisted values and falls back to the default", () => {
-		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ projectFolder: 42 }));
+		localStorage.setItem("videtio_user_preferences", JSON.stringify({ projectFolder: 42 }));
 		expect(loadUserPreferences().projectFolder).toBe(DEFAULT_PREFS.projectFolder);
 	});
 
 	it("ignores empty-string persisted values and falls back to the default", () => {
-		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ projectFolder: "" }));
+		localStorage.setItem("videtio_user_preferences", JSON.stringify({ projectFolder: "" }));
 		expect(loadUserPreferences().projectFolder).toBe(DEFAULT_PREFS.projectFolder);
 	});
 
@@ -101,7 +101,7 @@ describe("user preferences", () => {
 	});
 
 	it("falls back to the default tray layout for invalid stored values", () => {
-		localStorage.setItem("openscreen_user_preferences", JSON.stringify({ trayLayout: "diagonal" }));
+		localStorage.setItem("videtio_user_preferences", JSON.stringify({ trayLayout: "diagonal" }));
 
 		expect(loadUserPreferences().trayLayout).toBe("horizontal");
 	});
@@ -110,10 +110,7 @@ describe("user preferences", () => {
 		saveUserPreferences({ exportCompression: "compact" });
 		expect(loadUserPreferences().exportCompression).toBe("compact");
 
-		localStorage.setItem(
-			"openscreen_user_preferences",
-			JSON.stringify({ exportCompression: "tiny" }),
-		);
+		localStorage.setItem("videtio_user_preferences", JSON.stringify({ exportCompression: "tiny" }));
 		expect(loadUserPreferences().exportCompression).toBe(DEFAULT_PREFS.exportCompression);
 	});
 
@@ -157,7 +154,7 @@ describe("user preferences", () => {
 
 	it("normalizes invalid fields in the stored annotation style", () => {
 		localStorage.setItem(
-			"openscreen_user_preferences",
+			"videtio_user_preferences",
 			JSON.stringify({
 				lastAnnotationStyle: {
 					fontFamily: "",
@@ -220,7 +217,7 @@ describe("user preferences", () => {
 
 	it("falls back safely for malformed recording preferences", () => {
 		localStorage.setItem(
-			"openscreen_user_preferences",
+			"videtio_user_preferences",
 			JSON.stringify({
 				recording: {
 					microphoneEnabled: "yes",

@@ -13,7 +13,7 @@ import {
 } from "../../src/lib/exporter/nativeGpuExportProtocol";
 import { type AudioTimelineFilter, buildNativeGpuAudioMuxArgs } from "./nativeGpuAudioMux";
 
-const HELPER_NAME = "openscreen-linux-export-helper";
+const HELPER_NAME = "videtio-linux-export-helper";
 const MAX_STATIC_ASSET_BYTES = 32 * 1024 * 1024;
 const MAX_TOTAL_OVERLAY_ASSET_BYTES = 256 * 1024 * 1024;
 const MAX_OVERLAYS = 10_000;
@@ -77,7 +77,7 @@ function tailText(value: string, maxLength = 16_000) {
 }
 
 function helperCandidates() {
-	const envPath = process.env.OPENSCREEN_LINUX_EXPORT_HELPER_EXE?.trim();
+	const envPath = process.env.VIDETIO_LINUX_EXPORT_HELPER_EXE?.trim();
 	const appRoot = process.env.APP_ROOT ? path.resolve(process.env.APP_ROOT) : process.cwd();
 	const archTag = process.arch === "arm64" ? "linux-arm64" : "linux-x64";
 	const resourceRoot =
@@ -572,7 +572,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 					throw new Error("Native GPU export output path is invalid");
 				}
 				await fs.mkdir(path.dirname(outputPath), { recursive: true });
-				tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openscreen-native-gpu-export-"));
+				tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "videtio-native-gpu-export-"));
 				const assets = await prepareStaticAssets(dependencies.getFfmpegBinary(), tempDir, payload);
 				logNativeNvencMainPerf({
 					startupId,

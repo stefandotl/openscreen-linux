@@ -41,7 +41,7 @@ describe("custom Google Fonts persistence", () => {
 
 	it("ignores malformed persisted entries without discarding valid fonts", () => {
 		localStorage.setItem(
-			"openscreen_custom_fonts",
+			"videtio_custom_fonts",
 			JSON.stringify([
 				{
 					id: "valid-1",
