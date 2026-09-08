@@ -70,7 +70,7 @@
         "target": "dmg"
       }
     ],
-    "icon": "icons/icons/mac/icon.icns",
+    "icon": "public/videtio.png",
     "artifactName": "${productName}-Mac-${arch}-${version}-Installer.${ext}",
     "extraResources": [
       {
@@ -109,7 +109,7 @@
     "target": [
       "nsis"
     ],
-    "icon": "icons/icons/win/icon.ico",
+    "icon": "public/videtio.png",
     "extraResources": [
       {
         "from": "electron/native/bin",
