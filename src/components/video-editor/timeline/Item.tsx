@@ -31,6 +31,13 @@ const ZOOM_LABELS: Record<number, string> = {
 	6: "5×",
 };
 
+// dnd-timeline interprets half of resizeHandleWidth as the hit area on each edge.
+// Keep that hit area aligned with the visible caps so grabbing immediately beside a
+// cap (especially at the clipped viewport edge) starts a move instead of a resize.
+export const TIMELINE_ITEM_EDGE_WIDTH_PX = 8;
+export const TIMELINE_ITEM_RESIZE_HANDLE_WIDTH_PX = TIMELINE_ITEM_EDGE_WIDTH_PX * 2;
+export const TIMELINE_ITEM_MIN_WIDTH_PX = 24;
+
 function formatMs(ms: number): string {
 	const totalSeconds = ms / 1000;
 	const minutes = Math.floor(totalSeconds / 60);
@@ -61,6 +68,7 @@ export default function Item({
 		span,
 		data: { rowId },
 		disabled,
+		resizeHandleWidth: TIMELINE_ITEM_RESIZE_HANDLE_WIDTH_PX,
 	});
 
 	const isZoom = variant === "zoom";
@@ -85,10 +93,9 @@ export default function Item({
 		[span.start, span.end],
 	);
 
-	// Minimum clickable width on the outer wrapper. Kept small so items keep their real
-	// positions; zoom in to interact with sub-second items precisely.
-	const MIN_ITEM_PX = 6;
-	const safeItemStyle = { ...itemStyle, minWidth: MIN_ITEM_PX };
+	// The outer hit box must match the already-visible minimum-width content. Otherwise
+	// short items can have overlapping left/right resize zones and no draggable center.
+	const safeItemStyle = { ...itemStyle, minWidth: TIMELINE_ITEM_MIN_WIDTH_PX };
 
 	return (
 		<div
@@ -99,7 +106,7 @@ export default function Item({
 			onPointerDownCapture={() => onSelect?.()}
 			className={cn("group", disabled && "cursor-default")}
 		>
-			<div style={{ ...itemContentStyle, minWidth: 24 }}>
+			<div style={{ ...itemContentStyle, minWidth: TIMELINE_ITEM_MIN_WIDTH_PX }}>
 				<div
 					className={cn(
 						glassClass,
@@ -107,7 +114,7 @@ export default function Item({
 						disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
 						isSelected && glassStyles.selected,
 					)}
-					style={{ height: 30, color: "#fff", minWidth: 24 }}
+					style={{ height: 30, color: "#fff", minWidth: TIMELINE_ITEM_MIN_WIDTH_PX }}
 					onClick={(event) => {
 						event.stopPropagation();
 						onSelect?.();
@@ -120,7 +127,7 @@ export default function Item({
 								style={{
 									cursor: "col-resize",
 									pointerEvents: "auto",
-									width: 8,
+									width: TIMELINE_ITEM_EDGE_WIDTH_PX,
 									opacity: 0.9,
 									background: endCapColor,
 								}}
@@ -131,7 +138,7 @@ export default function Item({
 								style={{
 									cursor: "col-resize",
 									pointerEvents: "auto",
-									width: 8,
+									width: TIMELINE_ITEM_EDGE_WIDTH_PX,
 									opacity: 0.9,
 									background: endCapColor,
 								}}

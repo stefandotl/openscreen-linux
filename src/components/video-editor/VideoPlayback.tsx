@@ -83,6 +83,10 @@ import { clamp01 } from "./videoPlayback/mathUtils";
 import { seekMediaElement } from "./videoPlayback/mediaElementPlayback";
 import { synchronizeMediaFollowerPlayback } from "./videoPlayback/mediaElementSync";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
+import {
+	getPreviewRendererResolution,
+	shouldRenderScreenPreview,
+} from "./videoPlayback/previewPerformance";
 import { createVideoEventHandlers } from "./videoPlayback/videoEventHandlers";
 import { findDominantRegion } from "./videoPlayback/zoomRegionUtils";
 import { createZoomSpringState, resetZoomSpring, stepZoomSpring } from "./videoPlayback/zoomSpring";
@@ -299,6 +303,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const webcamPositionRef = useRef(webcamPosition);
 		const containerRef = useRef<HTMLDivElement | null>(null);
 		const appRef = useRef<Application | null>(null);
+		const videoSourceRef = useRef<VideoSource | null>(null);
 		const videoSpriteRef = useRef<Sprite | null>(null);
 		const videoContainerRef = useRef<Container | null>(null);
 		const cameraContainerRef = useRef<Container | null>(null);
@@ -550,6 +555,19 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				!cameraContainer
 			) {
 				return;
+			}
+
+			const previewResolution = getPreviewRendererResolution(
+				container.clientWidth,
+				container.clientHeight,
+				window.devicePixelRatio || 1,
+				isScrubbingRef.current,
+			);
+			if (Math.abs(app.renderer.resolution - previewResolution) > 0.001) {
+				app.renderer.resolution = previewResolution;
+				if (blurFilterRef.current) {
+					blurFilterRef.current.resolution = previewResolution;
+				}
 			}
 
 			// Lock video dimensions on first layout to prevent resize issues
@@ -1005,19 +1023,27 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			};
 		}, [pixiReady, videoReady, layoutVideoContent]);
 
-		// Drop canvas resolution to 1.0 while scrubbing and restore native DPR on play/idle.
-		// Only on scrub-state transitions; mutating renderer.resolution per-frame thrashes
-		// texture uploads.
+		// Reduce canvas resolution while scrubbing and restore the adaptive preview
+		// resolution on play/idle. Only change on scrub-state transitions; mutating
+		// renderer.resolution per-frame would thrash texture uploads.
 		useEffect(() => {
 			if (!pixiReady) return;
 			const app = appRef.current;
 			const container = containerRef.current;
 			if (!app || !container) return;
 
-			const targetResolution = isScrubbing ? 1 : window.devicePixelRatio || 1;
+			const targetResolution = getPreviewRendererResolution(
+				container.clientWidth,
+				container.clientHeight,
+				window.devicePixelRatio || 1,
+				isScrubbing,
+			);
 			if (app.renderer.resolution === targetResolution) return;
 
 			app.renderer.resolution = targetResolution;
+			if (blurFilterRef.current) {
+				blurFilterRef.current.resolution = targetResolution;
+			}
 			app.renderer.resize(container.clientWidth, container.clientHeight);
 			layoutVideoContentRef.current?.();
 		}, [isScrubbing, pixiReady]);
@@ -1089,7 +1115,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					height: container.clientHeight,
 					backgroundAlpha: 0,
 					antialias: true,
-					resolution: window.devicePixelRatio || 1,
+					resolution: getPreviewRendererResolution(
+						container.clientWidth,
+						container.clientHeight,
+						window.devicePixelRatio || 1,
+					),
 					autoDensity: true,
 				});
 
@@ -1152,6 +1182,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				cameraContainerRef.current = null;
 				videoContainerRef.current = null;
 				videoSpriteRef.current = null;
+				videoSourceRef.current = null;
 			};
 		}, []);
 
@@ -1246,13 +1277,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			if (!video || !app || !videoContainer) return;
 			if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-			const source = VideoSource.from(video);
+			const source = VideoSource.from(video) as VideoSource;
 			if ("autoPlay" in source) {
-				(source as { autoPlay?: boolean }).autoPlay = false;
+				(source as unknown as { autoPlay?: boolean }).autoPlay = false;
 			}
-			if ("autoUpdate" in source) {
-				(source as { autoUpdate?: boolean }).autoUpdate = true;
-			}
+			source.autoUpdate = true;
+			videoSourceRef.current = source;
 			const videoTexture = Texture.from(source);
 
 			const videoSprite = new Sprite(videoTexture);
@@ -1364,8 +1394,28 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				videoTexture.destroy(true);
 
 				videoSpriteRef.current = null;
+				videoSourceRef.current = null;
 			};
 		}, [pixiReady, videoReady]);
+
+		useEffect(() => {
+			if (!pixiReady || !videoReady) return;
+
+			const app = appRef.current;
+			const source = videoSourceRef.current;
+			if (!app || !source) return;
+
+			const shouldRenderScreen = shouldRenderScreenPreview(webcamLayoutPreset);
+			source.autoUpdate = shouldRenderScreen;
+			if (shouldRenderScreen) {
+				source.update();
+				app.start();
+			} else {
+				// In webcam-only mode the screen canvas is fully transparent. Stop both its
+				// texture uploads and its render ticker instead of compositing invisible frames.
+				app.stop();
+			}
+		}, [pixiReady, videoReady, webcamLayoutPreset]);
 
 		useEffect(() => {
 			if (pixiReady && videoReady) onReady?.();
@@ -1933,6 +1983,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 		useEffect(() => {
 			if (!webcamVideoPath) return;
+			// Normal playback is synchronized by the primary video's frame callback below.
+			// Keep this state-driven path for paused seeks, scrubbing and setting changes.
+			if (isPlaying && !isScrubbing) return;
 			syncWebcamPlayback({
 				masterTimeSeconds: currentTime,
 				playing: isPlaying,

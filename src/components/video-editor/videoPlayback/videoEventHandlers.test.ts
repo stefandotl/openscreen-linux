@@ -9,6 +9,7 @@ function createHandlers(
 		isPlaying?: boolean;
 		onTerminalTrim?: () => boolean | void;
 		trimRegions?: Array<{ id: string; startMs: number; endMs: number }>;
+		onScrubChange?: (scrubbing: boolean) => void;
 	} = {},
 ) {
 	const video = document.createElement("video");
@@ -26,6 +27,9 @@ function createHandlers(
 		paused = false;
 		return Promise.resolve();
 	});
+	const onTimeUpdate = vi.fn();
+	const isScrubbingRef = { current: false };
+	const scrubEndTimerRef = { current: null as number | null };
 	const handlers = createVideoEventHandlers({
 		video,
 		isSeekingRef: { current: false },
@@ -34,16 +38,21 @@ function createHandlers(
 		currentTimeRef: { current: 0 },
 		timeUpdateAnimationRef: { current: null },
 		onPlayStateChange: vi.fn(),
-		onTimeUpdate: vi.fn(),
+		onTimeUpdate,
 		onTerminalTrim: options.onTerminalTrim,
 		trimRegionsRef: { current: options.trimRegions ?? [] },
 		speedRegionsRef: { current: [] },
+		isScrubbingRef,
+		scrubEndTimerRef,
+		onScrubChange: options.onScrubChange,
 	});
 	return {
 		handlers,
 		video,
 		pause,
 		play,
+		onTimeUpdate,
+		isScrubbingRef,
 		setPaused: (value: boolean) => {
 			paused = value;
 		},
@@ -226,6 +235,53 @@ describe("video seeking playback intent", () => {
 		handlers.handlePause();
 		handlers.handleSeeked();
 		expect(play).toHaveBeenCalledOnce();
+		requestFrame.mockRestore();
+	});
+
+	it("limits React-facing playback updates to 30 fps while keeping the media clock live", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const { handlers, onTimeUpdate, video } = createHandlers(true);
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+		video.currentTime = 0.01;
+		(frameCallback as FrameRequestCallback)(10);
+		video.currentTime = 0.034;
+		(frameCallback as FrameRequestCallback)(34);
+
+		expect(onTimeUpdate).toHaveBeenCalledTimes(2);
+		expect(onTimeUpdate).toHaveBeenLastCalledWith(0.034);
+		requestFrame.mockRestore();
+	});
+
+	it("does not treat an automatic trim jump as user scrubbing", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const onScrubChange = vi.fn();
+		const { handlers, isScrubbingRef } = createHandlers(true, {
+			currentTime: 2,
+			trimRegions: [{ id: "automatic", startMs: 2000, endMs: 4000 }],
+			onScrubChange,
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+		handlers.handleSeeking();
+		handlers.handleSeeked();
+
+		expect(isScrubbingRef.current).toBe(false);
+		expect(onScrubChange).not.toHaveBeenCalled();
 		requestFrame.mockRestore();
 	});
 });

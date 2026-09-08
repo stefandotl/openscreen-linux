@@ -71,3 +71,27 @@ describe("SettingsPanel webcam A/V sync", () => {
 		expect(onWebcamVideoOffsetCommit).toHaveBeenCalledWith(210);
 	});
 });
+
+describe("SettingsPanel mode navigation", () => {
+	it("clears a selected auto-trim before opening the webcam layout", () => {
+		const onPanelModeOpen = vi.fn();
+		render(
+			<I18nProvider>
+				<TooltipProvider>
+					<SettingsPanel
+						selected=""
+						onWallpaperChange={vi.fn()}
+						aspectRatio="16:9"
+						hasWebcam
+						selectedTrimId="trim-from-auto-detection"
+						onPanelModeOpen={onPanelModeOpen}
+					/>
+				</TooltipProvider>
+			</I18nProvider>,
+		);
+
+		fireEvent.click(screen.getByTitle("Layout"));
+
+		expect(onPanelModeOpen).toHaveBeenCalledOnce();
+	});
+});

@@ -713,10 +713,12 @@ function Timeline({
 	}, []);
 
 	const handleTimelineWheel = useCallback(
-		(event: React.WheelEvent<HTMLDivElement>) => {
+		(event: WheelEvent) => {
 			if (!onRangeChange || event.ctrlKey || event.metaKey || videoDurationMs <= 0) {
 				return;
 			}
+			const timelineElement = localTimelineRef.current;
+			if (!timelineElement) return;
 
 			const visibleMs = range.end - range.start;
 			if (visibleMs <= 0 || videoDurationMs <= visibleMs) {
@@ -731,7 +733,7 @@ function Timeline({
 
 			event.preventDefault();
 
-			const pageWidthPx = Math.max(event.currentTarget.clientWidth - sidebarWidth, 1);
+			const pageWidthPx = Math.max(timelineElement.clientWidth - sidebarWidth, 1);
 			const normalizedDeltaPx = normalizeWheelDelta(dominantDelta, event.deltaMode, pageWidthPx);
 			const shiftMs = pixelsToValue(normalizedDeltaPx);
 
@@ -752,6 +754,17 @@ function Timeline({
 		[onRangeChange, videoDurationMs, range.end, range.start, sidebarWidth, pixelsToValue],
 	);
 
+	useEffect(() => {
+		const timelineElement = localTimelineRef.current;
+		if (!timelineElement) return;
+
+		// React delegates wheel events through a passive listener in Chromium, where
+		// preventDefault() is ignored. A native non-passive listener keeps horizontal
+		// timeline navigation contained and avoids repeated console warnings.
+		timelineElement.addEventListener("wheel", handleTimelineWheel, { passive: false });
+		return () => timelineElement.removeEventListener("wheel", handleTimelineWheel);
+	}, [handleTimelineWheel]);
+
 	const zoomItems = items.filter((item) => item.rowId === ZOOM_ROW_ID);
 	const trimItems = items.filter((item) => item.rowId === TRIM_ROW_ID);
 	const annotationItems = items.filter((item) => item.rowId === ANNOTATION_ROW_ID);
@@ -771,7 +784,6 @@ function Timeline({
 			onPointerCancel={stopTimelineScrub}
 			onPointerLeave={handleTimelinePointerLeave}
 			onLostPointerCapture={handleTimelineLostPointerCapture}
-			onWheel={handleTimelineWheel}
 		>
 			<div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px)] bg-[length:24px_100%] pointer-events-none" />
 			<TimelineAxis videoDurationMs={videoDurationMs} currentTimeMs={currentTimeMs} />

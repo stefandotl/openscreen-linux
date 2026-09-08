@@ -2328,6 +2328,14 @@ export default function VideoEditor() {
 		}
 	}, []);
 
+	const clearInspectorSelection = useCallback(() => {
+		setSelectedZoomId(null);
+		setSelectedTrimId(null);
+		setSelectedSpeedId(null);
+		setSelectedAnnotationId(null);
+		setSelectedBlurId(null);
+	}, []);
+
 	const handleZoomAdded = useCallback(
 		(span: Span) => {
 			const id = `zoom-${nextZoomIdRef.current++}`;
@@ -4681,10 +4689,9 @@ export default function VideoEditor() {
 												: getAspectRatioValue(aspectRatio),
 										)}
 										onExport={handleOpenExportDialog}
+										onPanelModeOpen={clearInspectorSelection}
 										onExportPanelOpen={() => {
-											setSelectedZoomId(null);
-											setSelectedTrimId(null);
-											setSelectedSpeedId(null);
+											clearInspectorSelection();
 										}}
 										selectedAnnotationId={selectedAnnotationId}
 										annotationRegions={annotationOnlyRegions}

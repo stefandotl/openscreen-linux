@@ -305,6 +305,7 @@ interface SettingsPanelProps {
 	gifOutputDimensions?: { width: number; height: number };
 	onExport?: () => void;
 	onExportPanelOpen?: () => void;
+	onPanelModeOpen?: () => void;
 	unsavedExport?: {
 		arrayBuffer: ArrayBuffer;
 		fileName: string;
@@ -456,6 +457,7 @@ export function SettingsPanel({
 	gifOutputDimensions = DEFAULT_GIF_SETTINGS.outputDimensions,
 	onExport,
 	onExportPanelOpen,
+	onPanelModeOpen,
 	unsavedExport,
 	onSaveUnsavedExport,
 	selectedAnnotationId,
@@ -846,6 +848,7 @@ export function SettingsPanel({
 								disabled={mode.disabled}
 								onClick={() => {
 									if (mode.id === "layout" && mode.disabled) return;
+									onPanelModeOpen?.();
 									setActivePanelMode(mode.id);
 								}}
 								className={cn(

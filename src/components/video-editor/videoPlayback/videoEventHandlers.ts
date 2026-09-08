@@ -4,6 +4,7 @@ import type { SpeedRegion, TrimRegion } from "../types";
 // Keep "scrub mode" on for a brief tail after `seeked`: rapid drag-scrubbing fires
 // `seeking`/`seeked` dozens of times a second and toggling effects each time would flicker.
 const SCRUB_END_DEBOUNCE_MS = 150;
+const PLAYBACK_UI_UPDATE_INTERVAL_MS = 1000 / 30;
 
 interface VideoEventHandlersParams {
 	video: HTMLVideoElement;
@@ -43,6 +44,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	} = params;
 	let pendingTrimSkipEndSeconds: number | null = null;
 	let continuingPastTerminalTrim = false;
+	let lastPlaybackUiUpdateMs = Number.NEGATIVE_INFINITY;
 
 	const clearScrubEndTimer = () => {
 		if (scrubEndTimerRef && scrubEndTimerRef.current !== null) {
@@ -51,8 +53,17 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		}
 	};
 
-	const emitTime = (timeValue: number) => {
+	const emitTime = (timeValue: number, frameTimestampMs?: number) => {
 		currentTimeRef.current = timeValue * 1000;
+		if (
+			frameTimestampMs !== undefined &&
+			frameTimestampMs - lastPlaybackUiUpdateMs < PLAYBACK_UI_UPDATE_INTERVAL_MS
+		) {
+			return;
+		}
+		if (frameTimestampMs !== undefined) {
+			lastPlaybackUiUpdateMs = frameTimestampMs;
+		}
 		onTimeUpdate(timeValue);
 	};
 
@@ -120,7 +131,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		});
 	};
 
-	function updateTime() {
+	function updateTime(frameTimestampMs: number) {
 		if (!video) return;
 
 		const currentTimeMs = video.currentTime * 1000;
@@ -143,7 +154,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			continuingPastTerminalTrim = false;
 			const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
 			video.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
-			emitTime(video.currentTime);
+			emitTime(video.currentTime, frameTimestampMs);
 		}
 
 		if (!video.paused && !video.ended) {
@@ -200,8 +211,9 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	const handleSeeked = () => {
 		isSeekingRef.current = false;
 		let issuedFollowupSeek = false;
+		const isAutomaticTrimSeek = pendingTrimSkipEndSeconds !== null;
 
-		if (isScrubbingRef && scrubEndTimerRef) {
+		if (!isAutomaticTrimSeek && isScrubbingRef && scrubEndTimerRef) {
 			clearScrubEndTimer();
 			scrubEndTimerRef.current = window.setTimeout(() => {
 				isScrubbingRef.current = false;
@@ -254,7 +266,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	const handleSeeking = () => {
 		isSeekingRef.current = true;
 
-		if (isScrubbingRef) {
+		if (isScrubbingRef && pendingTrimSkipEndSeconds === null) {
 			clearScrubEndTimer();
 			if (!isScrubbingRef.current) {
 				isScrubbingRef.current = true;
