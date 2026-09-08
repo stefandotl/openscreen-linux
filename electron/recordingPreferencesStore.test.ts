@@ -70,6 +70,16 @@ describe("RecordingPreferencesStore", () => {
 		expect(updated.captureSource?.id).toBe("screen:1:0");
 	});
 
+	it("keeps a saved webcam A/V sync value after the store is reopened", async () => {
+		const { filePath, store } = await createStore();
+		await store.initialize({ webcamVideoOffsetMs: 200 });
+		await store.update({ webcamVideoOffsetMs: 280 });
+
+		const reloaded = await new RecordingPreferencesStore(filePath).initialize({});
+
+		expect(reloaded.preferences.webcamVideoOffsetMs).toBe(280);
+	});
+
 	it("keeps the first initialized preferences when initialization races", async () => {
 		const { store } = await createStore();
 		const [first, second] = await Promise.all([

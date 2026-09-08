@@ -500,13 +500,18 @@ export default function VideoEditor() {
 		setProjectControllerState("paused");
 	}, [setProjectControllerState]);
 
-	const commitWebcamVideoOffset = useCallback(() => {
-		commitState();
-		saveRecordingPreferences({ webcamVideoOffsetMs });
-		void window.electronAPI.updateRecordingPreferences({ webcamVideoOffsetMs }).catch((error) => {
-			console.error("Failed to persist webcam A/V sync calibration:", error);
-		});
-	}, [commitState, webcamVideoOffsetMs]);
+	const commitWebcamVideoOffset = useCallback(
+		(offsetMs: number) => {
+			commitState();
+			saveRecordingPreferences({ webcamVideoOffsetMs: offsetMs });
+			void window.electronAPI
+				.updateRecordingPreferences({ webcamVideoOffsetMs: offsetMs })
+				.catch((error) => {
+					console.error("Failed to persist webcam A/V sync calibration:", error);
+				});
+		},
+		[commitState],
+	);
 
 	useEffect(() => {
 		scenesRef.current = scenes;

@@ -341,7 +341,7 @@ interface SettingsPanelProps {
 	onWebcamRotationChange?: (rotation: WebcamRotation) => void;
 	webcamVideoOffsetMs?: number;
 	onWebcamVideoOffsetChange?: (offsetMs: number) => void;
-	onWebcamVideoOffsetCommit?: () => void;
+	onWebcamVideoOffsetCommit?: (offsetMs: number) => void;
 	webcamReactiveZoom?: boolean;
 	onWebcamReactiveZoomChange?: (reactive: boolean) => void;
 	webcamSizePreset?: WebcamSizePreset;
@@ -376,6 +376,10 @@ const ZOOM_DEPTH_OPTIONS: Array<{ depth: ZoomDepth; label: string }> = [
 	{ depth: 5, label: "3.5×" },
 	{ depth: 6, label: "5×" },
 ];
+
+function formatWebcamVideoOffset(offsetMs: number) {
+	return `${offsetMs > 0 ? "+" : ""}${offsetMs} ms`;
+}
 
 type SettingsPanelMode = "background" | "effects" | "layout" | "cursor" | "export" | "timeline";
 
@@ -509,6 +513,7 @@ export function SettingsPanel({
 	showCursorSettings = true,
 }: SettingsPanelProps) {
 	const t = useScopedT("settings");
+	const [isWebcamSyncOpen, setIsWebcamSyncOpen] = useState(false);
 	const [activePanelMode, setActivePanelMode] = useState<SettingsPanelMode>("background");
 	const sourceDimensions = formatSourceDimensions(videoElement, cropRegion);
 	// Resolved URLs are for DOM rendering only. We persist the canonical
@@ -1354,29 +1359,49 @@ export function SettingsPanel({
 											</div>
 										)}
 										{webcamLayoutPreset !== "no-webcam" && (
-											<div className="mt-2 p-2 rounded-lg editor-control-surface">
-												<div className="mb-1.5 flex items-center justify-between gap-2">
-													<div className="text-[10px] font-medium text-slate-300">
-														{t("layout.webcamSync")}
-													</div>
-													<div className="text-[10px] font-medium tabular-nums text-slate-400">
-														{webcamVideoOffsetMs > 0 ? "+" : ""}
-														{webcamVideoOffsetMs} ms
-													</div>
-												</div>
-												<Slider
-													value={[webcamVideoOffsetMs]}
-													onValueChange={(values) => onWebcamVideoOffsetChange?.(values[0])}
-													onValueCommit={onWebcamVideoOffsetCommit}
-													min={WEBCAM_VIDEO_OFFSET_MIN_MS}
-													max={WEBCAM_VIDEO_OFFSET_MAX_MS}
-													step={10}
-													className="w-full"
-												/>
-												<p className="mt-1.5 text-[9px] leading-snug text-slate-500">
-													{t("layout.webcamSyncDescription")}
-												</p>
-											</div>
+											<Accordion
+												type="single"
+												collapsible
+												value={isWebcamSyncOpen ? "webcam-sync" : ""}
+												onValueChange={(value) => setIsWebcamSyncOpen(value === "webcam-sync")}
+												className="mt-2"
+											>
+												<AccordionItem
+													value="webcam-sync"
+													className="rounded-lg border-none editor-control-surface"
+												>
+													<AccordionTrigger className="px-2 py-2 hover:no-underline">
+														<div className="flex min-w-0 flex-1 items-center justify-between gap-2 pr-2">
+															<div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-300">
+																{isWebcamSyncOpen ? (
+																	<Unlock className="h-3 w-3 text-[#34B27B]" aria-hidden="true" />
+																) : (
+																	<Lock className="h-3 w-3 text-slate-500" aria-hidden="true" />
+																)}
+																{t("layout.webcamSync")}
+															</div>
+															<span className="text-[10px] font-medium tabular-nums text-slate-400">
+																{formatWebcamVideoOffset(webcamVideoOffsetMs)}
+															</span>
+														</div>
+													</AccordionTrigger>
+													<AccordionContent className="px-2 pb-2 pt-2">
+														<Slider
+															value={[webcamVideoOffsetMs]}
+															onValueChange={(values) => onWebcamVideoOffsetChange?.(values[0])}
+															onValueCommit={(values) => onWebcamVideoOffsetCommit?.(values[0])}
+															min={WEBCAM_VIDEO_OFFSET_MIN_MS}
+															max={WEBCAM_VIDEO_OFFSET_MAX_MS}
+															step={10}
+															aria-label={t("layout.webcamSync")}
+															className="w-full"
+														/>
+														<p className="mt-1.5 text-[9px] leading-snug text-slate-500">
+															{t("layout.webcamSyncDescription")}
+														</p>
+													</AccordionContent>
+												</AccordionItem>
+											</Accordion>
 										)}
 										{webcamLayoutPreset === "picture-in-picture" && (
 											<div className="mt-2 flex items-center justify-between p-2 rounded-lg editor-control-surface">
