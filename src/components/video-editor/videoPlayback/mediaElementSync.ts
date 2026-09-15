@@ -110,7 +110,8 @@ export function synchronizeMediaFollowerPlayback(
 	},
 ): MediaPlaybackSyncResult {
 	const position = getOffsetMediaPosition(master.currentTime, offsetMs, follower.duration);
-	const shouldHoldFrame = !options.playing || options.scrubbing || position.boundary !== null;
+	const shouldHoldFrame =
+		!options.playing || options.scrubbing || master.seeking || position.boundary !== null;
 
 	if (shouldHoldFrame) {
 		if (!follower.paused) {

@@ -1442,9 +1442,24 @@ export default function TimelineEditor({
 	// Spans that participate in overlap resolution (clampToNeighbours). Annotation
 	// and blur are excluded since they may overlap and shouldn't constrain a drag.
 	const allRegionSpans = useMemo(() => {
-		const zooms = zoomRegions.map((r) => ({ id: r.id, start: r.startMs, end: r.endMs }));
-		const trims = trimRegions.map((r) => ({ id: r.id, start: r.startMs, end: r.endMs }));
-		const speeds = speedRegions.map((r) => ({ id: r.id, start: r.startMs, end: r.endMs }));
+		const zooms = zoomRegions.map((r) => ({
+			id: r.id,
+			start: r.startMs,
+			end: r.endMs,
+			rowId: ZOOM_ROW_ID,
+		}));
+		const trims = trimRegions.map((r) => ({
+			id: r.id,
+			start: r.startMs,
+			end: r.endMs,
+			rowId: TRIM_ROW_ID,
+		}));
+		const speeds = speedRegions.map((r) => ({
+			id: r.id,
+			start: r.startMs,
+			end: r.endMs,
+			rowId: SPEED_ROW_ID,
+		}));
 		return [...zooms, ...trims, ...speeds];
 	}, [zoomRegions, trimRegions, speedRegions]);
 

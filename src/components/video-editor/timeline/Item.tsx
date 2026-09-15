@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { useItem } from "dnd-timeline";
+import { useItem, useTimelineContext } from "dnd-timeline";
 import { Gauge, LockKeyhole, MessageSquare, MousePointer2, Scissors, ZoomIn } from "lucide-react";
 import { useMemo } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
@@ -63,6 +63,7 @@ export default function Item({
 	children,
 }: ItemProps) {
 	const t = useScopedT("timeline");
+	const { range } = useTimelineContext();
 	const { setNodeRef, attributes, listeners, itemStyle, itemContentStyle } = useItem({
 		id,
 		span,
@@ -122,28 +123,32 @@ export default function Item({
 				>
 					{!disabled && (
 						<>
-							<div
-								className={cn(glassStyles.zoomEndCap, glassStyles.left)}
-								style={{
-									cursor: "col-resize",
-									pointerEvents: "auto",
-									width: TIMELINE_ITEM_EDGE_WIDTH_PX,
-									opacity: 0.9,
-									background: endCapColor,
-								}}
-								title="Resize left"
-							/>
-							<div
-								className={cn(glassStyles.zoomEndCap, glassStyles.right)}
-								style={{
-									cursor: "col-resize",
-									pointerEvents: "auto",
-									width: TIMELINE_ITEM_EDGE_WIDTH_PX,
-									opacity: 0.9,
-									background: endCapColor,
-								}}
-								title="Resize right"
-							/>
+							{span.start >= range.start && (
+								<div
+									className={cn(glassStyles.zoomEndCap, glassStyles.left)}
+									style={{
+										cursor: "col-resize",
+										pointerEvents: "auto",
+										width: TIMELINE_ITEM_EDGE_WIDTH_PX,
+										opacity: 0.9,
+										background: endCapColor,
+									}}
+									title="Resize left"
+								/>
+							)}
+							{span.end <= range.end && (
+								<div
+									className={cn(glassStyles.zoomEndCap, glassStyles.right)}
+									style={{
+										cursor: "col-resize",
+										pointerEvents: "auto",
+										width: TIMELINE_ITEM_EDGE_WIDTH_PX,
+										opacity: 0.9,
+										background: endCapColor,
+									}}
+									title="Resize right"
+								/>
+							)}
 						</>
 					)}
 					{/* Content */}

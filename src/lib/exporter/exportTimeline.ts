@@ -21,12 +21,13 @@ function computeKeepSegments(
 	let cursor = 0;
 
 	for (const trim of sorted) {
-		const trimStart = trim.startMs / 1000;
-		const trimEnd = trim.endMs / 1000;
+		const trimStart = Math.min(totalDuration, Math.max(0, trim.startMs / 1000));
+		const trimEnd = Math.min(totalDuration, Math.max(0, trim.endMs / 1000));
+		if (trimEnd <= trimStart) continue;
 		if (cursor < trimStart) {
 			segments.push({ startSec: cursor, endSec: trimStart });
 		}
-		cursor = trimEnd;
+		cursor = Math.max(cursor, trimEnd);
 	}
 
 	if (cursor < totalDuration) {

@@ -679,6 +679,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						currentTime: masterTimeSeconds,
 						duration: primaryVideo.duration,
 						playbackRate: primaryVideo.playbackRate,
+						seeking: primaryVideo.seeking,
 					},
 					webcamVideo,
 					offsetMs,
@@ -1968,6 +1969,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				}
 			};
 			const handleSeeked = () => syncWebcamPlayback();
+			const primaryVideo = videoRef.current;
+			primaryVideo?.addEventListener("seeking", handleSeeked);
+			primaryVideo?.addEventListener("seeked", handleSeeked);
 			const handleError = () => onErrorRef.current("Failed to load webcam video");
 
 			webcamVideo.addEventListener("loadedmetadata", handleLoadedMetadata);
@@ -1975,6 +1979,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			webcamVideo.addEventListener("error", handleError);
 			handleLoadedMetadata();
 			return () => {
+				primaryVideo?.removeEventListener("seeking", handleSeeked);
+				primaryVideo?.removeEventListener("seeked", handleSeeked);
 				webcamVideo.removeEventListener("loadedmetadata", handleLoadedMetadata);
 				webcamVideo.removeEventListener("seeked", handleSeeked);
 				webcamVideo.removeEventListener("error", handleError);

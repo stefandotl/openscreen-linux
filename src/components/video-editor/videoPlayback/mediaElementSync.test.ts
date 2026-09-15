@@ -161,4 +161,17 @@ describe("mediaElementSync", () => {
 		expect(getOffsetMediaTime(9.95, 200, 10)).toBeCloseTo(9.999);
 		expect(getOffsetMediaTime(0.05, -200, 10)).toBe(0);
 	});
+	it("holds the webcam clock while the primary seeks across a silence cut", () => {
+		const master = { ...mediaClock(4), seeking: true };
+		const { follower, pause, play } = playbackFollower(2);
+		expect(
+			synchronizeMediaFollowerPlayback(master, follower, 0, { playing: true, scrubbing: false }),
+		).toBe("held");
+		expect(pause).toHaveBeenCalledOnce();
+		expect(follower.currentTime).toBe(4);
+		expect(play).not.toHaveBeenCalled();
+		master.seeking = false;
+		synchronizeMediaFollowerPlayback(master, follower, 0, { playing: true, scrubbing: false });
+		expect(play).toHaveBeenCalledOnce();
+	});
 });

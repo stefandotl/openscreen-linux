@@ -22,7 +22,7 @@ interface TimelineWrapperProps {
 	gridSizeMs?: number;
 	onItemSpanChange: (id: string, span: Span) => void;
 	// Hard overlap constraints (zoom/trim/speed), used by clampToNeighbours and as snap targets.
-	allRegionSpans?: { id: string; start: number; end: number }[];
+	allRegionSpans?: { id: string; start: number; end: number; rowId?: string }[];
 	// Snap targets only (annotation/blur); never push other items during overlap resolution.
 	softSnapSpans?: { id: string; start: number; end: number }[];
 	currentTimeMs?: number;
@@ -163,7 +163,10 @@ export default function TimelineWrapper({
 	// When a span overlaps neighbours, clamp it to the nearest boundary
 	const clampToNeighbours = useCallback(
 		(span: Span, activeItemId: string): Span => {
-			const siblings = allRegionSpans.filter((r) => r.id !== activeItemId);
+			const active = allRegionSpans.find((r) => r.id === activeItemId);
+			const siblings = allRegionSpans.filter(
+				(r) => r.id !== activeItemId && r.rowId === active?.rowId,
+			);
 			let { start, end } = span;
 
 			for (const r of siblings) {
@@ -292,22 +295,50 @@ export default function TimelineWrapper({
 		],
 	);
 
-	// dnd-timeline's resize event doesn't expose direction, so compare the live span to
-	// the committed one (committed only updates on commit, so it's the pre-resize state).
-	// Returns null when deltas are equal (including the common clamped both-0 case): we
-	// can't tell which handle was grabbed, and guessing wrong snaps the other edge.
-	const inferResizeMode = useCallback(
-		(activeItemId: string, span: Span): "resize-left" | "resize-right" | null => {
-			const old =
-				allRegionSpans.find((r) => r.id === activeItemId) ??
-				softSnapSpans.find((r) => r.id === activeItemId);
-			if (!old) return "resize-right";
-			const startDelta = Math.abs(old.start - span.start);
-			const endDelta = Math.abs(old.end - span.end);
-			if (startDelta === endDelta) return null;
-			return startDelta > endDelta ? "resize-left" : "resize-right";
+	// Resize only the grabbed edge. A duration-preserving drag clamp would move the
+	// opposite edge when the pointer crosses the start/end of the recording.
+	const resolveResize = useCallback(
+		(event: ResizeMoveEvent) => {
+			const rawSpan = event.active.data.current.getSpanFromResizeEvent?.(event);
+			const original = event.active.data.current.span;
+			if (!rawSpan || !original) return null;
+			if (rawSpan[event.direction] === original[event.direction]) {
+				return { span: original, snapPoint: null };
+			}
+			const activeItemId = String(event.active.id);
+			const active = allRegionSpans.find((r) => r.id === activeItemId);
+			const minDuration = Math.min(minItemDurationMs, original.end - original.start);
+			let lowerBound = 0;
+			let upperBound = totalMs || Number.POSITIVE_INFINITY;
+			if (active) {
+				for (const sibling of allRegionSpans) {
+					if (sibling.id === activeItemId || sibling.rowId !== active.rowId) continue;
+					if (sibling.end <= original.start) lowerBound = Math.max(lowerBound, sibling.end);
+					if (sibling.start >= original.end) upperBound = Math.min(upperBound, sibling.start);
+				}
+			}
+			const clampEdge = (span: Span): Span =>
+				event.direction === "start"
+					? {
+							start: Math.max(lowerBound, Math.min(span.start, original.end - minDuration)),
+							end: original.end,
+						}
+					: {
+							start: original.start,
+							end: Math.min(upperBound, Math.max(span.end, original.start + minDuration)),
+						};
+			const snapped = snapSpanToTargets(
+				clampEdge(rawSpan),
+				activeItemId,
+				event.direction === "start" ? "resize-left" : "resize-right",
+			);
+			const span = clampEdge(snapped.span);
+			return {
+				span,
+				snapPoint: span[event.direction] === snapped.snapPoint ? snapped.snapPoint : null,
+			};
 		},
-		[allRegionSpans, softSnapSpans],
+		[allRegionSpans, minItemDurationMs, snapSpanToTargets, totalMs],
 	);
 
 	const updateSnapGuide = useCallback(
@@ -328,44 +359,12 @@ export default function TimelineWrapper({
 
 	const onResizeEnd = useCallback(
 		(event: ResizeEndEvent) => {
-			const updatedSpan = event.active.data.current.getSpanFromResizeEvent?.(event);
-			if (!updatedSpan) return;
-
-			const activeItemId = event.active.id as string;
-			let clampedSpan = clampSpanToBounds(updatedSpan);
-
-			const mode = inferResizeMode(activeItemId, clampedSpan);
-			if (mode !== null) {
-				clampedSpan = snapSpanToTargets(clampedSpan, activeItemId, mode).span;
-			}
-
-			const effectiveMinDuration =
-				totalMs > 0 ? Math.min(minItemDurationMs, totalMs) : minItemDurationMs;
-			if (clampedSpan.end - clampedSpan.start < effectiveMinDuration) {
-				return;
-			}
-
-			// Clamp to neighbour boundaries instead of rejecting
-			if (hasOverlap(clampedSpan, activeItemId)) {
-				clampedSpan = clampToNeighbours(clampedSpan, activeItemId);
-				// If still overlapping after clamping, fall back to original position
-				if (hasOverlap(clampedSpan, activeItemId)) {
-					return;
-				}
-			}
-
-			onItemSpanChange(activeItemId, clampedSpan);
+			const result = resolveResize(event);
+			const activeItemId = String(event.active.id);
+			if (!result || hasOverlap(result.span, activeItemId)) return;
+			onItemSpanChange(activeItemId, result.span);
 		},
-		[
-			clampSpanToBounds,
-			clampToNeighbours,
-			hasOverlap,
-			inferResizeMode,
-			minItemDurationMs,
-			onItemSpanChange,
-			snapSpanToTargets,
-			totalMs,
-		],
+		[hasOverlap, onItemSpanChange, resolveResize],
 	);
 
 	const onDragEnd = useCallback(
@@ -451,23 +450,17 @@ export default function TimelineWrapper({
 
 	const onResizeMove = useCallback(
 		(event: ResizeMoveEvent) => {
-			const rawSpan = event.active.data.current.getSpanFromResizeEvent?.(event);
-			if (!rawSpan) return;
-			const activeItemId = event.active.id as string;
-			const clamped = totalMs > 0 ? clampSpanToBounds(rawSpan) : rawSpan;
-			const mode = inferResizeMode(activeItemId, clamped);
-			const { span, snapPoint } =
-				mode !== null
-					? snapSpanToTargets(clamped, activeItemId, mode)
-					: { span: clamped, snapPoint: null };
+			const result = resolveResize(event);
+			if (!result) return;
+			const { span, snapPoint } = result;
 			updateSnapGuide(snapPoint);
 			const screenX =
 				event.activatorEvent && "clientX" in event.activatorEvent
-					? (event.activatorEvent as PointerEvent).clientX + (event.delta?.x ?? 0)
+					? (event.activatorEvent as PointerEvent).clientX
 					: undefined;
 			showTooltip(span, screenX);
 		},
-		[clampSpanToBounds, inferResizeMode, showTooltip, snapSpanToTargets, totalMs, updateSnapGuide],
+		[resolveResize, showTooltip, updateSnapGuide],
 	);
 
 	const hideTooltip = useCallback(() => showTooltip(null), [showTooltip]);

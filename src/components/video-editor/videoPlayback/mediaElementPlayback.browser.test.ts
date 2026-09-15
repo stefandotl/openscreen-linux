@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import sampleVideoUrl from "../../../../tests/fixtures/sample.webm?url";
 import { seekMediaElement } from "./mediaElementPlayback";
+import { synchronizeMediaFollowerPlayback } from "./mediaElementSync";
 import { createVideoEventHandlers } from "./videoEventHandlers";
 
 const mountedVideos: HTMLVideoElement[] = [];
@@ -45,6 +46,49 @@ describe("project playback media handoff", () => {
 });
 
 describe("trimmed playback", () => {
+	it("realigns webcam playback after repeated primary trim seeks", async () => {
+		const primary = await loadSampleVideo();
+		const webcam = await loadSampleVideo();
+		const sync = () =>
+			synchronizeMediaFollowerPlayback(primary, webcam, 0, { playing: true, scrubbing: false });
+		let frame: number | null = null;
+		let seekingEvents = 0;
+		const syncSeeking = () => {
+			seekingEvents++;
+			sync();
+			expect(webcam.paused).toBe(true);
+		};
+		const tick = () => {
+			sync();
+			frame = requestAnimationFrame(tick);
+		};
+		primary.addEventListener("seeking", syncSeeking);
+		primary.addEventListener("seeked", sync);
+		webcam.addEventListener("seeked", sync);
+		try {
+			await primary.play();
+			tick();
+			for (const fraction of [0.2, 0.4, 0.6]) {
+				await seekMediaElement(primary, primary.duration * fraction);
+				await expect
+					.poll(
+						() =>
+							!webcam.paused &&
+							!webcam.seeking &&
+							Math.abs(webcam.currentTime - primary.currentTime) < 0.075,
+						{ timeout: 3000 },
+					)
+					.toBe(true);
+			}
+			expect(seekingEvents).toBe(3);
+		} finally {
+			primary.removeEventListener("seeking", syncSeeking);
+			primary.removeEventListener("seeked", sync);
+			webcam.removeEventListener("seeked", sync);
+			if (frame !== null) cancelAnimationFrame(frame);
+		}
+	});
+
 	it("continues playing after skipping a trim in the middle of the video", async () => {
 		const video = await loadSampleVideo();
 		const trimStartSeconds = video.duration * 0.2;

@@ -120,6 +120,28 @@ describe("native GPU export plan", () => {
 		);
 	});
 
+	it("accepts silence trims inside scene exclusions and keeps audio-length frame timing", () => {
+		const config = createConfig({
+			trimRegions: [
+				{ id: "scene-start", startMs: 0, endMs: 4000, source: "scene-split" },
+				{ id: "silence-before", startMs: 1000, endMs: 2000 },
+				{ id: "silence-middle", startMs: 5417, endMs: 5763 },
+				{ id: "scene-end", startMs: 8000, endMs: 10000, source: "scene-split" },
+			],
+		});
+		const source = { ...videoInfo, duration: 10 };
+		expect(getNativeGpuExportBlockers(config, source)).toEqual([]);
+		const plan = createNativeGpuExportPlan(config, source);
+		expect(plan.frames).toHaveLength(110);
+		for (const [index, frame] of plan.frames.entries()) {
+			const sourceMs = frame.sourceTimestampMs;
+			expect(sourceMs).toBeGreaterThanOrEqual(4000);
+			expect(sourceMs).toBeLessThan(8000);
+			const removedMs = sourceMs >= 5763 ? 346 : 0;
+			expect(sourceMs - 4000 - removedMs).toBeCloseTo((index * 1000) / 30, 6);
+		}
+	});
+
 	it("accepts and orders sequential and overlapping annotations", () => {
 		const annotations = [
 			highlightedCaption({ id: "caption-1", startMs: 0, endMs: 300, zIndex: 5 }),
