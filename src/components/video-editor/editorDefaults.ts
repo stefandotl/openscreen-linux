@@ -17,6 +17,7 @@ import {
 	DEFAULT_CURSOR_MOTION_BLUR,
 	DEFAULT_CURSOR_SIZE,
 	DEFAULT_CURSOR_SMOOTHING,
+	DEFAULT_WEBCAM_FRAMING,
 	DEFAULT_WEBCAM_LAYOUT_PRESET,
 	DEFAULT_WEBCAM_MASK_SHAPE,
 	DEFAULT_WEBCAM_POSITION,
@@ -71,6 +72,7 @@ export const DEFAULT_WEBCAM_SETTINGS = {
 	sizePreset: DEFAULT_WEBCAM_SIZE_PRESET,
 	position: DEFAULT_WEBCAM_POSITION,
 	rotation: DEFAULT_WEBCAM_ROTATION,
+	framing: DEFAULT_WEBCAM_FRAMING,
 	videoOffsetMs: WEBCAM_VIDEO_OFFSET_DEFAULT_MS,
 } as const satisfies {
 	layoutPreset: WebcamLayoutPreset;
@@ -78,6 +80,7 @@ export const DEFAULT_WEBCAM_SETTINGS = {
 	sizePreset: WebcamSizePreset;
 	position: WebcamPosition | null;
 	rotation: WebcamRotation;
+	framing: import("./types").WebcamFraming;
 	videoOffsetMs: number;
 };
 

@@ -58,6 +58,7 @@ import type {
 } from "../../src/native/contracts";
 import { ParakeetModelManager } from "../captioning/parakeetModelManager";
 import { ParakeetTranscriptionService } from "../captioning/parakeetTranscription";
+import { CustomFontStore } from "../customFontStore";
 import { resolveFfmpegBinary } from "../ffmpegBinary";
 import { mainT } from "../i18n";
 import { resolveMacScreenAccessProbe } from "../macScreenAccess";
@@ -1570,6 +1571,12 @@ export function registerIpcHandlers(
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
+	const customFontStore = new CustomFontStore(
+		path.join(app.getPath("appData"), "videtio-shared", "fonts"),
+	);
+	ipcMain.handle("list-custom-fonts", () => customFontStore.list());
+	ipcMain.handle("merge-custom-fonts", (_, fonts: unknown) => customFontStore.merge(fonts));
+
 	const parakeetModelManager = new ParakeetModelManager(
 		path.join(app.getPath("userData"), "caption-models"),
 	);

@@ -46,6 +46,10 @@ interface Window {
 		}>;
 		selectSource: (source: ProcessedDesktopSource) => Promise<ProcessedDesktopSource | null>;
 		getSelectedSource: () => Promise<ProcessedDesktopSource | null>;
+		listCustomFonts: () => Promise<import("../src/lib/customFontDefinitions").CustomFont[]>;
+		mergeCustomFonts: (
+			fonts: import("../src/lib/customFontDefinitions").CustomFont[],
+		) => Promise<import("../src/lib/customFontDefinitions").CustomFont[]>;
 		initializeRecordingPreferences: (
 			fallback: import("../src/lib/recordingPreferences").RecordingPreferences,
 		) => Promise<{

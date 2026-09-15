@@ -174,6 +174,13 @@ enum class WebcamMaskShape {
 	Square,
 };
 
+struct WebcamSourceCrop {
+	float x;
+	float y;
+	float width;
+	float height;
+};
+
 struct WebcamPlan {
 	bool enabled = false;
 	std::string inputPath;
@@ -181,6 +188,7 @@ struct WebcamPlan {
 	int sourceHeight = 0;
 	double durationMs = 0.0;
 	double videoOffsetMs = 0.0;
+	WebcamSourceCrop sourceCrop{};
 	float x = 0.0f;
 	float y = 0.0f;
 	float width = 0.0f;
@@ -328,51 +336,29 @@ __device__ bool mapWebcamOutputToSource(
 	float outputX,
 	float outputY,
 	const SceneTransform &transform,
-	int sourceWidth,
-	int sourceHeight,
+	const WebcamSourceCrop &crop,
 	int rotation,
 	bool mirrored,
 	float *sourceX,
 	float *sourceY) {
 	if (!insideRoundedRect(outputX, outputY, transform)) return false;
-
-	const float localX = (outputX - transform.left) / transform.width;
-	const float localY = (outputY - transform.top) / transform.height;
-	const bool swapsAxes = rotation == 90 || rotation == 270;
-	const float rotatedWidth = static_cast<float>(swapsAxes ? sourceHeight : sourceWidth);
-	const float rotatedHeight = static_cast<float>(swapsAxes ? sourceWidth : sourceHeight);
-	const float sourceAspect = rotatedWidth / rotatedHeight;
-	const float targetAspect = transform.width / transform.height;
-	float cropX = 0.0f;
-	float cropY = 0.0f;
-	float cropWidth = rotatedWidth;
-	float cropHeight = rotatedHeight;
-	if (transform.cover && sourceAspect > targetAspect) {
-		cropWidth = rotatedHeight * targetAspect;
-		cropX = (rotatedWidth - cropWidth) * 0.5f;
-	} else if (transform.cover && sourceAspect < targetAspect) {
-		cropHeight = rotatedWidth / targetAspect;
-		cropY = (rotatedHeight - cropHeight) * 0.5f;
-	}
-	const float rotatedX =
-		cropX + clampFloat(localX, 0.0f, 1.0f) * fmaxf(0.0f, cropWidth - 1.0f);
-	const float rotatedY =
-		cropY + clampFloat(localY, 0.0f, 1.0f) * fmaxf(0.0f, cropHeight - 1.0f);
-
+	const float localX = clampFloat((outputX - transform.left) / transform.width, 0.0f, 1.0f);
+	const float localY = clampFloat((outputY - transform.top) / transform.height, 0.0f, 1.0f);
+	float u = localX;
+	float v = localY;
 	if (rotation == 90) {
-		*sourceX = rotatedY;
-		*sourceY = static_cast<float>(sourceHeight - 1) - rotatedX;
+		u = localY;
+		v = 1.0f - localX;
 	} else if (rotation == 180) {
-		*sourceX = static_cast<float>(sourceWidth - 1) - rotatedX;
-		*sourceY = static_cast<float>(sourceHeight - 1) - rotatedY;
+		u = 1.0f - localX;
+		v = 1.0f - localY;
 	} else if (rotation == 270) {
-		*sourceX = static_cast<float>(sourceWidth - 1) - rotatedY;
-		*sourceY = rotatedX;
-	} else {
-		*sourceX = rotatedX;
-		*sourceY = rotatedY;
+		u = 1.0f - localY;
+		v = localX;
 	}
-	if (mirrored) *sourceX = static_cast<float>(sourceWidth - 1) - *sourceX;
+	if (mirrored) u = 1.0f - u;
+	*sourceX = crop.x + u * fmaxf(0.0f, crop.width - 1.0f);
+	*sourceY = crop.y + v * fmaxf(0.0f, crop.height - 1.0f);
 	return true;
 }
 
@@ -518,6 +504,7 @@ __global__ void compositeWebcamLuma(
 	uint8_t *outputY,
 	int outputPitch,
 	SceneTransform transform,
+	WebcamSourceCrop sourceCrop,
 	int rotation,
 	bool mirrored) {
 	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -536,8 +523,7 @@ __global__ void compositeWebcamLuma(
 			sampleOutputX,
 			sampleOutputY,
 			transform,
-			sourceWidth,
-			sourceHeight,
+			sourceCrop,
 			rotation,
 			mirrored,
 			&sourceX,
@@ -567,6 +553,7 @@ __global__ void compositeWebcamChroma(
 	int outputWidth,
 	int outputHeight,
 	SceneTransform transform,
+	WebcamSourceCrop sourceCrop,
 	int rotation,
 	bool mirrored) {
 	const int localX = static_cast<int>(blockIdx.x * blockDim.x + threadIdx.x);
@@ -589,8 +576,7 @@ __global__ void compositeWebcamChroma(
 			sampleOutputX,
 			sampleOutputY,
 			transform,
-			sourceWidth,
-			sourceHeight,
+			sourceCrop,
 			rotation,
 			mirrored,
 			&sourceX,
@@ -1334,6 +1320,7 @@ double compositeFrame(
 			output->data[0],
 			output->linesize[0],
 			*webcamTransform,
+			webcam.sourceCrop,
 			webcam.rotation,
 			webcam.mirrored);
 		requireRuntime(cudaGetLastError(), "compositeWebcamLuma launch");
@@ -1359,6 +1346,7 @@ double compositeFrame(
 			outputWidth,
 			outputHeight,
 			*webcamTransform,
+			webcam.sourceCrop,
 			webcam.rotation,
 			webcam.mirrored);
 		requireRuntime(cudaGetLastError(), "compositeWebcamChroma launch");
@@ -1576,7 +1564,7 @@ ExportPlan loadPlan(const std::string &planPath) {
 
 	ExportPlan plan;
 	plan.version = document.at("version").get<int>();
-	if (plan.version != 8) fail("Unsupported native GPU export plan version");
+	if (plan.version != 9) fail("Unsupported native GPU export plan version");
 	plan.width = document.at("width").get<int>();
 	plan.height = document.at("height").get<int>();
 	plan.inputPath = document.at("inputPath").get<std::string>();
@@ -1654,6 +1642,19 @@ ExportPlan loadPlan(const std::string &planPath) {
 		plan.webcam.sourceHeight = item.at("sourceHeight").get<int>();
 		plan.webcam.durationMs = item.at("durationMs").get<double>();
 		plan.webcam.videoOffsetMs = item.at("videoOffsetMs").get<double>();
+		const auto &sourceCrop = item.at("sourceCrop");
+		plan.webcam.sourceCrop = {
+			sourceCrop.at("x").get<float>(), sourceCrop.at("y").get<float>(),
+			sourceCrop.at("width").get<float>(), sourceCrop.at("height").get<float>(),
+		};
+		const auto &crop = plan.webcam.sourceCrop;
+		if (!std::isfinite(crop.x) || !std::isfinite(crop.y) ||
+			!std::isfinite(crop.width) || !std::isfinite(crop.height) ||
+			crop.x < 0.0f || crop.y < 0.0f || crop.width <= 0.0f || crop.height <= 0.0f ||
+			crop.x + crop.width > static_cast<float>(plan.webcam.sourceWidth) + 0.001f ||
+			crop.y + crop.height > static_cast<float>(plan.webcam.sourceHeight) + 0.001f) {
+			fail("Native GPU export webcam crop is invalid");
+		}
 		const auto &rect = item.at("rect");
 		plan.webcam.x = rect.at("x").get<float>();
 		plan.webcam.y = rect.at("y").get<float>();

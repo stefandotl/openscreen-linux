@@ -97,7 +97,7 @@ describe("native GPU export plan", () => {
 		const first = createNativeGpuExportPlan(config, videoInfo);
 		const second = createNativeGpuExportPlan(config, videoInfo);
 
-		expect(first.version).toBe(8);
+		expect(first.version).toBe(9);
 		expect(first.frames).toHaveLength(30);
 		expect(first.frames[0].sourceTimestampMs).toBe(0);
 		expect(first.frames.at(-1)?.sourceTimestampMs).toBeCloseTo(966.6667, 3);
@@ -140,6 +140,25 @@ describe("native GPU export plan", () => {
 			const removedMs = sourceMs >= 5763 ? 346 : 0;
 			expect(sourceMs - 4000 - removedMs).toBeCloseTo((index * 1000) / 30, 6);
 		}
+	});
+
+	it("exports webcam framing as a source crop while preserving its layout", () => {
+		const webcamInfo = { width: 1920, height: 1080, duration: 1 };
+		const base = createConfig({ webcamVideoUrl: "/tmp/webcam.mp4", webcamMaskShape: "circle" });
+		const config = { ...base, webcamFraming: { zoom: 2, x: 0, y: 1 } };
+		expect(getNativeGpuExportBlockers(config, videoInfo, webcamInfo)).toEqual([]);
+		const cropped = createNativeGpuExportPlan(config, videoInfo, webcamInfo);
+		const centered = createNativeGpuExportPlan(base, videoInfo, webcamInfo);
+		expect(cropped.webcam?.rect).toEqual(centered.webcam?.rect);
+		expect(cropped.webcam?.sourceCrop).toEqual({ x: 0, y: 540, width: 540, height: 540 });
+		expect(cropped.frames).toEqual(centered.frames);
+		expect(
+			getNativeGpuExportBlockers(
+				{ ...config, webcamFraming: { zoom: NaN, x: 0, y: 0 } },
+				videoInfo,
+				webcamInfo,
+			),
+		).toContain("webcam framing is invalid");
 	});
 
 	it("accepts and orders sequential and overlapping annotations", () => {

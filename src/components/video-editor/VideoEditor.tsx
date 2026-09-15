@@ -42,6 +42,7 @@ import {
 	hasNativeCursorRecordingData,
 	hasRenderableNativeCursorRecordingData,
 } from "@/lib/cursor/nativeCursor";
+import { getCustomFonts, restoreProjectFonts } from "@/lib/customFonts";
 import {
 	calculateEffectiveSourceDimensions,
 	calculateMp4ExportSettings,
@@ -146,6 +147,7 @@ import {
 	DEFAULT_BLUR_DATA,
 	DEFAULT_FIGURE_DATA,
 	DEFAULT_PLAYBACK_SPEED,
+	DEFAULT_WEBCAM_FRAMING,
 	DEFAULT_ZOOM_DEPTH,
 	type FigureData,
 	type PlaybackSpeed,
@@ -280,6 +282,7 @@ export default function VideoEditor() {
 		webcamMaskShape,
 		webcamMirrored,
 		webcamRotation,
+		webcamFraming,
 		webcamVideoOffsetMs,
 		webcamReactiveZoom,
 		webcamSizePreset,
@@ -975,6 +978,12 @@ export default function VideoEditor() {
 				return false;
 			}
 
+			try {
+				await restoreProjectFonts(candidate.customFonts);
+			} catch (error) {
+				toast.error("Could not load project fonts", { description: String(error) });
+				return false;
+			}
 			exitProjectPlayback();
 			const project = candidate;
 			const savedScenes = normalizeProjectScenes(project.scenes);
@@ -1014,6 +1023,7 @@ export default function VideoEditor() {
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
 				webcamMirrored: normalizedEditor.webcamMirrored,
 				webcamRotation: normalizedEditor.webcamRotation,
+				webcamFraming: normalizedEditor.webcamFraming,
 				webcamVideoOffsetMs: normalizedEditor.webcamVideoOffsetMs,
 				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
 				webcamSizePreset: normalizedEditor.webcamSizePreset,
@@ -1077,6 +1087,7 @@ export default function VideoEditor() {
 							webcamMaskShape: scene.editor.webcamMaskShape,
 							webcamMirrored: scene.editor.webcamMirrored,
 							webcamRotation: scene.editor.webcamRotation,
+							webcamFraming: scene.editor.webcamFraming,
 							webcamVideoOffsetMs: scene.editor.webcamVideoOffsetMs,
 							webcamReactiveZoom: scene.editor.webcamReactiveZoom,
 							webcamSizePreset: scene.editor.webcamSizePreset,
@@ -1115,6 +1126,7 @@ export default function VideoEditor() {
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
 				webcamMirrored: normalizedEditor.webcamMirrored,
 				webcamRotation: normalizedEditor.webcamRotation,
+				webcamFraming: normalizedEditor.webcamFraming,
 				webcamVideoOffsetMs: normalizedEditor.webcamVideoOffsetMs,
 				webcamReactiveZoom: normalizedEditor.webcamReactiveZoom,
 				webcamSizePreset: normalizedEditor.webcamSizePreset,
@@ -1222,6 +1234,7 @@ export default function VideoEditor() {
 				webcamMaskShape,
 				webcamMirrored,
 				webcamRotation,
+				webcamFraming,
 				webcamVideoOffsetMs,
 				webcamReactiveZoom,
 				webcamSizePreset,
@@ -1262,6 +1275,7 @@ export default function VideoEditor() {
 		webcamMaskShape,
 		webcamMirrored,
 		webcamRotation,
+		webcamFraming,
 		webcamVideoOffsetMs,
 		webcamReactiveZoom,
 		webcamSizePreset,
@@ -1425,6 +1439,7 @@ export default function VideoEditor() {
 				webcamMaskShape,
 				webcamMirrored,
 				webcamRotation,
+				webcamFraming,
 				webcamVideoOffsetMs,
 				webcamReactiveZoom,
 				webcamSizePreset,
@@ -1442,6 +1457,7 @@ export default function VideoEditor() {
 				editorState,
 				projectScenes,
 				activeSceneId,
+				getCustomFonts(),
 			);
 			const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
 
@@ -1507,6 +1523,7 @@ export default function VideoEditor() {
 			webcamMaskShape,
 			webcamMirrored,
 			webcamRotation,
+			webcamFraming,
 			webcamVideoOffsetMs,
 			webcamReactiveZoom,
 			webcamSizePreset,
@@ -1600,6 +1617,7 @@ export default function VideoEditor() {
 						projectEditorForScene(editorState),
 						projectScenes,
 						activeSceneId,
+						getCustomFonts(),
 					)
 				: undefined;
 		const result = await window.electronAPI.startNewRecording(sceneId, projectData);
@@ -3278,6 +3296,7 @@ export default function VideoEditor() {
 						webcamMaskShape,
 						webcamMirrored,
 						webcamRotation,
+						webcamFraming,
 						webcamVideoOffsetMs,
 						webcamReactiveZoom,
 						webcamSizePreset,
@@ -3408,6 +3427,7 @@ export default function VideoEditor() {
 									webcamMaskShape: sceneEditor.webcamMaskShape,
 									webcamMirrored: sceneEditor.webcamMirrored,
 									webcamRotation: sceneEditor.webcamRotation,
+									webcamFraming: sceneEditor.webcamFraming,
 									webcamVideoOffsetMs: sceneEditor.webcamVideoOffsetMs,
 									webcamReactiveZoom: sceneEditor.webcamReactiveZoom,
 									webcamSizePreset: sceneEditor.webcamSizePreset,
@@ -3501,6 +3521,7 @@ export default function VideoEditor() {
 							webcamMaskShape,
 							webcamMirrored,
 							webcamRotation,
+							webcamFraming,
 							webcamVideoOffsetMs,
 							webcamReactiveZoom,
 							webcamSizePreset,
@@ -3618,6 +3639,7 @@ export default function VideoEditor() {
 			webcamMaskShape,
 			webcamMirrored,
 			webcamRotation,
+			webcamFraming,
 			webcamVideoOffsetMs,
 			webcamReactiveZoom,
 			webcamSizePreset,
@@ -4467,6 +4489,7 @@ export default function VideoEditor() {
 													webcamMaskShape={webcamMaskShape}
 													webcamMirrored={webcamMirrored}
 													webcamRotation={webcamRotation}
+													webcamFraming={webcamFraming}
 													webcamVideoOffsetMs={webcamVideoOffsetMs}
 													webcamReactiveZoom={webcamReactiveZoom}
 													webcamSizePreset={webcamSizePreset}
@@ -4634,10 +4657,16 @@ export default function VideoEditor() {
 										onWebcamMaskShapeChange={(shape) => pushState({ webcamMaskShape: shape })}
 										webcamMirrored={webcamMirrored}
 										webcamRotation={webcamRotation}
+										webcamFraming={webcamFraming}
 										webcamVideoOffsetMs={webcamVideoOffsetMs}
 										webcamReactiveZoom={webcamReactiveZoom}
 										onWebcamMirroredChange={(mirrored) => pushState({ webcamMirrored: mirrored })}
 										onWebcamRotationChange={(rotation) => pushState({ webcamRotation: rotation })}
+										onWebcamFramingChange={(value) => updateState({ webcamFraming: value })}
+										onWebcamFramingCommit={() => commitState()}
+										onWebcamFramingReset={() =>
+											pushState({ webcamFraming: { ...DEFAULT_WEBCAM_FRAMING } })
+										}
 										onWebcamVideoOffsetChange={(offsetMs) =>
 											updateState({ webcamVideoOffsetMs: offsetMs })
 										}

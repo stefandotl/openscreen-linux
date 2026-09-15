@@ -203,3 +203,30 @@ describe("native GPU export assets", () => {
 		).toBe(true);
 	});
 });
+
+it("keeps clipped word highlights as transparent no-ops instead of rejecting normal text boxes", async () => {
+	const highlighted = caption("annotation-1", 0, 1000, 5);
+	highlighted.content = "first\nsecond\nvisible\nfourth\nlast";
+	highlighted.size.height = 20;
+	highlighted.style.backgroundColor = "transparent";
+	highlighted.style.wordHighlight = true;
+	highlighted.style.wordHighlightMode = "text";
+	highlighted.style.wordHighlightColor = "#ff0066";
+	highlighted.captionWords = highlighted.content
+		.split("\n")
+		.map((text, index) => ({ text, startOffsetMs: index * 200, endOffsetMs: (index + 1) * 200 }));
+	const assets = await createNativeGpuExportAssets({
+		...createConfig(false),
+		annotationRegions: [highlighted],
+	});
+	expect(assets.overlays.map(({ startMs, endMs }) => ({ startMs, endMs }))).toEqual([
+		{ startMs: 0, endMs: 1000 },
+		{ startMs: 400, endMs: 600 },
+	]);
+	expect(
+		await pngContainsColor(
+			assets.overlayPngs[1]!,
+			(r, g, b, a) => r > 240 && g < 20 && b > 80 && a > 200,
+		),
+	).toBe(true);
+});

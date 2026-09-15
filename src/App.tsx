@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { CountdownOverlay } from "./components/launch/CountdownOverlay.tsx";
 import { LaunchWindow } from "./components/launch/LaunchWindow";
 import { SourceSelector } from "./components/launch/SourceSelector";
@@ -49,10 +50,15 @@ export default function App() {
 	}, [windowType]);
 
 	useEffect(() => {
-		// Load custom fonts on app initialization
-		loadAllCustomFonts().catch((error) => {
-			console.error("Failed to load custom fonts:", error);
-		});
+		const refresh = () => {
+			loadAllCustomFonts().catch((error) => {
+				console.error("Failed to load custom fonts:", error);
+				toast.error("Could not load custom fonts", { description: String(error) });
+			});
+		};
+		refresh();
+		window.addEventListener("focus", refresh);
+		return () => window.removeEventListener("focus", refresh);
 	}, []);
 
 	const content = (() => {

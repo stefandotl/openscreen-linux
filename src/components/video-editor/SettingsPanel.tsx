@@ -103,6 +103,7 @@ import {
 	ZOOM_DEPTH_SCALES,
 } from "./types";
 import { getFocusBoundsForScale } from "./videoPlayback/focusUtils";
+import { WebcamFramingControls } from "./WebcamFramingControls";
 
 function CustomSpeedInput({
 	value,
@@ -337,7 +338,11 @@ interface SettingsPanelProps {
 	webcamMirrored?: boolean;
 	onWebcamMirroredChange?: (mirrored: boolean) => void;
 	webcamRotation?: WebcamRotation;
+	webcamFraming?: import("@/components/video-editor/types").WebcamFraming;
 	onWebcamRotationChange?: (rotation: WebcamRotation) => void;
+	onWebcamFramingChange?: (value: import("./types").WebcamFraming) => void;
+	onWebcamFramingCommit?: () => void;
+	onWebcamFramingReset?: () => void;
 	webcamVideoOffsetMs?: number;
 	onWebcamVideoOffsetChange?: (offsetMs: number) => void;
 	onWebcamVideoOffsetCommit?: (offsetMs: number) => void;
@@ -485,7 +490,11 @@ export function SettingsPanel({
 	webcamMirrored = DEFAULT_WEBCAM_MIRRORED,
 	onWebcamMirroredChange,
 	webcamRotation = DEFAULT_WEBCAM_ROTATION,
+	webcamFraming = DEFAULT_WEBCAM_SETTINGS.framing,
 	onWebcamRotationChange,
+	onWebcamFramingChange,
+	onWebcamFramingCommit,
+	onWebcamFramingReset,
 	webcamVideoOffsetMs = 0,
 	onWebcamVideoOffsetChange,
 	onWebcamVideoOffsetCommit,
@@ -1334,6 +1343,14 @@ export function SettingsPanel({
 													</SelectContent>
 												</Select>
 											</div>
+										)}
+										{webcamLayoutPreset !== "no-webcam" && (
+											<WebcamFramingControls
+												value={webcamFraming}
+												onChange={onWebcamFramingChange}
+												onCommit={onWebcamFramingCommit}
+												onReset={onWebcamFramingReset}
+											/>
 										)}
 										{webcamLayoutPreset !== "no-webcam" && (
 											<Accordion

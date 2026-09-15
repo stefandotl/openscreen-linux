@@ -16,6 +16,15 @@ export const DEFAULT_WEBCAM_MASK_SHAPE: WebcamMaskShape = "rectangle";
 
 export const DEFAULT_WEBCAM_MIRRORED = false;
 
+/** Zoom and pan inside the webcam window; x/y run from left/top to right/bottom. */
+export interface WebcamFraming {
+	zoom: number;
+	x: number;
+	y: number;
+}
+
+export const DEFAULT_WEBCAM_FRAMING: WebcamFraming = { zoom: 1, x: 0.5, y: 0.5 };
+
 export type WebcamRotation = 0 | 90 | 180 | 270;
 
 export const DEFAULT_WEBCAM_ROTATION: WebcamRotation = 0;

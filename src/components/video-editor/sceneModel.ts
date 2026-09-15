@@ -269,6 +269,7 @@ function editorAppearance(editor: EditorState) {
 		webcamMaskShape: editor.webcamMaskShape,
 		webcamMirrored: editor.webcamMirrored,
 		webcamRotation: editor.webcamRotation,
+		webcamFraming: editor.webcamFraming,
 		webcamReactiveZoom: editor.webcamReactiveZoom,
 		webcamSizePreset: editor.webcamSizePreset,
 		webcamPosition: editor.webcamPosition,

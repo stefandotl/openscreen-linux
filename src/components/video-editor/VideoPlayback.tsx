@@ -41,6 +41,7 @@ import {
 	resolveNativeCursorRenderAsset,
 } from "@/lib/cursor/nativeCursor";
 import { classifyWallpaper, DEFAULT_WALLPAPER, resolveImageWallpaperUrl } from "@/lib/wallpaper";
+import { getWebcamVideoStyle } from "@/lib/webcamFraming";
 import { getCssClipPath } from "@/lib/webcamMaskShapes";
 import type { CursorRecordingData } from "@/native/contracts";
 import {
@@ -105,6 +106,7 @@ interface VideoPlaybackProps {
 	webcamMaskShape?: import("./types").WebcamMaskShape;
 	webcamMirrored?: boolean;
 	webcamRotation?: WebcamRotation;
+	webcamFraming?: import("@/components/video-editor/types").WebcamFraming;
 	webcamVideoOffsetMs?: number;
 	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
@@ -238,6 +240,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			webcamMaskShape,
 			webcamMirrored = false,
 			webcamRotation = 0,
+			webcamFraming,
 			webcamVideoOffsetMs = 0,
 			webcamReactiveZoom = false,
 			webcamSizePreset,
@@ -2148,19 +2151,17 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										ref={webcamVideoRef}
 										src={webcamVideoPath}
 										className={`absolute object-cover ${webcamLayoutPreset === "picture-in-picture" ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}
-										style={{
-											left: "50%",
-											top: "50%",
-											width:
-												webcamRotation === 90 || webcamRotation === 270
-													? (webcamLayout?.height ?? 0)
-													: "100%",
-											height:
-												webcamRotation === 90 || webcamRotation === 270
-													? (webcamLayout?.width ?? 0)
-													: "100%",
-											transform: `translate(-50%, -50%) rotate(${webcamRotation}deg)${webcamMirrored ? " scaleX(-1)" : ""}`,
-										}}
+										style={
+											webcamDimensions && webcamLayout
+												? getWebcamVideoStyle(
+														webcamDimensions,
+														webcamLayout,
+														webcamFraming,
+														webcamRotation,
+														webcamMirrored,
+													)
+												: { width: "100%", height: "100%" }
+										}
 										onPointerDown={handleWebcamPointerDown}
 										onPointerMove={handleWebcamPointerMove}
 										onPointerUp={handleWebcamPointerUp}

@@ -69,6 +69,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	getSelectedSource: () => {
 		return ipcRenderer.invoke("get-selected-source");
 	},
+	listCustomFonts: () => ipcRenderer.invoke("list-custom-fonts"),
+	mergeCustomFonts: (fonts: import("../src/lib/customFontDefinitions").CustomFont[]) =>
+		ipcRenderer.invoke("merge-custom-fonts", fonts),
 	initializeRecordingPreferences: (fallback: RecordingPreferences) => {
 		return ipcRenderer.invoke("initialize-recording-preferences", fallback);
 	},

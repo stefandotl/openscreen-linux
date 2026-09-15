@@ -37,6 +37,7 @@ import {
 	isFullBleedWebcamLayout,
 	reactiveWebcamScale,
 } from "@/lib/compositeLayout";
+import { getWebcamSourceCrop, isValidWebcamFraming } from "@/lib/webcamFraming";
 import { renderAnnotations } from "./annotationRenderer";
 import { getContinuousExportSourceTimestampsMs } from "./exportTimeline";
 import {
@@ -166,6 +167,9 @@ export function getNativeGpuExportBlockers(
 		blockers.push("source duration is invalid");
 	}
 	if (hasVisibleWebcam(config)) {
+		if (config.webcamFraming && !isValidWebcamFraming(config.webcamFraming)) {
+			blockers.push("webcam framing is invalid");
+		}
 		if (config.webcamVideoOffsetMs !== undefined && !Number.isFinite(config.webcamVideoOffsetMs)) {
 			blockers.push("webcam video offset is invalid");
 		}
@@ -477,6 +481,13 @@ export function createNativeGpuExportPlan(
 						sourceHeight: visibleWebcam.height,
 						durationMs: visibleWebcam.duration * 1000,
 						videoOffsetMs: config.webcamVideoOffsetMs ?? 0,
+						sourceCrop: getWebcamSourceCrop(
+							visibleWebcam,
+							layout.webcamRect,
+							config.webcamFraming,
+							config.webcamRotation,
+							config.webcamMirrored,
+						),
 						rect: {
 							x: layout.webcamRect.x,
 							y: layout.webcamRect.y,
@@ -578,7 +589,10 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 			}
 		}
 		if (maxX < minX || maxY < minY) {
-			throw new Error(`Annotation ${annotation.id} produced an empty word highlight`);
+			// Text is clipped to its box, just like preview. A word outside that
+			// box (or a transparent highlight) contributes no pixels at this time.
+			// Keep its base caption and timing; there is no GPU overlay to upload.
+			return null;
 		}
 
 		const croppedCanvas = document.createElement("canvas");
@@ -627,6 +641,7 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 			(annotation.startMs + annotation.endMs) / 2,
 			timedWords.length > 0 ? { forceActiveCaptionWordIndex: -1 } : undefined,
 		);
+		if (!base) throw new Error(`Failed to render base annotation ${annotation.id}`);
 		overlayPngs.push(await canvasToPng(base.canvas));
 		overlays.push({
 			startMs: annotation.startMs,
@@ -644,6 +659,7 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 				forceActiveCaptionWordIndex: wordIndex,
 				cropToAlpha: true,
 			});
+			if (!highlight) continue;
 			overlayPngs.push(await canvasToPng(highlight.canvas));
 			overlays.push({
 				startMs,

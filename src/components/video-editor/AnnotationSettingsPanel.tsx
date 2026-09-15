@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useScopedT } from "@/contexts/I18nContext";
 import { normalizeTextAnimation, TEXT_ANIMATION_OPTIONS } from "@/lib/annotationTextAnimation";
-import { type CustomFont, getCustomFonts } from "@/lib/customFonts";
+import { CUSTOM_FONTS_CHANGED, type CustomFont, getCustomFonts } from "@/lib/customFonts";
 import { cn } from "@/lib/utils";
 import ColorPicker from "../ui/color-picker";
 import { AddCustomFontDialog } from "./AddCustomFontDialog";
@@ -110,7 +110,10 @@ export function AnnotationSettingsPanel({
 		font.labelKey ? fontStyleLabels[font.labelKey] : font.name;
 
 	useEffect(() => {
-		setCustomFonts(getCustomFonts());
+		const refresh = () => setCustomFonts(getCustomFonts());
+		refresh();
+		window.addEventListener(CUSTOM_FONTS_CHANGED, refresh);
+		return () => window.removeEventListener(CUSTOM_FONTS_CHANGED, refresh);
 	}, []);
 
 	const colorPalette = [

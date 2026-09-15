@@ -219,6 +219,7 @@ function validateRequest(payload: NativeGpuExportRequest) {
 	if (plan.webcam) {
 		const webcam = plan.webcam;
 		const webcamRect = webcam.rect;
+		const sourceCrop = webcam.sourceCrop;
 		if (
 			typeof webcam.inputPath !== "string" ||
 			!Number.isInteger(webcam.sourceWidth) ||
@@ -250,6 +251,18 @@ function validateRequest(payload: NativeGpuExportRequest) {
 			typeof webcam.anchorBottom !== "boolean"
 		) {
 			throw new Error("Native GPU export webcam layout is invalid");
+		}
+		if (
+			!sourceCrop ||
+			![sourceCrop.x, sourceCrop.y, sourceCrop.width, sourceCrop.height].every(finiteNumber) ||
+			sourceCrop.x < 0 ||
+			sourceCrop.y < 0 ||
+			sourceCrop.width <= 0 ||
+			sourceCrop.height <= 0 ||
+			sourceCrop.x + sourceCrop.width > webcam.sourceWidth + 0.001 ||
+			sourceCrop.y + sourceCrop.height > webcam.sourceHeight + 0.001
+		) {
+			throw new Error("Native GPU export webcam crop is invalid");
 		}
 		if (
 			webcam.shadow &&

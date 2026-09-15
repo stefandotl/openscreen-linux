@@ -61,6 +61,7 @@ import {
 	resolveInterpolatedNativeCursorFrame,
 	resolveNativeCursorRenderAsset,
 } from "@/lib/cursor/nativeCursor";
+import { getWebcamSourceCrop } from "@/lib/webcamFraming";
 import { drawCanvasClipPath } from "@/lib/webcamMaskShapes";
 import type { CursorRecordingData } from "@/native/contracts";
 import { renderAnnotations } from "./annotationRenderer";
@@ -94,6 +95,7 @@ interface FrameRenderConfig {
 	webcamMaskShape?: import("@/components/video-editor/types").WebcamMaskShape;
 	webcamMirrored?: boolean;
 	webcamRotation?: import("@/components/video-editor/types").WebcamRotation;
+	webcamFraming?: import("@/components/video-editor/types").WebcamFraming;
 	webcamReactiveZoom?: boolean;
 	webcamSizePreset?: WebcamSizePreset;
 	webcamPosition?: { cx: number; cy: number } | null;
@@ -965,21 +967,14 @@ export class FrameRenderer {
 				("displayHeight" in webcamFrame && webcamFrame.displayHeight > 0
 					? webcamFrame.displayHeight
 					: webcamFrame.codedHeight) || webcamRect.height;
-			const sourceAspect = sourceWidth / sourceHeight;
-			const targetAspect = webcamRect.width / webcamRect.height;
 			const webcamRotation = this.config.webcamRotation ?? 0;
-			const sourceTargetAspect =
-				webcamRotation === 90 || webcamRotation === 270 ? 1 / targetAspect : targetAspect;
-			const sourceCropWidth =
-				sourceAspect > sourceTargetAspect
-					? Math.round(sourceHeight * sourceTargetAspect)
-					: sourceWidth;
-			const sourceCropHeight =
-				sourceAspect > sourceTargetAspect
-					? sourceHeight
-					: Math.round(sourceWidth / sourceTargetAspect);
-			const sourceCropX = Math.max(0, Math.round((sourceWidth - sourceCropWidth) / 2));
-			const sourceCropY = Math.max(0, Math.round((sourceHeight - sourceCropHeight) / 2));
+			const sourceCrop = getWebcamSourceCrop(
+				{ width: sourceWidth, height: sourceHeight },
+				webcamRect,
+				this.config.webcamFraming,
+				webcamRotation,
+				this.config.webcamMirrored,
+			);
 			fgCtx.save();
 			drawCanvasClipPath(
 				fgCtx,
@@ -1002,12 +997,7 @@ export class FrameRenderer {
 			drawWebcamFrameImage(
 				fgCtx,
 				webcamFrame as unknown as CanvasImageSource,
-				{
-					x: sourceCropX,
-					y: sourceCropY,
-					width: sourceCropWidth,
-					height: sourceCropHeight,
-				},
+				sourceCrop,
 				{
 					x: drawRect.x,
 					y: drawRect.y,

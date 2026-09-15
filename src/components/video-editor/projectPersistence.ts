@@ -1,6 +1,7 @@
 import { normalizeTextAnimation } from "@/lib/annotationTextAnimation";
 import { normalizeBlurColor, normalizeBlurType } from "@/lib/blurEffects";
 import { normalizeCursorThemeId } from "@/lib/cursor/cursorThemes";
+import { type CustomFont, isCustomFont } from "@/lib/customFontDefinitions";
 import type {
 	ExportCompression,
 	ExportFormat,
@@ -11,6 +12,7 @@ import type {
 import type { ProjectMedia } from "@/lib/recordingSession";
 import { normalizeProjectMedia } from "@/lib/recordingSession";
 import { DEFAULT_WALLPAPER, WALLPAPER_PATHS } from "@/lib/wallpaper";
+import { normalizeWebcamFraming } from "@/lib/webcamFraming";
 import { normalizeWebcamVideoOffsetMs } from "@/lib/webcamSync";
 import { ASPECT_RATIOS, type AspectRatio, isPortraitAspectRatio } from "@/utils/aspectRatioUtils";
 import {
@@ -95,6 +97,7 @@ export interface ProjectEditorState {
 	webcamMaskShape: WebcamMaskShape;
 	webcamMirrored: boolean;
 	webcamRotation: WebcamRotation;
+	webcamFraming: import("@/components/video-editor/types").WebcamFraming;
 	webcamVideoOffsetMs: number;
 	webcamReactiveZoom: boolean;
 	webcamSizePreset: WebcamSizePreset;
@@ -116,6 +119,7 @@ export interface ProjectSceneData {
 }
 
 export interface EditorProjectData {
+	customFonts?: CustomFont[];
 	version: number;
 	media?: ProjectMedia;
 	editor: ProjectEditorState;
@@ -574,6 +578,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		webcamRotation: isWebcamRotation(editor.webcamRotation)
 			? editor.webcamRotation
 			: DEFAULT_WEBCAM_ROTATION,
+		webcamFraming: normalizeWebcamFraming(editor.webcamFraming),
 		webcamVideoOffsetMs: normalizeWebcamVideoOffsetMs(editor.webcamVideoOffsetMs),
 		webcamReactiveZoom:
 			typeof editor.webcamReactiveZoom === "boolean"
@@ -656,9 +661,25 @@ export function createProjectData(
 	editor: ProjectEditorState,
 	scenes?: ProjectSceneData[],
 	activeSceneId?: string | null,
+	customFonts: CustomFont[] = [],
 ): EditorProjectData {
 	return {
 		version: PROJECT_VERSION,
+		customFonts: customFonts.filter(
+			(font) =>
+				isCustomFont(font) &&
+				[editor, ...(scenes ?? []).map((scene) => scene.editor)].some((state) =>
+					state.annotationRegions.some((annotation) =>
+						annotation.style.fontFamily.split(",").some(
+							(family) =>
+								family
+									.trim()
+									.replace(/^["']|["']$/g, "")
+									.toLowerCase() === font.fontFamily.toLowerCase(),
+						),
+					),
+				),
+		),
 		media,
 		editor,
 		...(scenes ? { scenes } : {}),

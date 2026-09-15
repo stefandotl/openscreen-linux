@@ -10,6 +10,7 @@ import {
 	resolveProjectMedia,
 	validateProjectData,
 } from "./projectPersistence";
+import { DEFAULT_ANNOTATION_STYLE } from "./types";
 
 describe("projectPersistence media compatibility", () => {
 	it("accepts legacy projects with a single videoPath", () => {
@@ -422,4 +423,53 @@ describe("wallpaper legacy normalization", () => {
 		});
 		expect(normalized.wallpaper).toBe("/wallpapers/wallpaper1.jpg");
 	});
+});
+
+it("round-trips per-scene webcam framing and initializes older projects", () => {
+	const framing = { zoom: 2.25, x: 0.15, y: 0.8 };
+	const editor = normalizeProjectEditor({ webcamFraming: framing });
+	expect(normalizeProjectEditor(JSON.parse(JSON.stringify(editor))).webcamFraming).toEqual(framing);
+	expect(normalizeProjectEditor({}).webcamFraming).toEqual({ zoom: 1, x: 0.5, y: 0.5 });
+});
+
+it("embeds only fonts used by annotations, including other scenes", () => {
+	const font = (family: string) => ({
+		id: family,
+		name: family,
+		fontFamily: family,
+		importUrl: `https://fonts.googleapis.com/css2?family=${family}`,
+	});
+	const editor = normalizeProjectEditor({
+		annotationRegions: [
+			{
+				id: "caption",
+				startMs: 0,
+				endMs: 1000,
+				type: "text",
+				content: "Hello",
+				position: { x: 0, y: 0 },
+				size: { width: 50, height: 20 },
+				style: { ...DEFAULT_ANNOTATION_STYLE, fontFamily: '"Roboto", sans-serif' },
+				zIndex: 1,
+			},
+		],
+	});
+	const otherScene = normalizeProjectEditor({
+		annotationRegions: [
+			{
+				...editor.annotationRegions[0],
+				style: { ...editor.annotationRegions[0].style, fontFamily: "Lora" },
+			},
+		],
+	});
+	const media = { screenVideoPath: "/tmp/screen.mp4" };
+	const project = createProjectData(
+		media,
+		editor,
+		[{ id: "scene", name: "Scene", media, editor: otherScene }],
+		"scene",
+		[font("Roboto"), font("Lora"), font("Unused")],
+	);
+	expect(JSON.parse(JSON.stringify(project)).customFonts).toEqual([font("Roboto"), font("Lora")]);
+	expect(validateProjectData(project)).toBe(true);
 });
