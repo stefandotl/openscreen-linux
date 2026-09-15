@@ -19,6 +19,75 @@ function waitForPresentedFrame(video: HTMLVideoElement, timeoutMs: number) {
 }
 
 describe("WebcamRecordingBridge (real browser)", () => {
+	it("keeps a square square when a landscape source reconnects in portrait", async () => {
+		const sources = [
+			{ width: 320, height: 180 },
+			{ width: 180, height: 320 },
+		].map(({ width, height }) => {
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			const context = canvas.getContext("2d")!;
+			const paint = () => {
+				context.fillStyle = "#f00";
+				context.fillRect(0, 0, width, height);
+				context.fillStyle = "#fff";
+				context.fillRect((width - 80) / 2, (height - 80) / 2, 80, 80);
+			};
+			paint();
+			return { stream: canvas.captureStream(20), timer: window.setInterval(paint, 20) };
+		});
+		const bridge = await WebcamRecordingBridge.create(sources[0].stream, 20);
+		const video = document.createElement("video");
+		video.muted = true;
+		video.srcObject = bridge.stream;
+		try {
+			await Promise.all([video.play(), waitForPresentedFrame(video, 1500)]);
+			bridge.detachSource(sources[0].stream);
+			await bridge.attachSource(sources[1].stream);
+			const snapshot = document.createElement("canvas");
+			snapshot.width = 320;
+			snapshot.height = 180;
+			const context = snapshot.getContext("2d", { willReadFrequently: true })!;
+			await expect
+				.poll(async () => {
+					await waitForPresentedFrame(video, 1500);
+					context.drawImage(video, 0, 0);
+					return Array.from(context.getImageData(10, 90, 1, 1).data);
+				})
+				.toEqual([0, 0, 0, 255]);
+			expect(video.videoWidth).toBe(320);
+			expect(video.videoHeight).toBe(180);
+			const pixels = context.getImageData(0, 0, 320, 180).data;
+			let minX = 320;
+			let maxX = -1;
+			let minY = 180;
+			let maxY = -1;
+			for (let y = 0; y < 180; y++) {
+				for (let x = 0; x < 320; x++) {
+					const offset = (y * 320 + x) * 4;
+					if (pixels[offset] > 230 && pixels[offset + 1] > 230 && pixels[offset + 2] > 230) {
+						minX = Math.min(minX, x);
+						maxX = Math.max(maxX, x);
+						minY = Math.min(minY, y);
+						maxY = Math.max(maxY, y);
+					}
+				}
+			}
+			expect(maxX - minX + 1).toBeGreaterThanOrEqual(44);
+			expect(maxX - minX + 1).toBeLessThanOrEqual(46);
+			expect(Math.abs(maxX - minX - (maxY - minY))).toBeLessThanOrEqual(1);
+		} finally {
+			video.pause();
+			video.srcObject = null;
+			bridge.destroy();
+			for (const source of sources) {
+				window.clearInterval(source.timer);
+				source.stream.getTracks().forEach((track) => track.stop());
+			}
+		}
+	});
+
 	it("publishes a source frame without waiting for the watchdog cadence", async () => {
 		const sourceCanvas = document.createElement("canvas");
 		sourceCanvas.width = 320;

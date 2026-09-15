@@ -5,6 +5,7 @@ describe("WebcamRecordingBridge", () => {
 	type SourceFrameCallback = Parameters<HTMLVideoElement["requestVideoFrameCallback"]>[0];
 
 	const drawImage = vi.fn();
+	const fillRect = vi.fn();
 	const requestFrame = vi.fn();
 	const stopOutputTrack = vi.fn();
 	const play = vi.fn(async () => undefined);
@@ -32,7 +33,7 @@ describe("WebcamRecordingBridge", () => {
 		height: 0,
 		getContext: vi.fn(() => ({
 			drawImage,
-			fillRect: vi.fn(),
+			fillRect,
 			fillStyle: "",
 		})),
 		captureStream: vi.fn(() => outputStream),
@@ -42,6 +43,8 @@ describe("WebcamRecordingBridge", () => {
 		muted: false,
 		playsInline: false,
 		readyState: HTMLMediaElement.HAVE_CURRENT_DATA,
+		videoWidth: 1280,
+		videoHeight: 720,
 		srcObject: null as MediaStream | null,
 		play,
 		pause,
@@ -86,6 +89,8 @@ describe("WebcamRecordingBridge", () => {
 				>,
 		);
 		video.readyState = HTMLMediaElement.HAVE_CURRENT_DATA;
+		video.videoWidth = 1280;
+		video.videoHeight = 720;
 		video.srcObject = null;
 	});
 
@@ -147,6 +152,57 @@ describe("WebcamRecordingBridge", () => {
 		expect(requestFrame).toHaveBeenCalledTimes(3);
 
 		bridge.destroy();
+		expect(stopOutputTrack).toHaveBeenCalledOnce();
+	});
+
+	it("uses the playable image dimensions when track settings still describe landscape", async () => {
+		video.videoWidth = 720;
+		video.videoHeight = 1280;
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30);
+		try {
+			presentNextSourceFrame();
+			expect(canvas.width).toBe(720);
+			expect(canvas.height).toBe(1280);
+			expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 720, 1280);
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it.each([
+		false,
+		true,
+	])("preserves proportions after a format change (reconnect: %s)", async (reconnect) => {
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30);
+		try {
+			presentNextSourceFrame();
+			video.videoWidth = 720;
+			video.videoHeight = 1280;
+			if (reconnect) {
+				bridge.detachSource(sourceStream);
+				await bridge.attachSource(recoveredSourceStream);
+			}
+			presentNextSourceFrame();
+			expect(canvas.width).toBe(1280);
+			expect(canvas.height).toBe(720);
+			expect(fillRect).toHaveBeenLastCalledWith(0, 0, 1280, 720);
+			expect(drawImage).toHaveBeenLastCalledWith(video, 437.5, 0, 405, 720);
+			expect(bridge.stream).toBe(outputStream);
+			video.videoWidth = 640;
+			video.videoHeight = 360;
+			presentNextSourceFrame();
+			expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 1280, 720);
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("rejects an initial source without playable dimensions and releases the output", async () => {
+		video.videoWidth = 0;
+		video.videoHeight = 0;
+		await expect(WebcamRecordingBridge.create(sourceStream, 30)).rejects.toThrow(
+			"Webcam source did not provide valid video dimensions",
+		);
 		expect(stopOutputTrack).toHaveBeenCalledOnce();
 	});
 

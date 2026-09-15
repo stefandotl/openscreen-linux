@@ -26,6 +26,7 @@ export class WebcamRecordingBridge {
 	private sourceFrameCallbackId: number | null = null;
 	private sourceFrameCallbackGeneration = 0;
 	private receivedSourceFrameSinceWatchdog = false;
+	private outputDimensionsInitialized = false;
 	private destroyed = false;
 
 	private constructor(sourceStream: MediaStream, frameRate: number) {
@@ -95,6 +96,16 @@ export class WebcamRecordingBridge {
 		this.video.srcObject = sourceStream;
 		await this.video.play();
 		if (!this.destroyed && this.sourceStream === sourceStream) {
+			if (!this.outputDimensionsInitialized) {
+				// Track settings can still describe the pre-rotation camera format.
+				// Lock the recording to the first playable image's display dimensions.
+				if (this.video.videoWidth <= 0 || this.video.videoHeight <= 0) {
+					throw new Error("Webcam source did not provide valid video dimensions.");
+				}
+				this.canvas.width = this.video.videoWidth;
+				this.canvas.height = this.video.videoHeight;
+				this.outputDimensionsInitialized = true;
+			}
 			this.scheduleSourceFrameCallback(sourceStream);
 		}
 	}
@@ -164,8 +175,30 @@ export class WebcamRecordingBridge {
 		if (this.destroyed) {
 			return;
 		}
-		if (this.sourceStream && this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-			this.context.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+		if (
+			this.outputDimensionsInitialized &&
+			this.sourceStream &&
+			this.video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
+			this.video.videoWidth > 0 &&
+			this.video.videoHeight > 0
+		) {
+			// Preserve the full image if a phone rotates or a recovered source changes
+			// aspect ratio. Keep the encoded dimensions stable throughout the recording.
+			const scale = Math.min(
+				this.canvas.width / this.video.videoWidth,
+				this.canvas.height / this.video.videoHeight,
+			);
+			const width = this.video.videoWidth * scale;
+			const height = this.video.videoHeight * scale;
+			this.context.fillStyle = "#000";
+			this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+			this.context.drawImage(
+				this.video,
+				(this.canvas.width - width) / 2,
+				(this.canvas.height - height) / 2,
+				width,
+				height,
+			);
 			this.receivedSourceFrameSinceWatchdog = true;
 		}
 		this.outputTrack.requestFrame();
