@@ -215,6 +215,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	discardCurrentRecording: () => {
 		return ipcRenderer.invoke("discard-current-recording");
 	},
+	inspectAudioFile: (filePath: string) => ipcRenderer.invoke("inspect-audio-file", filePath),
 	readBinaryFile: (filePath: string) => {
 		return ipcRenderer.invoke("read-binary-file", filePath);
 	},

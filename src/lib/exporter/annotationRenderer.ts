@@ -479,10 +479,10 @@ async function renderImage(
 	height: number,
 ): Promise<void> {
 	if (!annotation.content || !annotation.content.startsWith("data:image")) {
-		return;
+		throw new Error(`Image ${annotation.id} has no valid image data`);
 	}
 
-	return new Promise((resolve) => {
+	return new Promise((resolve, reject) => {
 		const img = new Image();
 		img.onload = () => {
 			// Contain within bounds, preserving aspect ratio
@@ -506,8 +506,7 @@ async function renderImage(
 			resolve();
 		};
 		img.onerror = () => {
-			console.error("[AnnotationRenderer] Failed to load image annotation");
-			resolve();
+			reject(new Error(`Failed to load image ${annotation.id}`));
 		};
 		img.src = annotation.content;
 	});

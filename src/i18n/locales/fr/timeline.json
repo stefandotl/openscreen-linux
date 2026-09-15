@@ -6,7 +6,10 @@
 		"addTrim": "Ajouter une coupe (T)",
 		"addAnnotation": "Ajouter une annotation (A)",
 		"addSpeed": "Ajouter une vitesse (S)",
-		"addBlur": "Ajouter un flou (B)"
+		"addBlur": "Ajouter un flou (B)",
+		"addContent": "Ajouter",
+		"importAudio": "Importer un audio",
+		"importImage": "Importer une image"
 	},
 	"hints": {
 		"pressZoom": "Appuyez sur Z pour ajouter un zoom",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "{{count}} suggestion de zoom basée sur le curseur ajoutée",
 		"addedZoomSuggestionsPlural": "{{count}} suggestions de zoom basées sur le curseur ajoutées"
+	},
+	"tracks": {
+		"text": "Texte",
+		"captions": "Sous-titres",
+		"image": "Images",
+		"figure": "Formes",
+		"audio": "Audio"
+	},
+	"audio": {
+		"volume": "Volume",
+		"fadeInMs": "Fondu entrant",
+		"fadeOutMs": "Fondu sortant",
+		"remove": "Supprimer l’audio"
 	}
 }

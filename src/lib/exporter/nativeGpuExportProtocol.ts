@@ -1,3 +1,4 @@
+import type { AudioRegion } from "@/components/video-editor/audioRegions";
 import type { SpeedRegion, TrimRegion } from "@/components/video-editor/types";
 
 export const NATIVE_GPU_EXPORT_PROTOCOL_VERSION = 9 as const;
@@ -87,6 +88,7 @@ export interface NativeGpuExportRequest {
 	plan: NativeGpuExportPlan;
 	outputPath: string;
 	audioPath?: string;
+	audioRegions?: AudioRegion[];
 	/** Multi-scene exports require every segment to expose the same audio layout. */
 	ensureAudioTrack?: boolean;
 	sourceDurationSec: number;

@@ -177,6 +177,7 @@ function editorForSplitRange(
 		),
 		speedRegions: keepRegionsOverlappingRange(copy.speedRegions, startMs, endMs),
 		annotationRegions: keepRegionsOverlappingRange(copy.annotationRegions, startMs, endMs),
+		audioRegions: keepRegionsOverlappingRange(copy.audioRegions, startMs, endMs),
 	};
 }
 
@@ -288,6 +289,10 @@ export function mergeScenesAtCut(
 		leftScene.editor.speedRegions,
 		rightScene.editor.speedRegions,
 	);
+	const audio = mergeRegionCollections(
+		leftScene.editor.audioRegions,
+		rightScene.editor.audioRegions,
+	);
 	const annotations = mergeRegionCollections(
 		leftScene.editor.annotationRegions,
 		rightScene.editor.annotationRegions,
@@ -310,6 +315,7 @@ export function mergeScenesAtCut(
 				),
 				speedRegions: speeds.regions,
 				annotationRegions: annotations.regions,
+				audioRegions: audio.regions,
 			},
 		},
 		boundaryMs: cut.boundaryMs,
@@ -318,7 +324,8 @@ export function mergeScenesAtCut(
 				JSON.stringify(editorAppearance(rightScene.editor)) ||
 			zooms.hasConflicts ||
 			speeds.hasConflicts ||
-			annotations.hasConflicts,
+			annotations.hasConflicts ||
+			audio.hasConflicts,
 	};
 }
 

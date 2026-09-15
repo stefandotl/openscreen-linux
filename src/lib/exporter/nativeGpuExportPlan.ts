@@ -89,8 +89,8 @@ function sortedActiveAnnotations(config: VideoExporterConfig) {
 	return activeAnnotations(config).sort((a, b) => a.zIndex - b.zIndex);
 }
 
-function sortedTextAnnotations(config: VideoExporterConfig) {
-	return sortedActiveAnnotations(config).filter((annotation) => annotation.type === "text");
+function sortedOverlayAnnotations(config: VideoExporterConfig) {
+	return sortedActiveAnnotations(config).filter((annotation) => annotation.type !== "blur");
 }
 
 function sortedBlurRegions(config: VideoExporterConfig) {
@@ -216,7 +216,7 @@ export function getNativeGpuExportBlockers(
 
 	const annotations = activeAnnotations(config);
 	for (const annotation of annotations) {
-		if (annotation.type !== "text" && annotation.type !== "blur")
+		if (!["text", "image", "figure", "blur"].includes(annotation.type))
 			blockers.push(`annotation type ${annotation.type} is not implemented`);
 		if (
 			annotation.type === "text" &&
@@ -436,7 +436,7 @@ export function createNativeGpuExportPlan(
 	if (sourceTimestampsMs.length === 0) {
 		throw new Error("Native GPU export timeline contains no frames");
 	}
-	const overlays = sortedTextAnnotations(config).map((annotation) => ({
+	const overlays = sortedOverlayAnnotations(config).map((annotation) => ({
 		startMs: annotation.startMs,
 		endMs: annotation.endMs,
 		...annotationPixelBounds(annotation, config),
@@ -536,7 +536,7 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 		? blurWallpaperCanvas(rawWallpaperCanvas)
 		: rawWallpaperCanvas;
 	const wallpaperPng = await canvasToPng(wallpaperCanvas);
-	const annotations = sortedTextAnnotations(config);
+	const annotations = sortedOverlayAnnotations(config);
 	const previewWidth = config.previewWidth ?? config.width;
 	const previewHeight = config.previewHeight ?? config.height;
 	const scaleFactor = (config.width / previewWidth + config.height / previewHeight) / 2;
@@ -627,14 +627,17 @@ export async function createNativeGpuExportAssets(config: VideoExporterConfig): 
 		if (bounds.width < 1 || bounds.height < 1) {
 			throw new Error(`Annotation ${annotation.id} has no visible export area`);
 		}
-		if (document.fonts) {
+		if (annotation.type === "text" && document.fonts) {
 			const fontStyle = annotation.style.fontStyle === "italic" ? "italic" : "normal";
 			const fontWeight = annotation.style.fontWeight === "bold" ? "bold" : "normal";
 			await document.fonts.load(
 				`${fontStyle} ${fontWeight} ${annotation.style.fontSize * scaleFactor}px ${annotation.style.fontFamily}`,
 			);
 		}
-		const timedWords = annotation.style.wordHighlight ? getCaptionDisplayWords(annotation) : [];
+		const timedWords =
+			annotation.type === "text" && annotation.style.wordHighlight
+				? getCaptionDisplayWords(annotation)
+				: [];
 		const base = await renderOverlay(
 			annotation,
 			bounds,

@@ -1,6 +1,16 @@
 import type { Span } from "dnd-timeline";
 import { useItem, useTimelineContext } from "dnd-timeline";
-import { Gauge, LockKeyhole, MessageSquare, MousePointer2, Scissors, ZoomIn } from "lucide-react";
+import {
+	Captions,
+	Gauge,
+	ImageIcon,
+	LockKeyhole,
+	MessageSquare,
+	MousePointer2,
+	Music,
+	Scissors,
+	ZoomIn,
+} from "lucide-react";
 import { useMemo } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
@@ -18,7 +28,16 @@ interface ItemProps {
 	speedValue?: number;
 	isAutoFocus?: boolean;
 	disabled?: boolean;
-	variant?: "zoom" | "trim" | "scene-boundary" | "annotation" | "speed" | "blur";
+	variant?:
+		| "zoom"
+		| "trim"
+		| "scene-boundary"
+		| "annotation"
+		| "speed"
+		| "blur"
+		| "audio"
+		| "captions"
+		| "image";
 }
 
 // Map zoom depth to multiplier labels
@@ -192,7 +211,15 @@ export default function Item({
 								</>
 							) : (
 								<>
-									<MessageSquare className="w-3.5 h-3.5 shrink-0" />
+									{variant === "captions" ? (
+										<Captions className="w-3.5 h-3.5 shrink-0" />
+									) : variant === "audio" ? (
+										<Music className="w-3.5 h-3.5 shrink-0" />
+									) : variant === "image" ? (
+										<ImageIcon className="w-3.5 h-3.5 shrink-0" />
+									) : (
+										<MessageSquare className="w-3.5 h-3.5 shrink-0" />
+									)}
 									<span className="text-[11px] font-semibold truncate whitespace-nowrap">
 										{children}
 									</span>

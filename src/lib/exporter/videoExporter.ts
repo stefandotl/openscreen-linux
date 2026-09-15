@@ -1,3 +1,4 @@
+import type { AudioRegion } from "@/components/video-editor/audioRegions";
 import type {
 	AnnotationRegion,
 	CropRegion,
@@ -76,6 +77,7 @@ export interface VideoExporterConfig extends ExportConfig {
 	linuxFrameSource?: LinuxExportFrameSource;
 	nativeOutputPath?: string;
 	nativeAudioPath?: string;
+	audioRegions?: AudioRegion[];
 	ensureAudioTrack?: boolean;
 	preferNativeNvenc?: boolean;
 	onProgress?: (progress: ExportProgress) => void;
@@ -132,6 +134,7 @@ export function getSourceCopyFastPathBlockers(
 	if (hasActiveTimeRegions(config.trimRegions)) blockers.push("trim regions are present");
 	if (hasActiveSpeedRegions(config.speedRegions)) blockers.push("speed regions are present");
 	if (hasActiveTimeRegions(config.zoomRegions)) blockers.push("zoom regions are present");
+	if (config.audioRegions?.length) blockers.push("external audio clips");
 	if (hasActiveTimeRegions(config.annotationRegions))
 		blockers.push("annotation regions are present");
 	if (hasNativeCursorOverlay(config)) blockers.push("editable cursor overlay is enabled");
@@ -385,6 +388,7 @@ export class VideoExporter {
 				plan,
 				outputPath: this.config.nativeOutputPath!,
 				audioPath: videoInfo.hasAudio ? this.config.nativeAudioPath : undefined,
+				audioRegions: this.config.audioRegions,
 				ensureAudioTrack: this.config.ensureAudioTrack,
 				sourceDurationSec: videoInfo.duration,
 				trimRegions: this.config.trimRegions,
@@ -474,6 +478,9 @@ export class VideoExporter {
 		this.fatalEncoderError = null;
 
 		try {
+			if (this.config.audioRegions?.length) {
+				throw new Error("External audio requires the native Linux MP4 exporter on this platform");
+			}
 			const platform = await getPlatform();
 			const useCpuFrameReadback = shouldUseCpuFrameReadback({
 				platform,

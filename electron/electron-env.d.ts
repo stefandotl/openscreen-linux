@@ -261,6 +261,11 @@ interface Window {
 			message?: string;
 			deleted?: boolean;
 		}>;
+		inspectAudioFile: (
+			filePath: string,
+		) => Promise<
+			{ success: true; path: string; durationMs: number } | { success: false; error: string }
+		>;
 		readBinaryFile: (filePath: string) => Promise<{
 			success: boolean;
 			data?: ArrayBuffer;

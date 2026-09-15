@@ -10,7 +10,10 @@
 		"addTrim": "Add Trim (T)",
 		"addAnnotation": "Add Annotation (A)",
 		"addBlur": "Add Blur (B)",
-		"addSpeed": "Add Speed (S)"
+		"addSpeed": "Add Speed (S)",
+		"addContent": "Add",
+		"importAudio": "Import audio",
+		"importImage": "Import image"
 	},
 	"hints": {
 		"pressZoom": "Press Z to add zoom",
@@ -57,5 +60,18 @@
 	"success": {
 		"addedZoomSuggestions": "Added {{count}} cursor-based zoom suggestion",
 		"addedZoomSuggestionsPlural": "Added {{count}} cursor-based zoom suggestions"
+	},
+	"tracks": {
+		"text": "Text",
+		"captions": "Subtitles",
+		"image": "Images",
+		"figure": "Shapes",
+		"audio": "Audio"
+	},
+	"audio": {
+		"volume": "Volume",
+		"fadeInMs": "Fade in",
+		"fadeOutMs": "Fade out",
+		"remove": "Remove audio"
 	}
 }

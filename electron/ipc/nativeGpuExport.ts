@@ -5,12 +5,15 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { ipcMain, type WebContents } from "electron";
+import type { AudioRegion } from "../../src/components/video-editor/audioRegions";
+import { validateAudioRegions } from "../../src/components/video-editor/audioRegions";
 import {
 	NATIVE_GPU_EXPORT_CHANNELS,
 	NATIVE_GPU_EXPORT_PROTOCOL_VERSION,
 	type NativeGpuExportProgress,
 	type NativeGpuExportRequest,
 } from "../../src/lib/exporter/nativeGpuExportProtocol";
+import { validateAudioPath } from "./audioAssets";
 import { type AudioTimelineFilter, buildNativeGpuAudioMuxArgs } from "./nativeGpuAudioMux";
 
 const HELPER_NAME = "videtio-linux-export-helper";
@@ -54,6 +57,7 @@ interface NativeGpuExportSession {
 	videoOnlyPath: string;
 	outputPath: string;
 	audioPath?: string;
+	audioRegions: AudioRegion[];
 	sourceDurationSec: number;
 	trimRegions?: Array<{ startMs: number; endMs: number }>;
 	speedRegions?: Array<{ startMs: number; endMs: number; speed: number }>;
@@ -572,6 +576,8 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 						throw new Error("Native GPU export webcam path is invalid or unapproved");
 					}
 				}
+				const audioRegions = validateAudioRegions(payload.audioRegions);
+				for (const clip of audioRegions) clip.sourcePath = await validateAudioPath(clip.sourcePath);
 				let audioPath: string | undefined;
 				if (payload.audioPath) {
 					audioPath = dependencies.resolveApprovedVideoPath(payload.audioPath) ?? undefined;
@@ -630,6 +636,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 					videoOnlyPath,
 					outputPath,
 					audioPath,
+					audioRegions,
 					sourceDurationSec: payload.sourceDurationSec,
 					trimRegions: payload.trimRegions,
 					speedRegions: payload.speedRegions,
@@ -706,7 +713,7 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 				totalFrames: session.totalFrames,
 				fps: 0,
 			});
-			if (session.audioPath || session.ensureAudioTrack) {
+			if (session.audioPath || session.ensureAudioTrack || session.audioRegions.length) {
 				const audioFilter = dependencies.buildAudioTimelineFilter(
 					session.sourceDurationSec,
 					session.trimRegions,
@@ -719,6 +726,8 @@ export function registerNativeGpuExportHandlers(dependencies: NativeGpuExportDep
 						{
 							videoOnlyPath: session.videoOnlyPath,
 							audioPath: session.audioPath,
+							audioRegions: session.audioRegions,
+							sourceDurationSec: session.sourceDurationSec,
 							outputPath: session.outputPath,
 							ensureAudioTrack: session.ensureAudioTrack,
 							totalFrames: session.totalFrames,

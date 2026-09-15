@@ -6,7 +6,10 @@
 		"addTrim": "Kırpma Ekle (T)",
 		"addAnnotation": "Açıklama Ekle (A)",
 		"addSpeed": "Hız Ekle (S)",
-		"addBlur": "Bulanık ekle (B)"
+		"addBlur": "Bulanık ekle (B)",
+		"addContent": "Ekle",
+		"importAudio": "Ses içe aktar",
+		"importImage": "Görsel içe aktar"
 	},
 	"hints": {
 		"pressZoom": "Yakınlaştırma eklemek için Z tuşuna basın",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "{{count}} imleç tabanlı yakınlaştırma önerisi eklendi",
 		"addedZoomSuggestionsPlural": "{{count}} imleç tabanlı yakınlaştırma önerisi eklendi"
+	},
+	"tracks": {
+		"text": "Metin",
+		"captions": "Altyazılar",
+		"image": "Görseller",
+		"figure": "Şekiller",
+		"audio": "Ses"
+	},
+	"audio": {
+		"volume": "Ses düzeyi",
+		"fadeInMs": "Yavaşça açılma",
+		"fadeOutMs": "Yavaşça kapanma",
+		"remove": "Sesi kaldır"
 	}
 }

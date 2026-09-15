@@ -6,7 +6,10 @@
 		"addTrim": "添加剪辑 (T)",
 		"addAnnotation": "添加标注 (A)",
 		"addSpeed": "添加速度 (S)",
-		"addBlur": "添加模糊 (B)"
+		"addBlur": "添加模糊 (B)",
+		"addContent": "添加",
+		"importAudio": "导入音频",
+		"importImage": "导入图片"
 	},
 	"hints": {
 		"pressZoom": "按 Z 添加缩放",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "已添加 {{count}} 个基于光标的缩放建议",
 		"addedZoomSuggestionsPlural": "已添加 {{count}} 个基于光标的缩放建议"
+	},
+	"tracks": {
+		"text": "文本",
+		"captions": "字幕",
+		"image": "图片",
+		"figure": "形状",
+		"audio": "音频"
+	},
+	"audio": {
+		"volume": "音量",
+		"fadeInMs": "淡入",
+		"fadeOutMs": "淡出",
+		"remove": "删除音频"
 	}
 }

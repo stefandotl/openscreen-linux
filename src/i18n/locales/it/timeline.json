@@ -6,7 +6,10 @@
 		"addTrim": "Aggiungi taglio (T)",
 		"addAnnotation": "Aggiungi annotazione (A)",
 		"addBlur": "Aggiungi sfocatura (B)",
-		"addSpeed": "Aggiungi velocità (S)"
+		"addSpeed": "Aggiungi velocità (S)",
+		"addContent": "Aggiungi",
+		"importAudio": "Importa audio",
+		"importImage": "Importa immagine"
 	},
 	"hints": {
 		"pressZoom": "Premi Z per aggiungere zoom",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "Aggiunto {{count}} suggerimento zoom basato sul cursore",
 		"addedZoomSuggestionsPlural": "Aggiunti {{count}} suggerimenti zoom basati sul cursore"
+	},
+	"tracks": {
+		"text": "Testo",
+		"captions": "Sottotitoli",
+		"image": "Immagini",
+		"figure": "Forme",
+		"audio": "Audio"
+	},
+	"audio": {
+		"volume": "Volume",
+		"fadeInMs": "Dissolvenza in entrata",
+		"fadeOutMs": "Dissolvenza in uscita",
+		"remove": "Rimuovi audio"
 	}
 }

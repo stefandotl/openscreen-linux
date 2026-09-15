@@ -6,7 +6,10 @@
 		"addTrim": "トリムを追加 (T)",
 		"addAnnotation": "注釈を追加 (A)",
 		"addBlur": "ぼかしを追加 (B)",
-		"addSpeed": "再生速度を追加 (S)"
+		"addSpeed": "再生速度を追加 (S)",
+		"addContent": "追加",
+		"importAudio": "音声を読み込む",
+		"importImage": "画像を読み込む"
 	},
 	"hints": {
 		"pressZoom": "Zキーを押してズームを追加",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "カーソルに基づくズーム提案を {{count}} 件追加しました",
 		"addedZoomSuggestionsPlural": "カーソルに基づくズーム提案を {{count}} 件追加しました"
+	},
+	"tracks": {
+		"text": "テキスト",
+		"captions": "字幕",
+		"image": "画像",
+		"figure": "図形",
+		"audio": "音声"
+	},
+	"audio": {
+		"volume": "音量",
+		"fadeInMs": "フェードイン",
+		"fadeOutMs": "フェードアウト",
+		"remove": "音声を削除"
 	}
 }

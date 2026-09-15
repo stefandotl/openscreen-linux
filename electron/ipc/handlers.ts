@@ -74,6 +74,7 @@ import {
 	RecordingProjectTransitionState,
 } from "../recordingProjectTransition";
 import { openRecordingsFolder } from "../recordingsFolder";
+import { registerAudioAssetHandlers } from "./audioAssets";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -1585,6 +1586,7 @@ export function registerIpcHandlers(
 		: path.join(path.dirname(fileURLToPath(import.meta.url)), "parakeetWorker.js");
 	const parakeetTranscriptionService = new ParakeetTranscriptionService(parakeetWorkerPath);
 
+	registerAudioAssetHandlers(getFfmpegBinary);
 	registerNativeGpuExportHandlers({
 		getFfmpegBinary,
 		resolveApprovedVideoPath,

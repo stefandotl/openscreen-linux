@@ -6,7 +6,10 @@
 		"addTrim": "트림 추가 (T)",
 		"addAnnotation": "주석 추가 (A)",
 		"addSpeed": "속도 추가 (S)",
-		"addBlur": "블러 추가 (B)"
+		"addBlur": "블러 추가 (B)",
+		"addContent": "추가",
+		"importAudio": "오디오 가져오기",
+		"importImage": "이미지 가져오기"
 	},
 	"hints": {
 		"pressZoom": "Z를 눌러 줌 추가",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "커서 기반 줌 제안 {{count}}개가 추가되었습니다",
 		"addedZoomSuggestionsPlural": "커서 기반 줌 제안 {{count}}개가 추가되었습니다"
+	},
+	"tracks": {
+		"text": "텍스트",
+		"captions": "자막",
+		"image": "이미지",
+		"figure": "도형",
+		"audio": "오디오"
+	},
+	"audio": {
+		"volume": "음량",
+		"fadeInMs": "페이드 인",
+		"fadeOutMs": "페이드 아웃",
+		"remove": "오디오 삭제"
 	}
 }

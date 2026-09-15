@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationRegion } from "@/components/video-editor/types";
-import { createNativeGpuExportAssets } from "./nativeGpuExportPlan";
+import { renderAnnotations } from "./annotationRenderer";
+import { createNativeGpuExportAssets, getNativeGpuExportBlockers } from "./nativeGpuExportPlan";
 import type { VideoExporterConfig } from "./videoExporter";
 
 function createConfig(showBlur: boolean): VideoExporterConfig {
@@ -229,4 +230,73 @@ it("keeps clipped word highlights as transparent no-ops instead of rejecting nor
 			(r, g, b, a) => r > 240 && g < 20 && b > 80 && a > 200,
 		),
 	).toBe(true);
+});
+
+describe("separate content tracks in native assets", () => {
+	it("matches preview timing and z-order for three captions, two overlapping texts and an image", async () => {
+		const config = createConfig(false);
+		const image = document.createElement("canvas");
+		image.width = 80;
+		image.height = 40;
+		const imageContext = image.getContext("2d")!;
+		imageContext.fillStyle = "#00ff00";
+		imageContext.fillRect(0, 0, 80, 40);
+		config.annotationRegions = [
+			{ ...caption("caption 1", 0, 300, 5), annotationSource: "auto-caption" },
+			{ ...caption("caption 2", 300, 600, 5), annotationSource: "auto-caption" },
+			{ ...caption("caption 3", 600, 900, 5), annotationSource: "auto-caption" },
+			caption("below", 200, 700, 2),
+			caption("above", 400, 800, 10),
+			{ ...caption("image", 100, 500, 3), type: "image", content: image.toDataURL() },
+		];
+		expect(getNativeGpuExportBlockers(config, { width: 320, height: 180, duration: 1 })).toEqual(
+			[],
+		);
+		const assets = await createNativeGpuExportAssets(config);
+		expect(assets.overlays).toHaveLength(6);
+		const bitmaps = await Promise.all(
+			assets.overlayPngs.map((png) => createImageBitmap(new Blob([png], { type: "image/png" }))),
+		);
+		try {
+			for (const time of [0, 100, 299, 300, 400, 500, 600, 800, 900]) {
+				const preview = document.createElement("canvas");
+				const native = document.createElement("canvas");
+				for (const canvas of [preview, native]) {
+					canvas.width = config.width;
+					canvas.height = config.height;
+				}
+				await renderAnnotations(
+					preview.getContext("2d")!,
+					config.annotationRegions,
+					config.width,
+					config.height,
+					time,
+				);
+				const context = native.getContext("2d")!;
+				assets.overlays.forEach((overlay, index) => {
+					if (time >= overlay.startMs && time < overlay.endMs)
+						context.drawImage(bitmaps[index], overlay.x, overlay.y);
+				});
+				const actual = context.getImageData(0, 0, config.width, config.height).data;
+				const expected = preview
+					.getContext("2d")!
+					.getImageData(0, 0, config.width, config.height).data;
+				expect(actual, `composition at ${time}ms`).toEqual(expected);
+			}
+		} finally {
+			bitmaps.forEach((bitmap) => bitmap.close());
+		}
+	});
+
+	it("fails visibly for an unreadable image rather than exporting an empty overlay", async () => {
+		const config = createConfig(false);
+		config.annotationRegions = [
+			{
+				...caption("broken image", 0, 900, 1),
+				type: "image",
+				content: "data:image/png;base64,broken",
+			},
+		];
+		await expect(createNativeGpuExportAssets(config)).rejects.toThrow("Failed to load image");
+	});
 });

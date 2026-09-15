@@ -6,7 +6,10 @@
 		"addTrim": "Thêm Cắt (T)",
 		"addAnnotation": "Thêm Chú thích (A)",
 		"addBlur": "Thêm Làm mờ (B)",
-		"addSpeed": "Thêm Tốc độ (S)"
+		"addSpeed": "Thêm Tốc độ (S)",
+		"addContent": "Thêm",
+		"importAudio": "Nhập âm thanh",
+		"importImage": "Nhập hình ảnh"
 	},
 	"hints": {
 		"pressZoom": "Nhấn Z để thêm thu phóng",
@@ -53,5 +56,18 @@
 	"success": {
 		"addedZoomSuggestions": "Đã thêm {{count}} đề xuất thu phóng dựa trên con trỏ",
 		"addedZoomSuggestionsPlural": "Đã thêm {{count}} đề xuất thu phóng dựa trên con trỏ"
+	},
+	"tracks": {
+		"text": "Văn bản",
+		"captions": "Phụ đề",
+		"image": "Hình ảnh",
+		"figure": "Hình dạng",
+		"audio": "Âm thanh"
+	},
+	"audio": {
+		"volume": "Âm lượng",
+		"fadeInMs": "Tăng dần",
+		"fadeOutMs": "Giảm dần",
+		"remove": "Xóa âm thanh"
 	}
 }

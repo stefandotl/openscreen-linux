@@ -81,6 +81,8 @@ import {
 	getNativeAspectRatioValue,
 	isPortraitAspectRatio,
 } from "@/utils/aspectRatioUtils";
+import { AudioClipSettings } from "./AudioClipSettings";
+import { resizeAudioRegion } from "./audioRegions";
 import { EditorEmptyState } from "./EditorEmptyState";
 import { ExportDialog } from "./ExportDialog";
 import {
@@ -118,6 +120,7 @@ import {
 	projectTimeToSceneSource,
 	sceneSourceTimeToProjectTime,
 } from "./projectPlayback";
+import { SceneAudioPlayback } from "./SceneAudioPlayback";
 import SceneStrip from "./SceneStrip";
 import { SettingsPanel } from "./SettingsPanel";
 import {
@@ -262,6 +265,10 @@ export default function VideoEditor() {
 		resetState,
 	} = useEditorHistory(INITIAL_EDITOR_STATE);
 
+	const [selectedAudioId, setSelectedAudioId] = useState<string | null>(null);
+	const audioInputRef = useRef<HTMLInputElement>(null);
+	const imageInputRef = useRef<HTMLInputElement>(null);
+
 	const {
 		zoomRegions,
 		autoZoomEnabled,
@@ -269,6 +276,7 @@ export default function VideoEditor() {
 		trimRegions,
 		speedRegions,
 		annotationRegions,
+		audioRegions,
 		cropRegion,
 		wallpaper,
 		shadowIntensity,
@@ -626,6 +634,7 @@ export default function VideoEditor() {
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		},
 		[applySceneMedia, pauseProjectPlaybackForEditing, resetState, updateActiveSceneSnapshot],
@@ -729,6 +738,7 @@ export default function VideoEditor() {
 		setSelectedTrimId(null);
 		setSelectedSpeedId(null);
 		setSelectedAnnotationId(null);
+		setSelectedAudioId(null);
 		setSelectedBlurId(null);
 		toast.success("Scene split");
 	}, [
@@ -774,6 +784,7 @@ export default function VideoEditor() {
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 
 			if (keptActiveScene && videoPlaybackRef.current?.video) {
@@ -1018,6 +1029,7 @@ export default function VideoEditor() {
 				trimRegions: normalizedEditor.trimRegions,
 				speedRegions: normalizedEditor.speedRegions,
 				annotationRegions: normalizedEditor.annotationRegions,
+				audioRegions: normalizedEditor.audioRegions,
 				aspectRatio: normalizedEditor.aspectRatio,
 				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
@@ -1082,6 +1094,7 @@ export default function VideoEditor() {
 							trimRegions: scene.editor.trimRegions,
 							speedRegions: scene.editor.speedRegions,
 							annotationRegions: scene.editor.annotationRegions,
+							audioRegions: scene.editor.audioRegions,
 							aspectRatio: scene.editor.aspectRatio,
 							webcamLayoutPreset: scene.editor.webcamLayoutPreset,
 							webcamMaskShape: scene.editor.webcamMaskShape,
@@ -1121,6 +1134,7 @@ export default function VideoEditor() {
 				trimRegions: normalizedEditor.trimRegions,
 				speedRegions: normalizedEditor.speedRegions,
 				annotationRegions: normalizedEditor.annotationRegions,
+				audioRegions: normalizedEditor.audioRegions,
 				aspectRatio: normalizedEditor.aspectRatio,
 				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
 				webcamMaskShape: normalizedEditor.webcamMaskShape,
@@ -1152,6 +1166,7 @@ export default function VideoEditor() {
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 
 			nextZoomIdRef.current = deriveNextId(
@@ -1229,6 +1244,7 @@ export default function VideoEditor() {
 				trimRegions,
 				speedRegions,
 				annotationRegions,
+				audioRegions,
 				aspectRatio,
 				webcamLayoutPreset,
 				webcamMaskShape,
@@ -1270,6 +1286,7 @@ export default function VideoEditor() {
 		trimRegions,
 		speedRegions,
 		annotationRegions,
+		audioRegions,
 		aspectRatio,
 		webcamLayoutPreset,
 		webcamMaskShape,
@@ -1434,6 +1451,7 @@ export default function VideoEditor() {
 				trimRegions,
 				speedRegions,
 				annotationRegions,
+				audioRegions,
 				aspectRatio,
 				webcamLayoutPreset,
 				webcamMaskShape,
@@ -1518,6 +1536,7 @@ export default function VideoEditor() {
 			trimRegions,
 			speedRegions,
 			annotationRegions,
+			audioRegions,
 			aspectRatio,
 			webcamLayoutPreset,
 			webcamMaskShape,
@@ -1705,6 +1724,7 @@ export default function VideoEditor() {
 		setSelectedTrimId(null);
 		setSelectedSpeedId(null);
 		setSelectedAnnotationId(null);
+		setSelectedAudioId(null);
 		setSelectedBlurId(null);
 		// Reset playback.
 		setCurrentTime(0);
@@ -1988,6 +2008,7 @@ export default function VideoEditor() {
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		},
 		[
@@ -2045,6 +2066,7 @@ export default function VideoEditor() {
 				setSelectedTrimId(null);
 				setSelectedSpeedId(null);
 				setSelectedAnnotationId(null);
+				setSelectedAudioId(null);
 				setSelectedBlurId(null);
 				playback.video.playbackRate = nextSegment.sourceSegments[0]?.speed ?? 1;
 				readyProjectPlaybackKeyRef.current = createScenePlaybackKey(
@@ -2312,6 +2334,7 @@ export default function VideoEditor() {
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		}
 	}, []);
@@ -2322,12 +2345,14 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		}
 	}, []);
 
 	const handleSelectAnnotation = useCallback((id: string | null) => {
 		setSelectedAnnotationId(id);
+		setSelectedAudioId(null);
 		if (id) {
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
@@ -2342,6 +2367,7 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedSpeedId(null);
 		}
 	}, []);
@@ -2351,6 +2377,7 @@ export default function VideoEditor() {
 		setSelectedTrimId(null);
 		setSelectedSpeedId(null);
 		setSelectedAnnotationId(null);
+		setSelectedAudioId(null);
 		setSelectedBlurId(null);
 	}, []);
 
@@ -2373,6 +2400,7 @@ export default function VideoEditor() {
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		},
 		[pushState, autoFocusAll],
@@ -2481,6 +2509,7 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		},
 		[pushState],
@@ -2637,6 +2666,7 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		}
 	}, []);
@@ -2657,6 +2687,7 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 		},
 		[pushState],
@@ -2703,6 +2734,92 @@ export default function VideoEditor() {
 		[selectedSpeedId, pushState],
 	);
 
+	const handleAudioPlaybackError = useCallback((message: string) => {
+		setIsPlaying(false);
+		toast.error(message);
+	}, []);
+
+	const importSceneFile = async (file: File, kind: "audio" | "image") => {
+		const targetSceneId = activeSceneIdRef.current;
+		const startMs = Math.min(
+			Math.round(currentTime * 1000),
+			Math.max(0, Math.round(duration * 1000) - 100),
+		);
+		try {
+			if (!targetSceneId || duration <= 0) throw new Error("Open a scene before importing media");
+			if (kind === "audio") {
+				const result = await window.electronAPI.inspectAudioFile(
+					window.electronAPI.getPathForFile(file),
+				);
+				if (!result.success) throw new Error(result.error);
+				if (targetSceneId !== activeSceneIdRef.current)
+					throw new Error("Scene changed during import. Please import again.");
+				const id = `audio-${crypto.randomUUID()}`;
+				pushState((previous) => ({
+					audioRegions: [
+						...previous.audioRegions,
+						{
+							id,
+							name: file.name,
+							sourcePath: result.path,
+							startMs,
+							endMs: Math.min(duration * 1000, startMs + result.durationMs),
+							sourceStartMs: 0,
+							sourceDurationMs: result.durationMs,
+							volume: 1,
+							fadeInMs: 0,
+							fadeOutMs: 0,
+						},
+					],
+				}));
+				clearInspectorSelection();
+				setSelectedAudioId(id);
+			} else {
+				if (!/^image\/(png|jpeg|webp)$/.test(file.type))
+					throw new Error("Use a PNG, JPEG or WebP image");
+				if (file.size > 20 * 1024 * 1024) throw new Error("Image must be smaller than 20 MB");
+				const bitmap = await createImageBitmap(file);
+				const canvas = document.createElement("canvas");
+				const scale = Math.min(1, 4096 / Math.max(bitmap.width, bitmap.height));
+				canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+				canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+				try {
+					const context = canvas.getContext("2d");
+					if (!context) throw new Error("Image could not be prepared");
+					context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+				} finally {
+					bitmap.close();
+				}
+				const content = canvas.toDataURL("image/png");
+				if (targetSceneId !== activeSceneIdRef.current)
+					throw new Error("Scene changed during import. Please import again.");
+				const id = `annotation-${nextAnnotationIdRef.current++}`;
+				const zIndex = nextAnnotationZIndexRef.current++;
+				pushState((previous) => ({
+					annotationRegions: [
+						...previous.annotationRegions,
+						{
+							id,
+							startMs,
+							endMs: Math.min(duration * 1000, startMs + 3000),
+							type: "image",
+							content,
+							imageContent: content,
+							position: { x: 25, y: 25 },
+							size: { width: 50, height: 50 },
+							style: { ...DEFAULT_ANNOTATION_STYLE },
+							zIndex,
+						},
+					],
+				}));
+				clearInspectorSelection();
+				setSelectedAnnotationId(id);
+			}
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : String(error));
+		}
+	};
+
 	const handleAnnotationAdded = useCallback(
 		(span: Span) => {
 			const id = `annotation-${nextAnnotationIdRef.current++}`;
@@ -2722,6 +2839,7 @@ export default function VideoEditor() {
 				annotationRegions: [...prev.annotationRegions, newRegion],
 			}));
 			setSelectedAnnotationId(id);
+			setSelectedAudioId(null);
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
@@ -2751,6 +2869,7 @@ export default function VideoEditor() {
 			}));
 			setSelectedBlurId(id);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedZoomId(null);
 			setSelectedTrimId(null);
 			setSelectedSpeedId(null);
@@ -2819,6 +2938,7 @@ export default function VideoEditor() {
 			}));
 			if (selectedAnnotationId === id) {
 				setSelectedAnnotationId(null);
+				setSelectedAudioId(null);
 			}
 			if (selectedBlurId === id) {
 				setSelectedBlurId(null);
@@ -2871,11 +2991,13 @@ export default function VideoEditor() {
 
 			if (type === "blur" && selectedAnnotationId === id) {
 				setSelectedAnnotationId(null);
+				setSelectedAudioId(null);
 				setSelectedBlurId(id);
 				setSelectedSpeedId(null);
 			} else if (type !== "blur" && selectedBlurId === id) {
 				setSelectedBlurId(null);
 				setSelectedAnnotationId(id);
+				setSelectedAudioId(null);
 			}
 		},
 		[pushState, selectedAnnotationId, selectedBlurId],
@@ -3104,6 +3226,7 @@ export default function VideoEditor() {
 			!annotationOnlyRegions.some((region) => region.id === selectedAnnotationId)
 		) {
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 		}
 		if (selectedBlurId && !blurRegions.some((region) => region.id === selectedBlurId)) {
 			setSelectedBlurId(null);
@@ -3423,6 +3546,7 @@ export default function VideoEditor() {
 									cursorClipToBounds,
 									cursorTheme,
 									annotationRegions: sceneEditor.annotationRegions,
+									audioRegions: sceneEditor.audioRegions,
 									webcamLayoutPreset: sceneEditor.webcamLayoutPreset,
 									webcamMaskShape: sceneEditor.webcamMaskShape,
 									webcamMirrored: sceneEditor.webcamMirrored,
@@ -3517,6 +3641,7 @@ export default function VideoEditor() {
 							cursorClipToBounds,
 							cursorTheme,
 							annotationRegions,
+							audioRegions,
 							webcamLayoutPreset,
 							webcamMaskShape,
 							webcamMirrored,
@@ -3633,6 +3758,7 @@ export default function VideoEditor() {
 			cropRegion,
 			cursorRecordingData,
 			annotationRegions,
+			audioRegions,
 			isPlaying,
 			aspectRatio,
 			webcamLayoutPreset,
@@ -3795,6 +3921,7 @@ export default function VideoEditor() {
 			setSelectedZoomId(null);
 			setSelectedSpeedId(null);
 			setSelectedAnnotationId(null);
+			setSelectedAudioId(null);
 			setSelectedBlurId(null);
 			setShowSilenceDetectionDialog(false);
 
@@ -4776,8 +4903,105 @@ export default function VideoEditor() {
 
 						{/* Full-width timeline */}
 						<Panel defaultSize={33} maxSize={54} minSize={24} className="min-h-[210px]">
-							<div className="editor-timeline-panel h-full overflow-hidden flex flex-col">
+							<div
+								className="editor-timeline-panel h-full overflow-hidden flex flex-col"
+								onDragOver={(event) => {
+									if (
+										Array.from(event.dataTransfer.items).some((item) =>
+											/^(audio|image)\//.test(item.type),
+										)
+									) {
+										event.preventDefault();
+										event.stopPropagation();
+									}
+								}}
+								onDrop={(event) => {
+									const files = Array.from(event.dataTransfer.files).filter((file) =>
+										/^(audio|image)\//.test(file.type),
+									);
+									if (files.length) {
+										event.preventDefault();
+										event.stopPropagation();
+										for (const file of files)
+											void importSceneFile(
+												file,
+												file.type.startsWith("audio/") ? "audio" : "image",
+											);
+									}
+								}}
+							>
+								<SceneAudioPlayback
+									key={activeSceneId}
+									clips={audioRegions}
+									videoRef={videoPlaybackRef}
+									enabled={!isExporting}
+									onError={handleAudioPlaybackError}
+								/>
+								<input
+									ref={audioInputRef}
+									type="file"
+									hidden
+									accept=".mp3,.wav,.m4a,.aac,.ogg,.opus,.flac"
+									onChange={(event) => {
+										const file = event.target.files?.[0];
+										event.target.value = "";
+										if (file) void importSceneFile(file, "audio");
+									}}
+								/>
+								<input
+									ref={imageInputRef}
+									type="file"
+									hidden
+									accept="image/png,image/jpeg,image/webp"
+									onChange={(event) => {
+										const file = event.target.files?.[0];
+										event.target.value = "";
+										if (file) void importSceneFile(file, "image");
+									}}
+								/>
+								{audioRegions
+									.filter((clip) => clip.id === selectedAudioId)
+									.map((clip) => (
+										<AudioClipSettings
+											key={clip.id}
+											clip={clip}
+											onChange={(patch) =>
+												pushState((previous) => ({
+													audioRegions: previous.audioRegions.map((item) =>
+														item.id === clip.id ? { ...item, ...patch } : item,
+													),
+												}))
+											}
+											onDelete={() => {
+												pushState((previous) => ({
+													audioRegions: previous.audioRegions.filter((item) => item.id !== clip.id),
+												}));
+												setSelectedAudioId(null);
+											}}
+										/>
+									))}
 								<TimelineEditor
+									audioRegions={audioRegions}
+									selectedAudioId={selectedAudioId}
+									onSelectAudio={(id) => {
+										if (id) clearInspectorSelection();
+										setSelectedAudioId(id);
+									}}
+									onAudioDelete={(id) => {
+										pushState((previous) => ({
+											audioRegions: previous.audioRegions.filter((clip) => clip.id !== id),
+										}));
+										setSelectedAudioId(null);
+									}}
+									onAudioSpanChange={(id, span) =>
+										pushState((previous) => ({
+											audioRegions: previous.audioRegions.map((clip) =>
+												clip.id === id ? resizeAudioRegion(clip, span) : clip,
+											),
+										}))
+									}
+									onImportAudio={() => audioInputRef.current?.click()}
+									onImportImage={() => imageInputRef.current?.click()}
 									videoDuration={duration}
 									currentTime={currentTime}
 									onSeek={handleSceneTimelineSeek}
