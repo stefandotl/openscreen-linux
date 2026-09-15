@@ -1,5 +1,6 @@
 {
 	"actions": {
+		"settings": "Configuración",
 		"cancel": "Cancelar",
 		"save": "Guardar",
 		"delete": "Eliminar",

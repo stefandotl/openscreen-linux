@@ -1,5 +1,6 @@
 {
 	"actions": {
+		"settings": "Ayarlar",
 		"cancel": "İptal",
 		"save": "Kaydet",
 		"delete": "Sil",

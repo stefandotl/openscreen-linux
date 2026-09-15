@@ -1,5 +1,6 @@
 {
 	"actions": {
+		"settings": "الإعدادات",
 		"cancel": "الغاء",
 		"save": "حفظ",
 		"delete": "حذف",

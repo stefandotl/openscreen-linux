@@ -86,6 +86,7 @@ import {
 } from "../recordingProjectTransition";
 import { openRecordingsFolder } from "../recordingsFolder";
 import { registerAudioAssetHandlers } from "./audioAssets";
+import { registerEditorWindowActions } from "./editorWindowActions";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -1596,6 +1597,7 @@ export function registerIpcHandlers(
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
+	registerEditorWindowActions(getMainWindow);
 	const customFontStore = new CustomFontStore(
 		path.join(app.getPath("appData"), "videtio-shared", "fonts"),
 	);

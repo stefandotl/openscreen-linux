@@ -8,7 +8,7 @@ On the first save in that recording directory, Videtio adopts the directory as a
 project folder and renames it to the chosen project name. Imported or legacy
 projects are collected into a new folder beside the chosen save path. Existing
 ordinary directories are never adopted or overwritten. Saving an existing managed
-project updates its project file; Save As / **Collect project…** creates an
+project updates its project file; **Save Project As…** creates an
 independent copy. Original files outside the destination folder are retained.
 
 Example:
@@ -33,9 +33,14 @@ local background/image files. Embedded images, annotations, and remote font
 configuration remain embedded/configured as before. New scene recordings inside
 a managed project are created in subdirectories of that project.
 
-The project-name menu in the editor provides **Collect project…** and **Move
-project to trash**. Trash operates on the active managed project only, confirms
-the folder name and total size, and uses Electron's `shell.trashItem`. Cancel or
+The editor’s **File** menu groups new/open/save, **Save Project As…**, the
+recordings folder and recorder navigation. Edit provides project undo/redo and
+text-field clipboard actions; View controls interface zoom and full screen.
+Language and keyboard shortcut settings live under the settings icon. The title bar
+shows the project name, an unsaved-change dot, and a Save shortcut when media
+exists. Destructive actions appear only at the bottom of File: **Move project to
+trash** for saved projects, or discard for fresh recordings. Trash operates on
+the active managed project only, confirms the folder name and total size, and uses Electron's `shell.trashItem`. Cancel or
 failure preserves the active project. Loose legacy projects must first be
 collected; their old files are not deleted automatically. Folders containing
 symlinks or another project file are rejected for whole-folder deletion.
@@ -52,7 +57,10 @@ are applied. No export-frame or GPU pipeline changes are involved.
   Save As independence, ownership and traversal checks, and recording cleanup.
 - `tests/e2e/project-storage.spec.ts`: real main/preload save/load calls, cancel and
   failed trash operations, simulated trash of temporary fixtures, recording-folder
-  adoption, and the editor's project menu.
+  adoption, and the editor's project menu. It also covers saving while the preview
+  is open, reopening renamed folders/files, loading after a full restart without
+  a new recording, and recovering from a missing-media error with unsaved edits.
+  Save/load/close confirmation dialogs must remain mounted on the error screen.
 - `tests/e2e/native-content-tracks.spec.ts` with `VIDETIO_E2E_CONTENT_TRACKS=1`:
   collects and reloads a captioned project before a native GPU export, then checks
   output pixels, annotation order/timing, and imported audio timing.

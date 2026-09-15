@@ -2,8 +2,9 @@ import type { Span } from "dnd-timeline";
 import {
 	Archive,
 	ChevronDown,
+	Copy,
+	FilePlus2,
 	FolderOpen,
-	Languages,
 	PanelLeftOpen,
 	Save,
 	Trash2,
@@ -25,6 +26,8 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuShortcut,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
@@ -38,8 +41,6 @@ import {
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { type EditorState, INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory";
-import { type Locale } from "@/i18n/config";
-import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
 import {
 	type CaptionEngine,
 	type CaptionTranscriptionResult,
@@ -98,6 +99,11 @@ import {
 } from "@/utils/aspectRatioUtils";
 import { AudioClipSettings } from "./AudioClipSettings";
 import { resizeAudioRegion } from "./audioRegions";
+import {
+	EditorEditViewMenus,
+	EditorPreferencesMenu,
+	isTextEditingTarget,
+} from "./EditorApplicationMenus";
 import { EditorEmptyState } from "./EditorEmptyState";
 import { ExportDialog } from "./ExportDialog";
 import {
@@ -277,6 +283,8 @@ export default function VideoEditor() {
 		commitState,
 		undo,
 		redo,
+		canUndo,
+		canRedo,
 		resetState,
 	} = useEditorHistory(INITIAL_EDITOR_STATE);
 
@@ -446,10 +454,9 @@ export default function VideoEditor() {
 	const effectiveShowCursor =
 		showCursor && hasEditableCursorRecording && webcamLayoutPreset !== "only-webcam";
 	const showCursorSettings = hasEditableCursorRecording && webcamLayoutPreset !== "only-webcam";
-	const { locale, setLocale, t: rawT } = useI18n();
+	const { t: rawT } = useI18n();
 	const t = useScopedT("editor");
 	const ts = useScopedT("settings");
-	const availableLocales = getAvailableLocales();
 
 	const nextAnnotationIdRef = useRef(1);
 	const nextAnnotationZIndexRef = useRef(1);
@@ -1751,6 +1758,7 @@ export default function VideoEditor() {
 		setScenes([]);
 		setActiveSceneId(null);
 		await nativeBridgeClient.project.clearCurrentVideoPath();
+		setError(null);
 		setVideoPath(null);
 		setVideoSourcePath(null);
 		setWebcamVideoPath(null);
@@ -1832,6 +1840,8 @@ export default function VideoEditor() {
 	// and reset the editor to the empty Studio dashboard. Only offered when the
 	// project has no saved project file yet, so a saved project's media survives.
 	const showDiscardRecordingAction = Boolean(videoPath && !currentProjectPath);
+	const hasProjectMedia = Boolean(currentProjectMedia || scenes.some((scene) => scene.media));
+	const projectActionsDisabled = isExporting || projectFileBusy || isSavingProject;
 
 	const handleDiscardRecording = useCallback(async () => {
 		setShowDiscardRecordingDialog(false);
@@ -3186,13 +3196,13 @@ export default function VideoEditor() {
 			const mod = e.ctrlKey || e.metaKey;
 			const key = e.key.toLowerCase();
 
-			if (mod && key === "z" && !e.shiftKey) {
+			if (mod && key === "z" && !e.shiftKey && !isTextEditingTarget(e.target)) {
 				e.preventDefault();
 				e.stopPropagation();
 				undo();
 				return;
 			}
-			if (mod && (key === "y" || (key === "z" && e.shiftKey))) {
+			if (mod && (key === "y" || (key === "z" && e.shiftKey)) && !isTextEditingTarget(e.target)) {
 				e.preventDefault();
 				e.stopPropagation();
 				redo();
@@ -4209,6 +4219,45 @@ export default function VideoEditor() {
 		[activeSceneId, currentProjectMedia, editorState, scenes],
 	);
 
+	// Recovery and window-close actions must remain available after a media error.
+	// Returning only the error view otherwise hides the unsaved-changes dialog.
+	const projectDialogs = (
+		<>
+			<UnsavedChangesDialog
+				isOpen={showCloseConfirmDialog}
+				onSaveAndClose={handleCloseConfirmSave}
+				onDiscardAndClose={handleCloseConfirmDiscard}
+				onCancel={handleCloseConfirmCancel}
+			/>
+
+			<UnsavedChangesDialog
+				isOpen={confirmDialogVariant !== null}
+				variant={confirmDialogVariant ?? "newProject"}
+				onSaveAndClose={
+					confirmDialogVariant === "loadProject"
+						? handleLoadProjectConfirmSave
+						: handleNewProjectConfirmSave
+				}
+				onDiscardAndClose={
+					confirmDialogVariant === "loadProject"
+						? handleLoadProjectConfirmDiscard
+						: handleNewProjectConfirmDiscard
+				}
+				onCancel={() => setConfirmDialogVariant(null)}
+			/>
+			<Dialog open={isSavingProject}>
+				<DialogContent
+					className="[&>button]:hidden"
+					aria-describedby={undefined}
+					onEscapeKeyDown={(event) => event.preventDefault()}
+					onPointerDownOutside={(event) => event.preventDefault()}
+				>
+					<DialogTitle>{t("project.saving")}</DialogTitle>
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center h-screen bg-background">
@@ -4229,6 +4278,7 @@ export default function VideoEditor() {
 						{ts("project.load")}
 					</button>
 				</div>
+				{projectDialogs}
 			</div>
 		);
 	}
@@ -4523,119 +4573,131 @@ export default function VideoEditor() {
 			</Dialog>
 
 			<div
-				className="h-11 flex-shrink-0 bg-[#070809]/85 backdrop-blur-xl border-b border-white/[0.07] flex items-center justify-between px-5 z-50 shadow-[0_1px_0_rgba(255,255,255,0.03)]"
+				data-testid="editor-titlebar"
+				className="h-11 flex-shrink-0 bg-[#070809]/85 backdrop-blur-xl border-b border-white/[0.07] grid grid-cols-[1fr_minmax(0,2fr)_1fr] items-center gap-3 px-4 z-50 shadow-[0_1px_0_rgba(255,255,255,0.03)]"
 				style={{ WebkitAppRegion: "drag" } as CSSProperties}
 			>
-				<div
-					className="flex-1 flex items-center gap-1"
-					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
-				>
-					<div
-						className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 ${isMac ? "ml-14" : "ml-2"}`}
-					>
-						<Languages size={14} />
-						<select
-							value={locale}
-							onChange={(e) => setLocale(e.target.value as Locale)}
-							className="bg-transparent text-[11px] font-medium outline-none cursor-pointer appearance-none pr-1"
-							style={{ color: "inherit" }}
-						>
-							{availableLocales.map((loc) => (
-								<option key={loc} value={loc} className="bg-[#09090b] text-white">
-									{getLocaleName(loc)}
-								</option>
-							))}
-						</select>
-					</div>
-					<button
-						type="button"
-						onClick={() => {
-							pendingRecordingSceneIdRef.current = null;
-							setShowNewRecordingDialog(true);
-						}}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
-					>
-						<Video size={14} />
-						{t("newRecording.title")}
-					</button>
-					<button
-						type="button"
-						onClick={handleLoadProject}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
-					>
-						<FolderOpen size={14} />
-						{ts("project.load")}
-					</button>
-					<button
-						type="button"
-						onClick={() => window.electronAPI.openRecordingsFolder()}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
-					>
-						<Archive size={14} />
-						{ts("recordings.openFolder")}
-					</button>
-					{currentProjectPath && (
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<button
-									type="button"
-									disabled={isExporting || projectFileBusy || isSavingProject}
-									title={currentProjectPath}
-									className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/[0.08] text-[11px] font-medium disabled:opacity-40"
-								>
-									<span className="max-w-36 truncate">
-										{currentProjectPath.split(/[\\/]/).pop()}
-									</span>
-									<ChevronDown size={12} />
-								</button>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								<DropdownMenuItem onSelect={() => void handleSaveProjectAs()}>
-									<Archive size={14} />
-									{t("project.collect")}
-								</DropdownMenuItem>
+				<div className={`flex items-center justify-self-start ${isMac ? "ml-14" : ""}`}>
+					<DropdownMenu>
+						<DropdownMenuTrigger asChild>
+							<button
+								type="button"
+								disabled={projectActionsDisabled}
+								style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+								className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/[0.08] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#34B27B] text-xs font-medium disabled:opacity-40"
+							>
+								{rawT("common.actions.file")}
+								<ChevronDown size={12} />
+							</button>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent align="start" className="min-w-64">
+							<DropdownMenuItem onSelect={() => void handleNewProject()}>
+								<FilePlus2 />
+								{rawT("dialogs.unsavedChanges.newProject")}
+								<DropdownMenuShortcut>{isMac ? "⌘N" : "Ctrl+N"}</DropdownMenuShortcut>
+							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => void handleLoadProject()}>
+								<FolderOpen />
+								{ts("project.load")}
+								<DropdownMenuShortcut>{isMac ? "⌘O" : "Ctrl+O"}</DropdownMenuShortcut>
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								disabled={!hasProjectMedia}
+								onSelect={() => void handleSaveProject()}
+							>
+								<Save />
+								{ts("project.save")}
+								<DropdownMenuShortcut>{isMac ? "⌘S" : "Ctrl+S"}</DropdownMenuShortcut>
+							</DropdownMenuItem>
+							{currentProjectPath && (
 								<DropdownMenuItem
-									onSelect={() => void handleTrashProject()}
-									className="text-red-400"
+									disabled={!hasProjectMedia}
+									onSelect={() => void handleSaveProjectAs()}
 								>
-									<Trash2 size={14} />
-									{t("project.trash")}
+									<Copy />
+									{rawT("dialogs.unsavedChanges.saveProjectAs")}
+									<DropdownMenuShortcut>{isMac ? "⇧⌘S" : "Ctrl+Shift+S"}</DropdownMenuShortcut>
 								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
+							)}
+							<DropdownMenuItem onSelect={() => void window.electronAPI.openRecordingsFolder()}>
+								<Archive />
+								{ts("recordings.openFolder")}
+							</DropdownMenuItem>
+							<DropdownMenuSeparator />
+							<DropdownMenuItem
+								onSelect={() => {
+									pendingRecordingSceneIdRef.current = null;
+									setShowNewRecordingDialog(true);
+								}}
+							>
+								<Video />
+								{t("newRecording.title")}
+							</DropdownMenuItem>
+							{(currentProjectPath || showDiscardRecordingAction) && (
+								<>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										onSelect={() =>
+											currentProjectPath
+												? void handleTrashProject()
+												: setShowDiscardRecordingDialog(true)
+										}
+										className="text-red-400 focus:text-red-400 focus:bg-red-500/10"
+									>
+										<Trash2 />
+										{currentProjectPath ? t("project.trash") : t("discard.button")}
+									</DropdownMenuItem>
+								</>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+					<EditorEditViewMenus
+						disabled={projectActionsDisabled}
+						canUndo={canUndo}
+						canRedo={canRedo}
+						onUndo={undo}
+						onRedo={redo}
+					/>
+				</div>
+				<div className="flex min-w-0 items-center justify-center gap-2 text-xs text-white/60">
+					<span
+						data-testid="project-title"
+						className="truncate"
+						title={currentProjectPath ?? undefined}
+					>
+						{currentProjectPath?.split(/[\\/]/).pop() ??
+							(hasProjectMedia || scenes.length > 0
+								? rawT("dialogs.unsavedChanges.newProject")
+								: t("emptyState.title"))}
+					</span>
+					{hasUnsavedChanges && (
+						<span
+							role="img"
+							aria-label={rawT("dialogs.unsavedChanges.title")}
+							title={rawT("dialogs.unsavedChanges.title")}
+							className="size-1.5 shrink-0 rounded-full bg-amber-300/80"
+						/>
 					)}
-
-					{showDiscardRecordingAction && (
+				</div>
+				<div className="flex items-center gap-1 justify-self-end">
+					<EditorPreferencesMenu disabled={projectActionsDisabled} />
+					{hasProjectMedia && (
 						<button
 							type="button"
-							onClick={() => setShowDiscardRecordingDialog(true)}
-							className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-red-400 hover:bg-red-500/10 transition-all duration-150 text-[11px] font-medium"
+							onClick={() => void handleSaveProject()}
+							disabled={projectActionsDisabled || Boolean(currentProjectPath && !hasUnsavedChanges)}
+							aria-label={ts("project.save")}
+							title={`${ts("project.save")} (${isMac ? "⌘S" : "Ctrl+S"})`}
+							style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
+							className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[#7ed6ad] hover:bg-[#34B27B]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#34B27B] text-xs font-medium disabled:text-white/30 disabled:hover:bg-transparent"
 						>
-							<Trash2 size={14} />
-							{t("discard.button")}
+							<Save size={14} />
+							{rawT("common.actions.save")}
 						</button>
 					)}
-					<button
-						type="button"
-						onClick={handleSaveProject}
-						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
-					>
-						<Save size={14} />
-						{ts("project.save")}
-					</button>
 				</div>
 			</div>
-
-			<Dialog open={isSavingProject}>
-				<DialogContent
-					className="[&>button]:hidden"
-					aria-describedby={undefined}
-					onEscapeKeyDown={(event) => event.preventDefault()}
-					onPointerDownOutside={(event) => event.preventDefault()}
-				>
-					<DialogTitle>{t("project.saving")}</DialogTitle>
-				</DialogContent>
-			</Dialog>
 
 			{showProjectPlaybackScope && (
 				<ProjectPlaybackPreloader
@@ -5202,28 +5264,7 @@ export default function VideoEditor() {
 				}
 			/>
 
-			<UnsavedChangesDialog
-				isOpen={showCloseConfirmDialog}
-				onSaveAndClose={handleCloseConfirmSave}
-				onDiscardAndClose={handleCloseConfirmDiscard}
-				onCancel={handleCloseConfirmCancel}
-			/>
-
-			<UnsavedChangesDialog
-				isOpen={confirmDialogVariant !== null}
-				variant={confirmDialogVariant ?? "newProject"}
-				onSaveAndClose={
-					confirmDialogVariant === "loadProject"
-						? handleLoadProjectConfirmSave
-						: handleNewProjectConfirmSave
-				}
-				onDiscardAndClose={
-					confirmDialogVariant === "loadProject"
-						? handleLoadProjectConfirmDiscard
-						: handleNewProjectConfirmDiscard
-				}
-				onCancel={() => setConfirmDialogVariant(null)}
-			/>
+			{projectDialogs}
 		</div>
 	);
 }

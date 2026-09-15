@@ -295,6 +295,9 @@ interface Window {
 			) => void,
 		) => () => void;
 		clearCurrentVideoPath: () => Promise<{ success: boolean }>;
+		editorWindowAction: (
+			action: import("../src/lib/editorWindowActions").EditorWindowAction,
+		) => Promise<void>;
 		trashCurrentProject: () => Promise<{ success: boolean; canceled?: boolean; message?: string }>;
 		saveProjectFile: (
 			projectData: unknown,

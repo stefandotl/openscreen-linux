@@ -291,7 +291,7 @@ export async function inspectProjectFolder(
 	projectPath = path.resolve(projectPath);
 	if (!(await isManagedProject(projectPath)))
 		throw new Error(
-			"Save this project into a project folder first using Save As / Collect project. Existing loose files will be kept.",
+			"Save this project into a project folder first using File > Save Project As. Existing loose files will be kept.",
 		);
 	const directory = path.dirname(projectPath);
 	const count = async (folder: string): Promise<number> => {

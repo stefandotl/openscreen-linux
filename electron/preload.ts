@@ -26,6 +26,9 @@ const assetBaseUrlArg = process.argv.find((arg) => arg.startsWith(ASSET_BASE_URL
 const assetBaseUrl = assetBaseUrlArg ? assetBaseUrlArg.slice(ASSET_BASE_URL_ARG_PREFIX.length) : "";
 
 contextBridge.exposeInMainWorld("electronAPI", {
+	editorWindowAction: (
+		action: import("../src/lib/editorWindowActions").EditorWindowAction,
+	): Promise<void> => ipcRenderer.invoke("editor-window-action", action),
 	assetBaseUrl,
 	invokeNativeBridge: <TData>(request: NativeBridgeRequest) => {
 		return ipcRenderer.invoke(NATIVE_BRIDGE_CHANNEL, request) as Promise<TData>;

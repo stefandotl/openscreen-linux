@@ -205,7 +205,13 @@ export default function SceneStrip({
 											autoFocus
 											onFocus={(event) => event.currentTarget.select()}
 											onChange={(event) => setDraftName(event.target.value)}
-											onBlur={() => {
+											onBlur={(event) => {
+												// A text-editing menu temporarily owns focus; keep the draft mounted.
+												if (
+													event.relatedTarget instanceof Element &&
+													event.relatedTarget.closest("[data-editor-menu]")
+												)
+													return;
 												if (cancelRenameRef.current) {
 													cancelRenameRef.current = false;
 													return;

@@ -1,5 +1,6 @@
 {
 	"actions": {
+		"settings": "設定",
 		"cancel": "取消",
 		"save": "儲存",
 		"delete": "刪除",

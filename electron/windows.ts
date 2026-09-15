@@ -182,6 +182,8 @@ export function createEditorWindow(): BrowserWindow {
 		height: 800,
 		minWidth: 800,
 		minHeight: 600,
+		// Keep native accelerators available without duplicating the editor’s File menu.
+		autoHideMenuBar: true,
 		...(isMac && {
 			titleBarStyle: "hiddenInset",
 			trafficLightPosition: { x: 12, y: 12 },

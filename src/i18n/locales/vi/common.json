@@ -1,5 +1,6 @@
 {
 	"actions": {
+		"settings": "Cài đặt",
 		"cancel": "Hủy",
 		"save": "Lưu",
 		"delete": "Xóa",

@@ -1,5 +1,6 @@
 {
 	"actions": {
+		"settings": "설정",
 		"cancel": "취소",
 		"save": "저장",
 		"delete": "삭제",
