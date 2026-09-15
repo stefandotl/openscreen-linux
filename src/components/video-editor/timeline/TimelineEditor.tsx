@@ -874,30 +874,6 @@ function Timeline({
 				))}
 			</Row>
 
-			{contentRows.map((rowId) => {
-				const rowItems = items.filter((item) => item.rowId === rowId);
-				const kind = rowItems[0].trackKind!;
-				return (
-					<Row key={rowId} id={rowId} label={t(`tracks.${kind}`)}>
-						{rowItems.map((item) => (
-							<Item
-								key={item.id}
-								id={item.id}
-								rowId={rowId}
-								span={item.span}
-								variant={item.variant}
-								isSelected={item.id === (kind === "audio" ? selectedAudioId : selectedAnnotationId)}
-								onSelect={() =>
-									kind === "audio" ? onSelectAudio?.(item.id) : onSelectAnnotation?.(item.id)
-								}
-							>
-								{item.label}
-							</Item>
-						))}
-					</Row>
-				);
-			})}
-
 			{BLUR_REGIONS_ENABLED && (
 				<Row id={BLUR_ROW_ID} isEmpty={blurItems.length === 0} hint={t("hints.pressBlur")}>
 					{blurItems.map((item) => (
@@ -932,6 +908,30 @@ function Timeline({
 					</Item>
 				))}
 			</Row>
+
+			{contentRows.map((rowId) => {
+				const rowItems = items.filter((item) => item.rowId === rowId);
+				const kind = rowItems[0].trackKind!;
+				return (
+					<Row key={rowId} id={rowId} label={t(`tracks.${kind}`)}>
+						{rowItems.map((item) => (
+							<Item
+								key={item.id}
+								id={item.id}
+								rowId={rowId}
+								span={item.span}
+								variant={item.variant}
+								isSelected={item.id === (kind === "audio" ? selectedAudioId : selectedAnnotationId)}
+								onSelect={() =>
+									kind === "audio" ? onSelectAudio?.(item.id) : onSelectAnnotation?.(item.id)
+								}
+							>
+								{item.label}
+							</Item>
+						))}
+					</Row>
+				);
+			})}
 		</div>
 	);
 }
@@ -1656,42 +1656,6 @@ export default function TimelineEditor({
 							<AudioWaveform className="w-4 h-4" />
 						</Button>
 					)}
-					<DropdownMenu>
-						<DropdownMenuTrigger asChild>
-							<Button variant="ghost" size="sm" className="h-7 gap-1 text-xs">
-								<Plus className="w-4 h-4" />
-								{t("buttons.addContent")}
-								<ChevronDown className="w-3 h-3" />
-							</Button>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align="start">
-							<DropdownMenuItem onSelect={handleAddAnnotation}>
-								<Type className="mr-2 w-4 h-4" />
-								{t("tracks.text")}
-							</DropdownMenuItem>
-							{onGenerateCaptions && (
-								<DropdownMenuItem
-									onSelect={onGenerateCaptions}
-									disabled={isGeneratingCaptions || !videoUrl}
-								>
-									<Captions className="mr-2 w-4 h-4" />
-									{captionsLabel}
-								</DropdownMenuItem>
-							)}
-							{onImportAudio && (
-								<DropdownMenuItem onSelect={onImportAudio}>
-									<Music className="mr-2 w-4 h-4" />
-									{t("buttons.importAudio")}
-								</DropdownMenuItem>
-							)}
-							{onImportImage && (
-								<DropdownMenuItem onSelect={onImportImage}>
-									<ImagePlus className="mr-2 w-4 h-4" />
-									{t("buttons.importImage")}
-								</DropdownMenuItem>
-							)}
-						</DropdownMenuContent>
-					</DropdownMenu>
 					{BLUR_REGIONS_ENABLED && (
 						<Button
 							onClick={handleAddBlur}
@@ -1722,6 +1686,20 @@ export default function TimelineEditor({
 					>
 						<Gauge className="w-4 h-4" />
 					</Button>
+					{onGenerateCaptions && (
+						<Button
+							onClick={onGenerateCaptions}
+							disabled={isGeneratingCaptions || !videoUrl}
+							aria-busy={isGeneratingCaptions}
+							variant="ghost"
+							size="sm"
+							className="h-7 gap-1.5 rounded-lg px-2 text-xs text-slate-400 hover:text-[#a78bfa] hover:bg-[#a78bfa]/10 transition-all"
+							title={captionsLabel}
+						>
+							<Captions className="w-4 h-4" />
+							{captionsLabel}
+						</Button>
+					)}
 				</div>
 				<div className="flex items-center gap-1.5 min-w-0">
 					<DropdownMenu>
@@ -1749,6 +1727,37 @@ export default function TimelineEditor({
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button
+							variant="ghost"
+							size="sm"
+							className="h-7 gap-1 rounded-lg border border-white/[0.06] text-xs"
+						>
+							<Plus className="w-4 h-4" />
+							{t("buttons.addContent")}
+							<ChevronDown className="w-3 h-3" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start">
+						<DropdownMenuItem onSelect={handleAddAnnotation}>
+							<Type className="mr-2 w-4 h-4" />
+							{t("tracks.text")}
+						</DropdownMenuItem>
+						{onImportAudio && (
+							<DropdownMenuItem onSelect={onImportAudio}>
+								<Music className="mr-2 w-4 h-4" />
+								{t("buttons.importAudio")}
+							</DropdownMenuItem>
+						)}
+						{onImportImage && (
+							<DropdownMenuItem onSelect={onImportImage}>
+								<ImagePlus className="mr-2 w-4 h-4" />
+								{t("buttons.importImage")}
+							</DropdownMenuItem>
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
 				<div className="flex-1" />
 				<div className="hidden md:flex items-center gap-3 text-[10px] text-slate-500 font-medium">
 					<span className="flex items-center gap-1.5">

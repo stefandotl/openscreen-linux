@@ -92,7 +92,10 @@ describe("content track interactions", () => {
 			);
 			await page.getByText("Callout", { exact: true }).click();
 			expect(container.querySelector("output")?.textContent).toBe("Callout");
+			await page.getByRole("button", { name: "Create subtitles", exact: true }).click();
+			expect(captions).toHaveBeenCalledOnce();
 			await page.getByRole("button", { name: "Add", exact: true }).click();
+			expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(3);
 			await page.getByRole("menuitem", { name: "Import audio" }).click();
 			expect(addAudio).toHaveBeenCalledOnce();
 			await page.getByRole("button", { name: "Add", exact: true }).click();
