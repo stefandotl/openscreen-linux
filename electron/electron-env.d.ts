@@ -295,6 +295,7 @@ interface Window {
 			) => void,
 		) => () => void;
 		clearCurrentVideoPath: () => Promise<{ success: boolean }>;
+		trashCurrentProject: () => Promise<{ success: boolean; canceled?: boolean; message?: string }>;
 		saveProjectFile: (
 			projectData: unknown,
 			suggestedName?: string,
@@ -302,6 +303,7 @@ interface Window {
 		) => Promise<{
 			success: boolean;
 			path?: string;
+			project?: unknown;
 			message?: string;
 			canceled?: boolean;
 			error?: string;

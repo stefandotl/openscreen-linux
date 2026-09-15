@@ -35,6 +35,11 @@
 		"exportedSuccessfully": "{{format}} 내보내기가 완료되었습니다"
 	},
 	"project": {
+		"saving": "프로젝트 저장 중…",
+		"collect": "프로젝트 파일 모으기…",
+		"trash": "프로젝트를 휴지통으로 이동",
+		"trashed": "프로젝트를 휴지통으로 이동했습니다",
+		"trashFailed": "프로젝트를 휴지통으로 이동할 수 없습니다",
 		"saveCanceled": "프로젝트 저장이 취소되었습니다",
 		"failedToSave": "프로젝트 저장에 실패했습니다",
 		"savedTo": "프로젝트가 {{path}}에 저장되었습니다",

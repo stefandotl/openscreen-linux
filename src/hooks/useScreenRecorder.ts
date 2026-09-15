@@ -71,6 +71,7 @@ type UseScreenRecorderReturn = {
 	setMicrophoneDeviceId: (deviceId: string | undefined) => void;
 	microphoneDeviceName: string | undefined;
 	setMicrophoneDeviceName: (deviceName: string | undefined) => void;
+	recordingPreferencesHydrated: boolean;
 	webcamDeviceId: string | undefined;
 	setWebcamDeviceId: (deviceId: string | undefined) => void;
 	webcamDeviceName: string | undefined;
@@ -311,6 +312,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	);
 
 	useEffect(() => {
+		if (!recordingPreferencesHydrated) return;
 		if (!webcamEnabled) {
 			stopWebcamPreviewStream();
 			return;
@@ -348,13 +350,21 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				const availableCameras = (await navigator.mediaDevices.enumerateDevices()).filter(
 					(device) => device.kind === "videoinput",
 				);
+				if (cancelled || thisAcquireId !== webcamAcquireId.current) return;
 				const preferredCamera = selectPreferredCameraDevice(
 					availableCameras,
 					webcamDeviceId,
 					webcamDeviceName,
 				);
 				if (!preferredCamera) {
-					throw new DOMException("No camera devices are available.", "NotFoundError");
+					// A virtual camera can appear late, without devicechange. Keep the
+					// saved identity and retry instead of persisting another webcam.
+					if (!recoveryNotified) {
+						toast.error(t("recording.cameraNotFound"));
+						recoveryNotified = true;
+					}
+					scheduleRecovery();
+					return;
 				}
 
 				// Chromium device IDs are origin-specific. Development uses localhost while
@@ -503,7 +513,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				}
 			}
 		};
-	}, [stopWebcamPreviewStream, t, webcamDeviceId, webcamDeviceName, webcamEnabled]);
+	}, [
+		recordingPreferencesHydrated,
+		stopWebcamPreviewStream,
+		t,
+		webcamDeviceId,
+		webcamDeviceName,
+		webcamEnabled,
+	]);
 
 	useEffect(() => stopWebcamPreviewStream, [stopWebcamPreviewStream]);
 
@@ -1874,6 +1891,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		setMicrophoneDeviceId,
 		microphoneDeviceName,
 		setMicrophoneDeviceName,
+		recordingPreferencesHydrated,
 		webcamDeviceId,
 		setWebcamDeviceId,
 		webcamDeviceName,

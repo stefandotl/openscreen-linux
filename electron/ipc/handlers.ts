@@ -66,6 +66,17 @@ import { RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
+import {
+	approveContainedProjectAssets,
+	inspectProjectFolder,
+	isManagedProject,
+	isRecordingFolder,
+	prepareRecordingFolder,
+	recordingOutputPath,
+	removeEmptyRecordingFolder,
+	resolveProjectAssets,
+	saveStandaloneProject,
+} from "../projectStorage";
 import { getDiscardDeletionTargets } from "../recording/recordingDiscard";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { RecordingPreferencesStore } from "../recordingPreferencesStore";
@@ -497,24 +508,13 @@ async function approveReadableVideoPath(
 	return normalizedPath;
 }
 
+let sceneRecordingRoot: string | null = null;
+
 function resolveRecordingOutputPath(fileName: string): string {
-	const trimmed = fileName.trim();
-	if (!trimmed) {
-		throw new Error("Invalid recording file name");
-	}
-
-	const parsedPath = path.parse(trimmed);
-	const hasTraversalSegments = trimmed.split(/[\\/]+/).some((segment) => segment === "..");
-	const isNestedPath =
-		parsedPath.dir !== "" ||
-		path.isAbsolute(trimmed) ||
-		trimmed.includes("/") ||
-		trimmed.includes("\\");
-	if (hasTraversalSegments || isNestedPath || parsedPath.base !== trimmed) {
-		throw new Error("Recording file name must not contain path segments");
-	}
-
-	return path.join(RECORDINGS_DIR, parsedPath.base);
+	return recordingOutputPath(
+		(recordingProjectTransition.sceneId && sceneRecordingRoot) || RECORDINGS_DIR,
+		fileName,
+	);
 }
 
 function isValidDurationMs(value: number | undefined): value is number {
@@ -534,6 +534,7 @@ async function finalizeRecordingFile(
 ): Promise<boolean> {
 	const streamed = await registry.finalize(fileName);
 	if (!streamed && videoData && videoData.byteLength > 0) {
+		await prepareRecordingFolder(filePath);
 		await fs.writeFile(filePath, Buffer.from(videoData));
 	}
 	return streamed;
@@ -1498,6 +1499,27 @@ function getSessionManifestPathForVideo(videoPath: string) {
 	return path.join(parsedPath.dir, `${baseName}${RECORDING_SESSION_SUFFIX}`);
 }
 
+async function writeRecordingSessionManifest(session: RecordingSession) {
+	const manifestPath = getSessionManifestPathForVideo(session.screenVideoPath);
+	await fs.writeFile(
+		manifestPath,
+		JSON.stringify(
+			{
+				...session,
+				screenVideoPath: path.basename(session.screenVideoPath),
+				...(session.webcamVideoPath
+					? { webcamVideoPath: path.basename(session.webcamVideoPath) }
+					: {}),
+			},
+			null,
+			2,
+		),
+		"utf-8",
+	);
+	approveFilePath(session.screenVideoPath);
+	if (session.webcamVideoPath) approveFilePath(session.webcamVideoPath);
+}
+
 async function loadRecordedSessionForVideoPath(
 	videoPath: string,
 ): Promise<RecordingSession | null> {
@@ -1511,7 +1533,9 @@ async function loadRecordedSessionForVideoPath(
 		}
 
 		const content = await fs.readFile(manifestPath, "utf-8");
-		const session = normalizeRecordingSession(JSON.parse(content));
+		const session = normalizeRecordingSession(
+			resolveProjectAssets(JSON.parse(content), manifestPath),
+		);
 		if (!session) {
 			return null;
 		}
@@ -1586,7 +1610,7 @@ export function registerIpcHandlers(
 		: path.join(path.dirname(fileURLToPath(import.meta.url)), "parakeetWorker.js");
 	const parakeetTranscriptionService = new ParakeetTranscriptionService(parakeetWorkerPath);
 
-	registerAudioAssetHandlers(getFfmpegBinary);
+	registerAudioAssetHandlers(getFfmpegBinary, approveFilePath);
 	registerNativeGpuExportHandlers({
 		getFfmpegBinary,
 		resolveApprovedVideoPath,
@@ -1872,7 +1896,11 @@ export function registerIpcHandlers(
 		return { success: true };
 	});
 
-	ipcMain.handle("start-new-recording", (_, sceneId?: string, projectData?: unknown) => {
+	ipcMain.handle("start-new-recording", async (_, sceneId?: string, projectData?: unknown) => {
+		sceneRecordingRoot =
+			sceneId && currentProjectPath && (await isManagedProject(currentProjectPath))
+				? path.dirname(currentProjectPath)
+				: null;
 		beginRecordingProjectTransition(
 			recordingProjectTransition,
 			() => setCurrentRecordingSessionState(null),
@@ -1975,9 +2003,8 @@ export function registerIpcHandlers(
 					typeof request.recordingId === "number" && Number.isFinite(request.recordingId)
 						? request.recordingId
 						: Date.now();
-				const outputPath = path.join(RECORDINGS_DIR, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
-				const webcamOutputPath = path.join(
-					RECORDINGS_DIR,
+				const outputPath = resolveRecordingOutputPath(`${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
+				const webcamOutputPath = resolveRecordingOutputPath(
 					`${RECORDING_FILE_PREFIX}${recordingId}-webcam.mp4`,
 				);
 				const sourceDisplay =
@@ -2056,7 +2083,7 @@ export function registerIpcHandlers(
 					outputPath,
 				});
 
-				await fs.mkdir(RECORDINGS_DIR, { recursive: true });
+				await prepareRecordingFolder(outputPath);
 				nativeWindowsCaptureOutput = "";
 				nativeWindowsCaptureTargetPath = outputPath;
 				nativeWindowsCaptureWebcamTargetPath = request.webcam.enabled ? webcamOutputPath : null;
@@ -2156,7 +2183,7 @@ export function registerIpcHandlers(
 				typeof request.recordingId === "number" && Number.isFinite(request.recordingId)
 					? request.recordingId
 					: Date.now();
-			const outputPath = path.join(RECORDINGS_DIR, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
+			const outputPath = resolveRecordingOutputPath(`${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
 			const cursorCaptureMode =
 				normalizeCursorCaptureMode(request.cursor?.mode) ?? "editable-overlay";
 			try {
@@ -2201,7 +2228,7 @@ export function registerIpcHandlers(
 				outputs: {
 					screenPath: outputPath,
 					manifestPath: path.join(
-						RECORDINGS_DIR,
+						path.dirname(outputPath),
 						`${RECORDING_FILE_PREFIX}${recordingId}${RECORDING_SESSION_SUFFIX}`,
 					),
 				},
@@ -2216,7 +2243,7 @@ export function registerIpcHandlers(
 				outputPath,
 			});
 
-			await fs.mkdir(RECORDINGS_DIR, { recursive: true });
+			await prepareRecordingFolder(outputPath);
 			nativeMacCaptureOutput = "";
 			nativeMacCaptureTargetPath = outputPath;
 			nativeMacCaptureRecordingId = recordingId;
@@ -2436,11 +2463,7 @@ export function registerIpcHandlers(
 			setCurrentRecordingSessionState(session);
 			clearCurrentProjectForNewMedia();
 
-			const sessionManifestPath = path.join(
-				RECORDINGS_DIR,
-				`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
-			);
-			await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+			await writeRecordingSessionManifest(session);
 
 			return {
 				success: true,
@@ -2523,11 +2546,7 @@ export function registerIpcHandlers(
 			setCurrentRecordingSessionState(session);
 			clearCurrentProjectForNewMedia();
 
-			const sessionManifestPath = path.join(
-				RECORDINGS_DIR,
-				`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
-			);
-			await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+			await writeRecordingSessionManifest(session);
 
 			return {
 				success: true,
@@ -2565,7 +2584,10 @@ export function registerIpcHandlers(
 				}
 
 				const screenVideoPath = normalizeVideoSourcePath(payload.screenVideoPath);
-				if (!screenVideoPath || !isPathWithinDir(screenVideoPath, RECORDINGS_DIR)) {
+				if (
+					!screenVideoPath ||
+					!isPathWithinDir(screenVideoPath, sceneRecordingRoot ?? RECORDINGS_DIR)
+				) {
 					return {
 						success: false,
 						error: "Native macOS webcam attachment requires a recording output path.",
@@ -2579,6 +2601,7 @@ export function registerIpcHandlers(
 				}
 
 				const webcamVideoPath = resolveRecordingOutputPath(payload.webcam.fileName);
+				await prepareRecordingFolder(webcamVideoPath);
 				await fs.writeFile(webcamVideoPath, Buffer.from(payload.webcam.videoData));
 
 				const createdAt =
@@ -2597,11 +2620,7 @@ export function registerIpcHandlers(
 				setCurrentRecordingSessionState(session);
 				clearCurrentProjectForNewMedia();
 
-				const sessionManifestPath = path.join(
-					RECORDINGS_DIR,
-					`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
-				);
-				await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+				await writeRecordingSessionManifest(session);
 
 				return {
 					success: true,
@@ -2687,16 +2706,14 @@ export function registerIpcHandlers(
 					...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 				}
 			: { screenVideoPath, createdAt, ...(cursorCaptureMode ? { cursorCaptureMode } : {}) };
+		approveFilePath(session.screenVideoPath);
+		if (session.webcamVideoPath) approveFilePath(session.webcamVideoPath);
 		setCurrentRecordingSessionState(session);
 		clearCurrentProjectForNewMedia();
 
 		await writePendingCursorTelemetry(screenVideoPath);
 
-		const sessionManifestPath = path.join(
-			RECORDINGS_DIR,
-			`${path.parse(payload.screen.fileName).name}${RECORDING_SESSION_SUFFIX}`,
-		);
-		await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+		await writeRecordingSessionManifest(session);
 
 		return {
 			success: true,
@@ -2728,16 +2745,18 @@ export function registerIpcHandlers(
 				return { success: true, path: currentRecordingSession.screenVideoPath };
 			}
 
-			const files = await fs.readdir(RECORDINGS_DIR);
-			const videoFiles = files.filter(
-				(file) => file.endsWith(".webm") && !file.endsWith("-webcam.webm"),
+			const files = await fs.readdir(RECORDINGS_DIR, { recursive: true });
+			const videoFiles = files.filter((file) =>
+				/^recording-\d+\.(webm|mp4)$/.test(path.basename(file)),
 			);
 
 			if (videoFiles.length === 0) {
 				return { success: false, message: "No recorded video found" };
 			}
 
-			const latestVideo = videoFiles.sort().reverse()[0];
+			const latestVideo = videoFiles.sort((a, b) =>
+				path.basename(b).localeCompare(path.basename(a)),
+			)[0];
 			const videoPath = path.join(RECORDINGS_DIR, latestVideo);
 
 			return { success: true, path: videoPath };
@@ -3182,39 +3201,47 @@ export function registerIpcHandlers(
 		},
 	);
 
+	let projectFileOperationPending = false;
 	async function saveProjectFile(
 		projectData: unknown,
 		suggestedName?: string,
 		existingProjectPath?: string,
 	): Promise<ProjectFileResult> {
+		if (projectFileOperationPending)
+			return { success: false, message: "A project file operation is already in progress" };
+		projectFileOperationPending = true;
 		try {
 			const trustedExistingProjectPath = isTrustedProjectPath(existingProjectPath)
 				? existingProjectPath
 				: null;
 
-			if (trustedExistingProjectPath) {
-				await fs.writeFile(
-					trustedExistingProjectPath,
-					JSON.stringify(projectData, null, 2),
-					"utf-8",
-				);
-				currentProjectPath = trustedExistingProjectPath;
-				return {
-					success: true,
-					path: trustedExistingProjectPath,
-					message: "Project saved successfully",
-				};
+			if (trustedExistingProjectPath && (await isManagedProject(trustedExistingProjectPath))) {
+				const saved = await saveStandaloneProject(projectData, trustedExistingProjectPath, {
+					isApprovedSource: isPathAllowed,
+				});
+				await approveContainedProjectAssets(saved.project, saved.path, approveFilePath);
+				currentProjectPath = saved.path;
+				return { success: true, ...saved };
 			}
 
-			const safeName = (suggestedName || `project-${Date.now()}`).replace(/[^a-zA-Z0-9-_]/g, "_");
+			const safeName = (suggestedName || `project-${Date.now()}`).replace(/[<>:"/\\|?*]/g, "_");
 			const defaultName = safeName.endsWith(`.${PROJECT_FILE_EXTENSION}`)
 				? safeName
 				: `${safeName}.${PROJECT_FILE_EXTENSION}`;
 
+			const recordingDirectory =
+				!currentProjectPath && currentRecordingSession
+					? path.dirname(currentRecordingSession.screenVideoPath)
+					: null;
+			const reuseRecordingFolder = Boolean(
+				recordingDirectory && (await isRecordingFolder(recordingDirectory)),
+			);
+			const defaultDirectory =
+				reuseRecordingFolder && recordingDirectory ? recordingDirectory : RECORDINGS_DIR;
 			const dialogOptions = buildDialogOptions(
 				{
 					title: mainT("dialogs", "fileDialogs.saveProject"),
-					defaultPath: path.join(RECORDINGS_DIR, defaultName),
+					defaultPath: path.join(defaultDirectory, defaultName),
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.videtioProject"),
@@ -3240,23 +3267,73 @@ export function registerIpcHandlers(
 				};
 			}
 
-			await fs.writeFile(result.filePath, JSON.stringify(projectData, null, 2), "utf-8");
-			currentProjectPath = result.filePath;
+			const saved = await saveStandaloneProject(projectData, result.filePath, {
+				isApprovedSource: isPathAllowed,
+				reuseRecordingFolder:
+					reuseRecordingFolder && path.dirname(result.filePath) === recordingDirectory,
+			});
+			await approveContainedProjectAssets(saved.project, saved.path, approveFilePath);
+			currentProjectPath = saved.path;
+			setCurrentRecordingSessionState(await getApprovedProjectSession(saved.project, saved.path));
 
 			return {
 				success: true,
-				path: result.filePath,
+				...saved,
 				message: "Project saved successfully",
 			};
 		} catch (error) {
 			console.error("Failed to save project file:", error);
 			return {
 				success: false,
-				message: "Failed to save project file",
+				message: error instanceof Error ? error.message : String(error),
 				error: String(error),
 			};
+		} finally {
+			projectFileOperationPending = false;
 		}
 	}
+
+	ipcMain.handle("trash-current-project", async () => {
+		if (projectFileOperationPending)
+			return { success: false, message: "Project deletion is already in progress" };
+		projectFileOperationPending = true;
+		try {
+			const projectPath = currentProjectPath;
+			if (!projectPath) throw new Error("No saved project is open");
+			const folder = await inspectProjectFolder(projectPath);
+			const response = await dialog.showMessageBox({
+				type: "warning",
+				title: mainT("dialogs", "projectTrash.title"),
+				message: mainT("dialogs", "projectTrash.message", {
+					name: path.basename(folder.directory),
+				}),
+				detail: mainT("dialogs", "projectTrash.detail", {
+					size: (folder.bytes / 1024 / 1024).toFixed(1),
+				}),
+				buttons: [
+					mainT("dialogs", "projectTrash.cancel"),
+					mainT("dialogs", "projectTrash.confirm"),
+				],
+				defaultId: 0,
+				cancelId: 0,
+				noLink: true,
+			});
+			if (response.response !== 1) return { success: false, canceled: true };
+			if (currentProjectPath !== projectPath)
+				throw new Error("The active project changed. Please try again.");
+			await inspectProjectFolder(projectPath);
+			await shell.trashItem(folder.directory);
+			currentProjectPath = null;
+			setCurrentRecordingSessionState(null);
+			recordingProjectTransition.clear();
+			return { success: true };
+		} catch (error) {
+			console.error("Failed to trash project:", error);
+			return { success: false, message: String(error) };
+		} finally {
+			projectFileOperationPending = false;
+		}
+	});
 
 	ipcMain.handle("load-project-file", async (_, projectFolder?: string) => {
 		return loadProjectFile(projectFolder);
@@ -3310,7 +3387,8 @@ export function registerIpcHandlers(
 
 			const filePath = result.filePaths[0];
 			const content = await fs.readFile(filePath, "utf-8");
-			const project = JSON.parse(content);
+			const project = resolveProjectAssets(JSON.parse(content), filePath);
+			await approveContainedProjectAssets(project, filePath, approveFilePath);
 			currentProjectPath = filePath;
 			setCurrentRecordingSessionState(await getApprovedProjectSessionOrNull(project, filePath));
 
@@ -3347,7 +3425,8 @@ export function registerIpcHandlers(
 				return { success: false, message: "File not found" };
 			}
 			const content = await fs.readFile(filePath, "utf-8");
-			const project = JSON.parse(content);
+			const project = resolveProjectAssets(JSON.parse(content), filePath);
+			await approveContainedProjectAssets(project, filePath, approveFilePath);
 			currentProjectPath = filePath;
 
 			// Tolerate missing/moved media so the project settings still load.
@@ -3384,7 +3463,8 @@ export function registerIpcHandlers(
 			}
 
 			const content = await fs.readFile(currentProjectPath, "utf-8");
-			const project = JSON.parse(content);
+			const project = resolveProjectAssets(JSON.parse(content), currentProjectPath);
+			await approveContainedProjectAssets(project, currentProjectPath, approveFilePath);
 			setCurrentRecordingSessionState(
 				await getApprovedProjectSessionOrNull(project, currentProjectPath),
 			);
@@ -3448,6 +3528,7 @@ export function registerIpcHandlers(
 		try {
 			const deletableTargets = getDiscardDeletionTargets(session, RECORDINGS_DIR);
 			await Promise.all(deletableTargets.map((target) => fs.rm(target, { force: true })));
+			await removeEmptyRecordingFolder(path.dirname(session.screenVideoPath));
 
 			setCurrentRecordingSessionState(null);
 			clearCurrentProjectForNewMedia();

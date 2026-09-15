@@ -18,6 +18,11 @@
 		"exportedSuccessfully": "{{format}} exportado exitosamente"
 	},
 	"project": {
+		"saving": "Guardando proyecto…",
+		"collect": "Reunir proyecto…",
+		"trash": "Mover proyecto a la papelera",
+		"trashed": "Proyecto movido a la papelera",
+		"trashFailed": "No se pudo mover el proyecto a la papelera",
 		"saveCanceled": "Guardado de proyecto cancelado",
 		"failedToSave": "Error al guardar el proyecto",
 		"savedTo": "Proyecto guardado en {{path}}",

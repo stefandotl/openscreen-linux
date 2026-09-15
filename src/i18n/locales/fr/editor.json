@@ -33,6 +33,11 @@
 		"exportedSuccessfully": "{{format}} exporté avec succès"
 	},
 	"project": {
+		"saving": "Enregistrement du projet…",
+		"collect": "Rassembler le projet…",
+		"trash": "Mettre le projet à la corbeille",
+		"trashed": "Projet mis à la corbeille",
+		"trashFailed": "Impossible de mettre le projet à la corbeille",
 		"saveCanceled": "Enregistrement du projet annulé",
 		"failedToSave": "Échec de l'enregistrement du projet",
 		"savedTo": "Projet enregistré dans {{path}}",

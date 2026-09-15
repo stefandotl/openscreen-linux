@@ -35,6 +35,11 @@
 		"exportedSuccessfully": "{{format}} 匯出成功"
 	},
 	"project": {
+		"saving": "正在儲存專案…",
+		"collect": "收集專案檔案…",
+		"trash": "將專案移到垃圾桶",
+		"trashed": "專案已移到垃圾桶",
+		"trashFailed": "無法將專案移到垃圾桶",
 		"saveCanceled": "專案儲存已取消",
 		"failedToSave": "儲存專案失敗",
 		"savedTo": "專案已儲存至 {{path}}",

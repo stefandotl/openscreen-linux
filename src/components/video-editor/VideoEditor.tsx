@@ -1,5 +1,14 @@
 import type { Span } from "dnd-timeline";
-import { Archive, FolderOpen, Languages, PanelLeftOpen, Save, Trash2, Video } from "lucide-react";
+import {
+	Archive,
+	ChevronDown,
+	FolderOpen,
+	Languages,
+	PanelLeftOpen,
+	Save,
+	Trash2,
+	Video,
+} from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -12,6 +21,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import {
 	Select,
@@ -343,6 +358,8 @@ export default function VideoEditor() {
 	const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
 	const [selectedBlurId, setSelectedBlurId] = useState<string | null>(null);
 	const [isExporting, setIsExporting] = useState(false);
+	const [isSavingProject, setIsSavingProject] = useState(false);
+	const projectSaveInFlight = useRef(false);
 	const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDialog, setShowExportDialog] = useState(false);
@@ -1429,94 +1446,114 @@ export default function VideoEditor() {
 
 	const saveProject = useCallback(
 		async (forceSaveAs: boolean) => {
-			const mediaForProject =
-				currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
-			if (!mediaForProject) {
-				toast.error(t("errors.noVideoLoaded"));
+			if (projectSaveInFlight.current || isExporting) return false;
+			projectSaveInFlight.current = true;
+			setIsSavingProject(true);
+			try {
+				const mediaForProject =
+					currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
+				if (!mediaForProject) {
+					toast.error(t("errors.noVideoLoaded"));
+					return false;
+				}
+
+				const editorState = {
+					wallpaper,
+					shadowIntensity,
+					showBlur,
+					showTrimWaveform,
+					motionBlurAmount,
+					borderRadius,
+					padding,
+					cropRegion,
+					zoomRegions,
+					autoZoomEnabled,
+					autoFocusAll,
+					trimRegions,
+					speedRegions,
+					annotationRegions,
+					audioRegions,
+					aspectRatio,
+					webcamLayoutPreset,
+					webcamMaskShape,
+					webcamMirrored,
+					webcamRotation,
+					webcamFraming,
+					webcamVideoOffsetMs,
+					webcamReactiveZoom,
+					webcamSizePreset,
+					webcamPosition,
+					exportQuality,
+					exportCompression,
+					exportFormat,
+					gifFrameRate,
+					gifLoop,
+					gifSizePreset,
+					cursorTheme,
+				};
+				const projectData = createProjectData(
+					mediaForProject,
+					editorState,
+					projectScenes,
+					activeSceneId,
+					getCustomFonts(),
+				);
+				const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
+
+				const fileNameBase =
+					mediaForProject.screenVideoPath
+						.split(/[\\/]/)
+						.pop()
+						?.replace(/\.[^.]+$/, "") || `project-${Date.now()}`;
+				// Normalize the same way as currentProjectSnapshot so the post-save
+				// baseline compares equal and hasUnsavedChanges clears.
+				const projectSnapshot = createProjectSnapshot(
+					mediaForProject,
+					editorState,
+					persistedScenes,
+					activeSceneId,
+				);
+				const result = await nativeBridgeClient.project.saveProjectFile(
+					projectData,
+					fileNameBase,
+					forceSaveAs ? undefined : (currentProjectPath ?? undefined),
+				);
+
+				if (result.canceled) {
+					toast.info(t("project.saveCanceled"));
+					return false;
+				}
+
+				if (!result.success) {
+					toast.error(result.message || t("project.failedToSave"));
+					return false;
+				}
+
+				if (result.path) {
+					setCurrentProjectPath(result.path);
+				}
+				if (result.project && JSON.stringify(result.project) !== JSON.stringify(projectData)) {
+					if (!(await applyLoadedProject(result.project, result.path))) {
+						toast.error(t("project.invalidFormat"));
+						return false;
+					}
+				} else {
+					setLastSavedSnapshot(projectSnapshot);
+				}
+
+				toast.success(t("project.savedTo", { path: result.path ?? "" }));
+				return true;
+			} catch (error) {
+				toast.error(String(error));
 				return false;
+			} finally {
+				projectSaveInFlight.current = false;
+				setIsSavingProject(false);
 			}
-
-			const editorState = {
-				wallpaper,
-				shadowIntensity,
-				showBlur,
-				showTrimWaveform,
-				motionBlurAmount,
-				borderRadius,
-				padding,
-				cropRegion,
-				zoomRegions,
-				autoZoomEnabled,
-				autoFocusAll,
-				trimRegions,
-				speedRegions,
-				annotationRegions,
-				audioRegions,
-				aspectRatio,
-				webcamLayoutPreset,
-				webcamMaskShape,
-				webcamMirrored,
-				webcamRotation,
-				webcamFraming,
-				webcamVideoOffsetMs,
-				webcamReactiveZoom,
-				webcamSizePreset,
-				webcamPosition,
-				exportQuality,
-				exportCompression,
-				exportFormat,
-				gifFrameRate,
-				gifLoop,
-				gifSizePreset,
-				cursorTheme,
-			};
-			const projectData = createProjectData(
-				mediaForProject,
-				editorState,
-				projectScenes,
-				activeSceneId,
-				getCustomFonts(),
-			);
-			const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
-
-			const fileNameBase =
-				mediaForProject.screenVideoPath
-					.split(/[\\/]/)
-					.pop()
-					?.replace(/\.[^.]+$/, "") || `project-${Date.now()}`;
-			// Normalize the same way as currentProjectSnapshot so the post-save
-			// baseline compares equal and hasUnsavedChanges clears.
-			const projectSnapshot = createProjectSnapshot(
-				mediaForProject,
-				editorState,
-				persistedScenes,
-				activeSceneId,
-			);
-			const result = await nativeBridgeClient.project.saveProjectFile(
-				projectData,
-				fileNameBase,
-				forceSaveAs ? undefined : (currentProjectPath ?? undefined),
-			);
-
-			if (result.canceled) {
-				toast.info(t("project.saveCanceled"));
-				return false;
-			}
-
-			if (!result.success) {
-				toast.error(result.message || t("project.failedToSave"));
-				return false;
-			}
-
-			if (result.path) {
-				setCurrentProjectPath(result.path);
-			}
-			setLastSavedSnapshot(projectSnapshot);
-
-			toast.success(t("project.savedTo", { path: result.path ?? "" }));
-			return true;
 		},
 		[
+			isExporting,
+			applyLoadedProject,
 			currentProjectMedia,
 			currentProjectPath,
 			activeSceneId,
@@ -1709,6 +1746,10 @@ export default function VideoEditor() {
 	// Studio dashboard. Prompts to save first when there are unsaved changes.
 	const doNewProject = useCallback(async () => {
 		exitProjectPlayback();
+		scenesRef.current = [];
+		activeSceneIdRef.current = null;
+		setScenes([]);
+		setActiveSceneId(null);
 		await nativeBridgeClient.project.clearCurrentVideoPath();
 		setVideoPath(null);
 		setVideoSourcePath(null);
@@ -1744,6 +1785,27 @@ export default function VideoEditor() {
 		nextAnnotationIdRef.current = 1;
 		nextAnnotationZIndexRef.current = 1;
 	}, [exitProjectPlayback, resetState]);
+
+	const [projectFileBusy, setProjectFileBusy] = useState(false);
+	const handleTrashProject = useCallback(async () => {
+		if (isExporting || projectFileBusy) return;
+		setProjectFileBusy(true);
+		setIsPlaying(false);
+		try {
+			const result = await window.electronAPI.trashCurrentProject();
+			if (result.canceled) return;
+			if (!result.success) {
+				toast.error(result.message || t("project.trashFailed"));
+				return;
+			}
+			await doNewProject();
+			toast.success(t("project.trashed"));
+		} catch (error) {
+			toast.error(String(error));
+		} finally {
+			setProjectFileBusy(false);
+		}
+	}, [doNewProject, isExporting, projectFileBusy, t]);
 
 	const handleNewProject = useCallback(async () => {
 		if (hasUnsavedChanges) {
@@ -4512,6 +4574,37 @@ export default function VideoEditor() {
 						<Archive size={14} />
 						{ts("recordings.openFolder")}
 					</button>
+					{currentProjectPath && (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<button
+									type="button"
+									disabled={isExporting || projectFileBusy || isSavingProject}
+									title={currentProjectPath}
+									className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/[0.08] text-[11px] font-medium disabled:opacity-40"
+								>
+									<span className="max-w-36 truncate">
+										{currentProjectPath.split(/[\\/]/).pop()}
+									</span>
+									<ChevronDown size={12} />
+								</button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start">
+								<DropdownMenuItem onSelect={() => void handleSaveProjectAs()}>
+									<Archive size={14} />
+									{t("project.collect")}
+								</DropdownMenuItem>
+								<DropdownMenuItem
+									onSelect={() => void handleTrashProject()}
+									className="text-red-400"
+								>
+									<Trash2 size={14} />
+									{t("project.trash")}
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					)}
+
 					{showDiscardRecordingAction && (
 						<button
 							type="button"
@@ -4532,6 +4625,17 @@ export default function VideoEditor() {
 					</button>
 				</div>
 			</div>
+
+			<Dialog open={isSavingProject}>
+				<DialogContent
+					className="[&>button]:hidden"
+					aria-describedby={undefined}
+					onEscapeKeyDown={(event) => event.preventDefault()}
+					onPointerDownOutside={(event) => event.preventDefault()}
+				>
+					<DialogTitle>{t("project.saving")}</DialogTitle>
+				</DialogContent>
+			</Dialog>
 
 			{showProjectPlaybackScope && (
 				<ProjectPlaybackPreloader

@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "プロジェクトをゴミ箱に移動しますか？",
+		"message": "「{{name}}」をゴミ箱に移動しますか？",
+		"detail": "プロジェクトフォルダー全体（{{size}} MB）、録画、未保存の変更が削除されます。フォルダー外の元ファイルは保持されます。",
+		"cancel": "キャンセル",
+		"confirm": "ゴミ箱に移動"
+	},
 	"export": {
 		"complete": "エクスポート完了",
 		"yourFormatReady": "{{format}}の準備ができました",

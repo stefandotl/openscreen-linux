@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "¿Mover proyecto a la papelera?",
+		"message": "¿Mover «{{name}}» a la papelera?",
+		"detail": "Se eliminará toda la carpeta del proyecto ({{size}} MB), incluidas sus grabaciones y los cambios sin guardar. Los originales fuera de esta carpeta se conservarán.",
+		"cancel": "Cancelar",
+		"confirm": "Mover a la papelera"
+	},
 	"export": {
 		"complete": "Exportación completada",
 		"yourFormatReady": "Tu {{format}} está listo",

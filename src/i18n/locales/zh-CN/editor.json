@@ -35,6 +35,11 @@
 		"exportedSuccessfully": "{{format}} 导出成功"
 	},
 	"project": {
+		"saving": "正在保存项目…",
+		"collect": "收集项目文件…",
+		"trash": "将项目移到回收站",
+		"trashed": "项目已移到回收站",
+		"trashFailed": "无法将项目移到回收站",
 		"saveCanceled": "项目保存已取消",
 		"failedToSave": "保存项目失败",
 		"savedTo": "项目已保存至 {{path}}",

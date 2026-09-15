@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "将项目移到回收站？",
+		"message": "将“{{name}}”移到回收站？",
+		"detail": "整个项目文件夹（{{size}} MB）、其中的录制文件和未保存的修改都将被移除。文件夹外的原始文件将保留。",
+		"cancel": "取消",
+		"confirm": "移到回收站"
+	},
 	"export": {
 		"complete": "导出完成",
 		"yourFormatReady": "您的 {{format}} 已准备就绪",

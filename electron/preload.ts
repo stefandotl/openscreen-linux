@@ -244,6 +244,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	clearCurrentVideoPath: () => {
 		return ipcRenderer.invoke("clear-current-video-path");
 	},
+	trashCurrentProject: () => ipcRenderer.invoke("trash-current-project"),
 	saveProjectFile: (projectData: unknown, suggestedName?: string, existingProjectPath?: string) => {
 		return ipcRenderer.invoke("save-project-file", projectData, suggestedName, existingProjectPath);
 	},

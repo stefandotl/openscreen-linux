@@ -35,6 +35,11 @@
 		"exportedSuccessfully": "Đã xuất {{format}} thành công"
 	},
 	"project": {
+		"saving": "Đang lưu dự án…",
+		"collect": "Gom tệp dự án…",
+		"trash": "Chuyển dự án vào thùng rác",
+		"trashed": "Đã chuyển dự án vào thùng rác",
+		"trashFailed": "Không thể chuyển dự án vào thùng rác",
 		"saveCanceled": "Đã hủy lưu dự án",
 		"failedToSave": "Lưu dự án thất bại",
 		"savedTo": "Đã lưu dự án vào {{path}}",

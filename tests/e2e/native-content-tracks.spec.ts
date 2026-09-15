@@ -22,6 +22,12 @@ test("exports auto-caption output, overlapping text, an image and imported audio
 		const sourcePath = path.join(recordings, "source.mp4");
 		const audioPath = path.join(directory, "music.wav");
 		const outputPath = path.join(directory, "output.mp4");
+		await app.evaluate(
+			({ dialog }, filePath) => {
+				dialog.showSaveDialog = async () => ({ canceled: false, filePath });
+			},
+			path.join(directory, "Collected.videtio"),
+		);
 		const ffmpeg = process.env.VIDETIO_FFMPEG_PATH ?? "/usr/bin/ffmpeg";
 		const run = (args: string[]) =>
 			execFileSync(ffmpeg, ["-v", "error", "-y", ...args], { maxBuffer: 32 * 1024 * 1024 });
@@ -60,7 +66,13 @@ test("exports auto-caption output, overlapping text, an image and imported audio
 				image.getContext("2d").fillStyle = "#00ff00"; image.getContext("2d").fillRect(0, 0, 32, 32);
 				const annotationRegions = [...captions, text("Lower", "#ff0000", 10, 200, 1800), text("Upper", "#0000ff", 20, 1200, 2800),
 					{ ...text("Image", "transparent", 30, 0, 1000), type: "image", content: image.toDataURL(), position: { x: 60, y: 10 }, size: { width: 20, height: 20 } }];
-				const config = { videoUrl: sourcePath, width: 320, height: 180, frameRate: 30, bitrate: 4000000, wallpaper: "#000000",
+				const saved = await window.electronAPI.saveProjectFile({version: 2, media: {screenVideoPath: sourcePath},
+					editor: {annotationRegions, audioRegions: [{sourcePath: imported.path}]}}, "Collected");
+				if (!saved.success) throw new Error(JSON.stringify(saved));
+				const reopened = await window.electronAPI.loadProjectFileFromPath(saved.path);
+				if (!reopened.success) throw new Error(JSON.stringify(reopened));
+				if (JSON.stringify(reopened.project.editor.annotationRegions) !== JSON.stringify(annotationRegions)) throw new Error("Collected annotations changed");
+				const config = { videoUrl: reopened.project.media.screenVideoPath, width: 320, height: 180, frameRate: 30, bitrate: 4000000, wallpaper: "#000000",
 					zoomRegions: [], trimRegions: [], speedRegions: [], annotationRegions, showShadow: false, shadowIntensity: 0, showBlur: false,
 					motionBlurAmount: 0, borderRadius: 0, padding: 0, cropRegion: { x: 0, y: 0, width: 1, height: 1 } };
 				const blockers = getNativeGpuExportBlockers(config, { width: 320, height: 180, duration: 3 });
@@ -68,7 +80,7 @@ test("exports auto-caption output, overlapping text, an image and imported audio
 				const plan = createNativeGpuExportPlan(config, { width: 320, height: 180, duration: 3 });
 				const assets = await createNativeGpuExportAssets(config);
 				plan.overlays = assets.overlays;
-				const audioRegions = [{ id: "music", name: "music.wav", sourcePath: imported.path, startMs: 1000, endMs: 2000,
+				const audioRegions = [{ id: "music", name: "music.wav", sourcePath: reopened.project.editor.audioRegions[0].sourcePath, startMs: 1000, endMs: 2000,
 					sourceStartMs: 0, sourceDurationMs: imported.durationMs, volume: 0.5, fadeInMs: 100, fadeOutMs: 100 }];
 				const started = await window.electronAPI.startNativeGpuExport({ plan, outputPath, audioRegions, sourceDurationSec: 3,
 					wallpaperPng: assets.wallpaperPng, overlayPngs: assets.overlayPngs });

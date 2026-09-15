@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "Mover projeto para a lixeira?",
+		"message": "Mover “{{name}}” para a lixeira?",
+		"detail": "Toda a pasta do projeto ({{size}} MB), incluindo gravações e alterações não salvas, será removida. Os originais fora desta pasta serão mantidos.",
+		"cancel": "Cancelar",
+		"confirm": "Mover para a lixeira"
+	},
 	"export": {
 		"complete": "Exportação Concluída",
 		"yourFormatReady": "Seu {{format}} está pronto",

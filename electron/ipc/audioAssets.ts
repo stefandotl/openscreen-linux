@@ -22,7 +22,10 @@ export async function validateAudioPath(candidate: unknown): Promise<string> {
 	return normalized;
 }
 
-export function registerAudioAssetHandlers(getFfmpegBinary: () => string) {
+export function registerAudioAssetHandlers(
+	getFfmpegBinary: () => string,
+	approvePath?: (filePath: string) => void,
+) {
 	ipcMain.handle("inspect-audio-file", async (_event, candidate: unknown) => {
 		try {
 			const sourcePath = await validateAudioPath(candidate);
@@ -48,6 +51,7 @@ export function registerAudioAssetHandlers(getFfmpegBinary: () => string) {
 				? (Number(duration[1]) * 3600 + Number(duration[2]) * 60 + Number(duration[3])) * 1000
 				: 0;
 			if (durationMs <= 0) throw new Error("Audio file has no usable duration");
+			approvePath?.(sourcePath);
 			return { success: true as const, path: sourcePath, durationMs };
 		} catch (error) {
 			console.error("[audio-import]", error);

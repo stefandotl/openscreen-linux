@@ -18,6 +18,11 @@
 		"exportedSuccessfully": "{{format}} başarıyla dışa aktarıldı"
 	},
 	"project": {
+		"saving": "Proje kaydediliyor…",
+		"collect": "Proje dosyalarını topla…",
+		"trash": "Projeyi çöp kutusuna taşı",
+		"trashed": "Proje çöp kutusuna taşındı",
+		"trashFailed": "Proje çöp kutusuna taşınamadı",
 		"saveCanceled": "Proje kaydetme iptal edildi",
 		"failedToSave": "Proje kaydedilemedi",
 		"savedTo": "Proje şuraya kaydedildi: {{path}}",

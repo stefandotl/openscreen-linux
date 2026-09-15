@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "Proje çöp kutusuna taşınsın mı?",
+		"message": "“{{name}}” çöp kutusuna taşınsın mı?",
+		"detail": "Kayıtlar ve kaydedilmemiş değişiklikler dahil tüm proje klasörü ({{size}} MB) kaldırılacak. Klasör dışındaki özgün dosyalar korunacak.",
+		"cancel": "İptal",
+		"confirm": "Çöp kutusuna taşı"
+	},
 	"export": {
 		"complete": "Dışa Aktarım Tamamlandı",
 		"yourFormatReady": "{{format}} dosyanız hazır",

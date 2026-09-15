@@ -17,13 +17,22 @@ describe("selectPreferredCameraDevice", () => {
 		expect(selectPreferredCameraDevice(cameras, "dev-origin-id", "USB Camera")).toEqual(cameras[1]);
 	});
 
-	it("uses the first available camera when no persisted identity is still available", () => {
-		expect(selectPreferredCameraDevice(cameras, "stale-id", "Disconnected Camera")).toEqual(
-			cameras[0],
-		);
+	it("keeps an unavailable saved camera instead of falling back", () => {
+		expect(selectPreferredCameraDevice(cameras, "stale-id", "Disconnected Camera")).toBeUndefined();
 	});
 
 	it("returns undefined when no camera is available", () => {
 		expect(selectPreferredCameraDevice([], "stale-id", "USB Camera")).toBeUndefined();
 	});
+});
+
+it("selects a default only before a camera has been chosen", () => {
+	expect(selectPreferredCameraDevice(cameras, undefined, undefined)).toEqual(cameras[0]);
+});
+it("recovers a virtual camera after an incomplete enumeration", () => {
+	const virtual = { deviceId: "new-virtual-id", label: "OBS Virtual Camera" };
+	expect(selectPreferredCameraDevice(cameras, "old-virtual-id", virtual.label)).toBeUndefined();
+	expect(
+		selectPreferredCameraDevice([...cameras, virtual], "old-virtual-id", virtual.label),
+	).toEqual(virtual);
 });

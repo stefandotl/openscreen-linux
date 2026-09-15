@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "Chuyển dự án vào thùng rác?",
+		"message": "Chuyển “{{name}}” vào thùng rác?",
+		"detail": "Toàn bộ thư mục dự án ({{size}} MB), bản ghi và thay đổi chưa lưu sẽ bị xóa. Các tệp gốc bên ngoài thư mục này sẽ được giữ lại.",
+		"cancel": "Hủy",
+		"confirm": "Chuyển vào thùng rác"
+	},
 	"export": {
 		"complete": "Xuất hoàn tất",
 		"yourFormatReady": "{{format}} của bạn đã sẵn sàng",

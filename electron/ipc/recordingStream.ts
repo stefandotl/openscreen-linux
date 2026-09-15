@@ -1,6 +1,7 @@
 import { createWriteStream, type WriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
 import type { IpcMain } from "electron";
+import { prepareRecordingFolder } from "../projectStorage";
 
 /**
  * Owns write streams for in-progress recordings, keyed by output file name.
@@ -101,7 +102,9 @@ export function registerRecordingStreamHandlers(
 		"open-recording-stream",
 		async (_, fileName: string): Promise<{ success: boolean; error?: string }> => {
 			try {
-				await registry.open(fileName, resolveRecordingOutputPath(fileName));
+				const filePath = resolveRecordingOutputPath(fileName);
+				await prepareRecordingFolder(filePath);
+				await registry.open(fileName, filePath);
 				return { success: true };
 			} catch (error) {
 				return { success: false, error: String(error) };

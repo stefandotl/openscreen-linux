@@ -11,10 +11,18 @@ const ROOT = path.join(__dirname, "../..");
 const MAIN_JS = path.join(ROOT, "dist-electron/main.js");
 
 async function launchApp(userDataDir: string): Promise<ElectronApplication> {
+	const launchEnv = { ...process.env };
+	delete launchEnv.ELECTRON_RUN_AS_NODE;
 	return electron.launch({
-		args: [MAIN_JS, "--no-sandbox", "--enable-unsafe-swiftshader", "--lang=en-US"],
+		args: [
+			MAIN_JS,
+			"--no-sandbox",
+			"--enable-unsafe-swiftshader",
+			"--lang=en-US",
+			`--user-data-dir=${userDataDir}/profile`,
+		],
 		env: {
-			...process.env,
+			...launchEnv,
 			HEADLESS: "true",
 			LANG: "en_US.UTF-8",
 			LC_ALL: "en_US.UTF-8",
@@ -122,4 +130,104 @@ test.describe("recording preferences", () => {
 			fs.rmSync(configRoot, { recursive: true, force: true });
 		}
 	});
+});
+
+test("retains a virtual camera while enumeration is incomplete and recovers its changed ID", async () => {
+	const configRoot = fs.mkdtempSync(path.join(os.tmpdir(), "videtio-virtual-camera-"));
+	const app = await launchApp(configRoot);
+	try {
+		const page = await app.firstWindow({ timeout: 60_000 });
+		await page.waitForLoadState("domcontentloaded");
+		await page.evaluate(() =>
+			window.electronAPI.updateRecordingPreferences({
+				webcamEnabled: true,
+				webcamDeviceId: "old-origin-id",
+				webcamDeviceName: "OBS Virtual Camera",
+			}),
+		);
+		await page.addInitScript(() => {
+			const started = performance.now();
+			const requests: string[] = [];
+			(window as unknown as { cameraRequests: string[] }).cameraRequests = requests;
+			Object.defineProperty(navigator.mediaDevices, "enumerateDevices", {
+				value: async () => {
+					const devices = [
+						{
+							kind: "videoinput",
+							deviceId: "built-in",
+							label: "Built-in Camera",
+							groupId: "physical",
+							toJSON: () => ({}),
+						},
+					];
+					if (performance.now() - started > 3000)
+						devices.push({
+							kind: "videoinput",
+							deviceId: "new-virtual-id",
+							label: "OBS Virtual Camera",
+							groupId: "virtual",
+							toJSON: () => ({}),
+						});
+					return devices;
+				},
+			});
+			Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
+				value: async (constraints: MediaStreamConstraints) => {
+					const video = constraints.video as MediaTrackConstraints;
+					const id = (video.deviceId as ConstrainDOMStringParameters)?.exact as string;
+					requests.push(id);
+					if (id !== "new-virtual-id") throw new Error(`Unexpected camera requested: ${id}`);
+					const canvas = document.createElement("canvas");
+					canvas.width = 320;
+					canvas.height = 180;
+					const context = canvas.getContext("2d")!;
+					context.fillRect(0, 0, 320, 180);
+					return canvas.captureStream(30);
+				},
+			});
+		});
+		await page.reload();
+		await page.waitForLoadState("domcontentloaded");
+		await expect
+			.poll(async () =>
+				page.evaluate(async () => {
+					const { preferences } = await window.electronAPI.initializeRecordingPreferences({});
+					return preferences.webcamDeviceName;
+				}),
+			)
+			.toBe("OBS Virtual Camera");
+		// Sample during the incomplete enumeration, then await the automatic recovery.
+		await page.waitForTimeout(1000);
+		const waiting = await page.evaluate(() =>
+			window.electronAPI.initializeRecordingPreferences({}),
+		);
+		expect(waiting.preferences.webcamDeviceId).toBe("old-origin-id");
+		expect(waiting.preferences.webcamDeviceName).toBe("OBS Virtual Camera");
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(async () => {
+						const { preferences } = await window.electronAPI.initializeRecordingPreferences({});
+						return preferences.webcamDeviceId;
+					}),
+				{ timeout: 15_000 },
+			)
+			.toBe("new-virtual-id");
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() => (window as unknown as { cameraRequests: string[] }).cameraRequests.length,
+				),
+			)
+			.toBeGreaterThan(0);
+		const requests = await page.evaluate(
+			() => (window as unknown as { cameraRequests: string[] }).cameraRequests,
+		);
+		expect(requests.every((id) => id === "new-virtual-id")).toBe(true);
+		const saved = await page.evaluate(() => window.electronAPI.initializeRecordingPreferences({}));
+		expect(saved.preferences.webcamDeviceName).toBe("OBS Virtual Camera");
+	} finally {
+		await closeApp(app);
+		fs.rmSync(configRoot, { recursive: true, force: true });
+	}
 });

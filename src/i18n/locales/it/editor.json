@@ -43,6 +43,11 @@
 		"exportedSuccessfully": "{{format}} esportato con successo"
 	},
 	"project": {
+		"saving": "Salvataggio del progetto…",
+		"collect": "Raccogli progetto…",
+		"trash": "Sposta progetto nel cestino",
+		"trashed": "Progetto spostato nel cestino",
+		"trashFailed": "Impossibile spostare il progetto nel cestino",
 		"saveCanceled": "Salvataggio progetto annullato",
 		"failedToSave": "Impossibile salvare il progetto",
 		"savedTo": "Progetto salvato in {{path}}",

@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "Mettre le projet à la corbeille ?",
+		"message": "Mettre « {{name}} » à la corbeille ?",
+		"detail": "Le dossier entier du projet ({{size}} Mo), ses enregistrements et les modifications non enregistrées seront supprimés. Les originaux hors de ce dossier seront conservés.",
+		"cancel": "Annuler",
+		"confirm": "Mettre à la corbeille"
+	},
 	"export": {
 		"complete": "Export terminé",
 		"yourFormatReady": "Votre {{format}} est prêt",

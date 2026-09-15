@@ -35,6 +35,11 @@
 		"exportedSuccessfully": "{{format}} exported successfully"
 	},
 	"project": {
+		"saving": "Saving project…",
+		"collect": "Collect project…",
+		"trash": "Move project to trash",
+		"trashed": "Project moved to trash",
+		"trashFailed": "Could not move project to trash",
 		"saveCanceled": "Project save canceled",
 		"failedToSave": "Failed to save project",
 		"savedTo": "Project saved to {{path}}",

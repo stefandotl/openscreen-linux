@@ -1,6 +1,7 @@
 export type CameraDeviceIdentity = {
 	deviceId: string;
 	label: string;
+	identityLabel?: string;
 };
 
 export function selectPreferredCameraDevice<T extends CameraDeviceIdentity>(
@@ -10,7 +11,7 @@ export function selectPreferredCameraDevice<T extends CameraDeviceIdentity>(
 ): T | undefined {
 	return (
 		devices.find((device) => device.deviceId === preferredDeviceId) ??
-		devices.find((device) => device.label === preferredDeviceName) ??
-		devices[0]
+		devices.find((device) => (device.identityLabel ?? device.label) === preferredDeviceName) ??
+		(!preferredDeviceId && !preferredDeviceName ? devices[0] : undefined)
 	);
 }

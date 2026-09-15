@@ -35,6 +35,11 @@
 		"exportedSuccessfully": "{{format}}を正常にエクスポートしました"
 	},
 	"project": {
+		"saving": "プロジェクトを保存中…",
+		"collect": "プロジェクトをまとめる…",
+		"trash": "プロジェクトをゴミ箱に移動",
+		"trashed": "プロジェクトをゴミ箱に移動しました",
+		"trashFailed": "プロジェクトをゴミ箱に移動できませんでした",
 		"saveCanceled": "プロジェクトの保存がキャンセルされました",
 		"failedToSave": "プロジェクトの保存に失敗しました",
 		"savedTo": "プロジェクトを保存しました: {{path}}",

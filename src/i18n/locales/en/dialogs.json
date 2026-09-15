@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "Move project to trash?",
+		"message": "Move “{{name}}” to the trash?",
+		"detail": "The entire project folder ({{size}} MB), including its recordings and unsaved edits, will be removed. Original files outside this folder remain.",
+		"cancel": "Cancel",
+		"confirm": "Move to trash"
+	},
 	"export": {
 		"complete": "Export Complete",
 		"yourFormatReady": "Your {{format}} is ready",

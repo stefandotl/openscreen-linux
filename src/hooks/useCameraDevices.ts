@@ -6,6 +6,7 @@ export interface CameraDevice {
 	deviceId: string;
 	label: string;
 	groupId: string;
+	identityLabel?: string;
 }
 
 export function useCameraDevices(enabled: boolean = false) {
@@ -37,6 +38,7 @@ export function useCameraDevices(enabled: boolean = false) {
 					.filter((device) => device.kind === "videoinput")
 					.map((device) => ({
 						deviceId: device.deviceId,
+						identityLabel: device.label,
 						label: device.label || `Camera ${device.deviceId.slice(0, 8)}`,
 						groupId: device.groupId,
 					}));

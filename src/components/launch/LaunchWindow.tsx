@@ -24,6 +24,7 @@ import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
 import { resolvePreferredCaptureSource } from "@/lib/captureSourcePreferences";
 import { loadUserPreferences, saveUserPreferences } from "@/lib/userPreferences";
 import { nativeBridgeClient } from "@/native";
+import { selectPreferredCameraDevice } from "../../hooks/cameraDeviceSelection";
 import { useAudioLevelMeter } from "../../hooks/useAudioLevelMeter";
 import { useCameraDevices } from "../../hooks/useCameraDevices";
 import { useMicrophoneDevices } from "../../hooks/useMicrophoneDevices";
@@ -123,6 +124,7 @@ export function LaunchWindow() {
 		setSystemAudioEnabled,
 		webcamEnabled,
 		setWebcamEnabled,
+		recordingPreferencesHydrated,
 		webcamDeviceId,
 		setWebcamDeviceId,
 		webcamDeviceName,
@@ -187,7 +189,7 @@ export function LaunchWindow() {
 			? t("webcam.unavailable")
 			: cameraDevices.length === 0
 				? t("webcam.noneFound")
-				: selectedCameraDevice?.label || t("webcam.defaultCamera");
+				: selectedCameraDevice?.label || webcamDeviceName || t("webcam.defaultCamera");
 
 	const { level } = useAudioLevelMeter({
 		enabled: showMicControls,
@@ -217,18 +219,21 @@ export function LaunchWindow() {
 	]);
 
 	useEffect(() => {
-		const preferredDevice =
-			cameraDevices.find((device) => device.deviceId === webcamDeviceId) ??
-			cameraDevices.find((device) => device.label === webcamDeviceName) ??
-			cameraDevices.find((device) => device.deviceId === selectedCameraId);
+		if (!recordingPreferencesHydrated) return;
+		const preferredDevice = selectPreferredCameraDevice(
+			cameraDevices,
+			webcamDeviceId,
+			webcamDeviceName,
+		);
 		if (!preferredDevice) return;
 
 		if (selectedCameraId !== preferredDevice.deviceId) {
 			setSelectedCameraId(preferredDevice.deviceId);
 		}
 		setWebcamDeviceId(preferredDevice.deviceId);
-		setWebcamDeviceName(preferredDevice.label);
+		if (preferredDevice.identityLabel) setWebcamDeviceName(preferredDevice.identityLabel);
 	}, [
+		recordingPreferencesHydrated,
 		cameraDevices,
 		selectedCameraId,
 		setSelectedCameraId,
@@ -744,6 +749,7 @@ export function LaunchWindow() {
 										<>
 											<select
 												value={webcamDeviceId || selectedCameraId}
+												disabled={!recordingPreferencesHydrated}
 												onChange={(e) => {
 													const device = cameraDevices.find(
 														(item) => item.deviceId === e.target.value,
@@ -754,6 +760,12 @@ export function LaunchWindow() {
 												}}
 												className="w-full appearance-none bg-white/5 text-white text-[11px] rounded-lg pl-2 pr-6 py-1 border border-white/10 outline-none hover:bg-white/10 transition-colors cursor-pointer"
 											>
+												{webcamDeviceId &&
+													!cameraDevices.some((device) => device.deviceId === webcamDeviceId) && (
+														<option value={webcamDeviceId}>
+															{webcamDeviceName || t("webcam.noneFound")}
+														</option>
+													)}
 												{cameraDevices.map((device) => (
 													<option
 														key={device.deviceId}
@@ -773,6 +785,7 @@ export function LaunchWindow() {
 								{(!webcamExpanded || cameraDevices.length === 0) && (
 									<select
 										value={webcamDeviceId || selectedCameraId}
+										disabled={!recordingPreferencesHydrated}
 										onChange={(e) => {
 											const device = cameraDevices.find((item) => item.deviceId === e.target.value);
 											setSelectedCameraId(e.target.value);
@@ -781,6 +794,12 @@ export function LaunchWindow() {
 										}}
 										className="sr-only"
 									>
+										{webcamDeviceId &&
+											!cameraDevices.some((device) => device.deviceId === webcamDeviceId) && (
+												<option value={webcamDeviceId}>
+													{webcamDeviceName || t("webcam.noneFound")}
+												</option>
+											)}
 										{cameraDevices.map((device) => (
 											<option key={device.deviceId} value={device.deviceId}>
 												{device.label}

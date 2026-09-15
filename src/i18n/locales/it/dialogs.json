@@ -1,4 +1,11 @@
 {
+	"projectTrash": {
+		"title": "Spostare il progetto nel cestino?",
+		"message": "Spostare «{{name}}» nel cestino?",
+		"detail": "Verrà rimossa tutta la cartella del progetto ({{size}} MB), incluse le registrazioni e le modifiche non salvate. Gli originali fuori dalla cartella verranno conservati.",
+		"cancel": "Annulla",
+		"confirm": "Sposta nel cestino"
+	},
 	"export": {
 		"complete": "Esportazione completata",
 		"yourFormatReady": "Il tuo {{format}} è pronto",
