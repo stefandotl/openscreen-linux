@@ -18,7 +18,12 @@ import {
 import type { CursorCaptureMode, RecordedVideoAssetInput } from "@/lib/recordingSession";
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { loadUserPreferences } from "@/lib/userPreferences";
-import { WebcamRecordingBridge } from "@/lib/webcamRecordingBridge";
+import {
+	createWebcamVideoConstraints,
+	isLowResolutionVirtualCamera,
+	WEBCAM_TARGET_FRAME_RATE,
+} from "@/lib/webcamCapture";
+import { type WebcamFormatChange, WebcamRecordingBridge } from "@/lib/webcamRecordingBridge";
 import { getRecommendedWebcamVideoOffsetMs } from "@/lib/webcamSync";
 import { selectPreferredCameraDevice } from "./cameraDeviceSelection";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
@@ -54,7 +59,6 @@ const AUDIO_BITRATE_VOICE = 256_000;
 const AUDIO_BITRATE_SYSTEM = 320_000;
 
 const MIC_GAIN = 1;
-const WEBCAM_TARGET_FRAME_RATE = 30;
 
 type UseScreenRecorderReturn = {
 	recording: boolean;
@@ -152,6 +156,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const discardRecordingId = useRef<number | null>(null);
 	const restarting = useRef(false);
 	const countdownRunId = useRef(0);
+	const stopRecording = useRef<() => void>(() => undefined);
 	const [countdownActive, setCountdownActive] = useState(false);
 	const webcamReady = useRef(false);
 	const webcamAcquireId = useRef(0);
@@ -235,6 +240,37 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		];
 
 		return preferred.find((type) => MediaRecorder.isTypeSupported(type)) ?? "video/webm";
+	};
+
+	const createWebcamRecorderHandle = (
+		options: MediaRecorderOptions,
+		fileName?: string,
+	): RecorderHandle => {
+		const bridge = webcamRecordingBridge.current;
+		if (!bridge || webcamStream.current !== bridge.stream) {
+			throw new Error("Webcam recording bridge is not ready.");
+		}
+
+		const dimensions = bridge.prepareForRecording();
+		if (isLowResolutionVirtualCamera(webcamDeviceName, dimensions)) {
+			bridge.finishRecording();
+			throw new Error(
+				t("recording.cameraResolutionTooLow", {
+					resolution: `${dimensions.width}x${dimensions.height}`,
+				}),
+			);
+		}
+		console.info(
+			`[webcam-recording] Locked ${dimensions.width}x${dimensions.height} @ ${WEBCAM_TARGET_FRAME_RATE}fps`,
+		);
+		try {
+			const handle = createRecorderHandle(bridge.stream, options, fileName);
+			handle.recorder.addEventListener("stop", () => bridge.finishRecording(), { once: true });
+			return handle;
+		} catch (error) {
+			bridge.finishRecording();
+			throw error;
+		}
 	};
 
 	const computeBitrate = (width: number, height: number) => {
@@ -383,10 +419,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 				const stream = await navigator.mediaDevices.getUserMedia({
 					audio: false,
-					video: {
-						deviceId: { exact: preferredCamera.deviceId },
-						frameRate: { ideal: WEBCAM_TARGET_FRAME_RATE, max: WEBCAM_TARGET_FRAME_RATE },
-					},
+					video: createWebcamVideoConstraints(preferredCamera.deviceId),
 				});
 
 				if (cancelled || thisAcquireId !== webcamAcquireId.current) {
@@ -402,9 +435,22 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				if (webcamRecordingBridge.current) {
 					await webcamRecordingBridge.current.attachSource(stream);
 				} else {
+					const handleLockedFormatChange = ({ previous, current }: WebcamFormatChange) => {
+						console.error(
+							`[webcam-recording] Camera format changed while recording: ${previous.width}x${previous.height} -> ${current.width}x${current.height}`,
+						);
+						toast.error(
+							t("recording.cameraFormatChanged", {
+								before: `${previous.width}x${previous.height}`,
+								after: `${current.width}x${current.height}`,
+							}),
+						);
+						stopRecording.current();
+					};
 					webcamRecordingBridge.current = await WebcamRecordingBridge.create(
 						stream,
 						WEBCAM_TARGET_FRAME_RATE,
+						{ onLockedFormatChange: handleLockedFormatChange },
 					);
 				}
 				webcamStream.current = webcamRecordingBridge.current.stream;
@@ -846,7 +892,6 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		[cursorCaptureMode, getRecordingDurationMs, webcamVideoOffsetMs],
 	);
 
-	const stopRecording = useRef<() => void>(() => undefined);
 	stopRecording.current = () => {
 		if (nativeWindowsRecording.current) {
 			void finalizeNativeWindowsRecording(false);
@@ -1046,7 +1091,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			}
 			const browserWebcamRecorder =
 				webcamEnabled && webcamStream.current
-					? createRecorderHandle(webcamStream.current, {
+					? createWebcamRecorderHandle({
 							mimeType: selectMimeType(),
 							videoBitsPerSecond: BITRATE_BASE,
 						})
@@ -1174,7 +1219,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					return true;
 				}
 				if (webcamStream.current) {
-					nativeWebcamRecorder = createRecorderHandle(webcamStream.current, {
+					nativeWebcamRecorder = createWebcamRecorderHandle({
 						mimeType: selectMimeType(),
 						videoBitsPerSecond: BITRATE_BASE,
 					});
@@ -1577,8 +1622,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			);
 
 			if (webcamStream.current) {
-				webcamRecorder.current = createRecorderHandle(
-					webcamStream.current,
+				webcamRecorder.current = createWebcamRecorderHandle(
 					{ mimeType, videoBitsPerSecond: Math.min(videoBitsPerSecond, BITRATE_BASE) },
 					`${RECORDING_FILE_PREFIX}${activeRecordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`,
 				);

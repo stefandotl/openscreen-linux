@@ -56,6 +56,8 @@
 		"permissionDenied": "녹화 권한이 거부되었습니다. 화면 녹화를 허용해 주세요.",
 		"cameraDisconnected": "웹캠 연결이 끊어졌습니다.",
 		"cameraNotFound": "카메라를 찾을 수 없습니다.",
+		"cameraFormatChanged": "카메라 형식이 {{before}}에서 {{after}}(으)로 변경되었습니다. 흐린 영상이나 검은 여백을 방지하기 위해 녹화를 중지했습니다.",
+		"cameraResolutionTooLow": "가상 카메라가 {{resolution}} 해상도만 제공하고 있습니다. Camera Lab을 최소 1280x720으로 설정한 후 다시 녹화를 시작하세요.",
 		"accessibilityAllowAndRetry": "Videtio의 손쉬운 사용 접근을 허용한 다음, 카운트다운을 시작하려면 다시 녹화를 누르세요."
 	},
 	"autoCaptions": {

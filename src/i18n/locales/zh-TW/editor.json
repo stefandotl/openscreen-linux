@@ -56,6 +56,8 @@
 		"permissionDenied": "錄影權限被拒絕。請允許螢幕錄製。",
 		"cameraDisconnected": "網路攝影機已中斷連線。",
 		"cameraNotFound": "找不到攝影機。",
+		"cameraFormatChanged": "攝影機格式已從 {{before}} 變更為 {{after}}。為避免影片模糊或出現黑邊，錄影已停止。",
+		"cameraResolutionTooLow": "虛擬攝影機僅提供 {{resolution}}。請將 Camera Lab 設定為至少 1280x720，然後重新開始錄影。",
 		"accessibilityAllowAndRetry": "允許 Videtio 使用輔助使用權限，然後再次按下錄製以開始倒數。"
 	},
 	"autoCaptions": {

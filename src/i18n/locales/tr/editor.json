@@ -39,6 +39,8 @@
 		"permissionDenied": "Kayıt izni reddedildi. Lütfen ekran kaydına izin verin.",
 		"cameraDisconnected": "Webcam bağlantısı kesildi.",
 		"cameraNotFound": "Kamera bulunamadı.",
+		"cameraFormatChanged": "Kamera biçimi {{before}} değerinden {{after}} değerine değişti. Bulanık videoyu veya siyah şeritleri önlemek için kayıt durduruldu.",
+		"cameraResolutionTooLow": "Sanal kamera yalnızca {{resolution}} sağlıyor. Camera Lab’i en az 1280x720 olarak ayarlayın ve kaydı yeniden başlatın.",
 		"accessibilityAllowAndRetry": "Videtio için Erişilebilirlik erişimine izin verin, ardından geri sayımı başlatmak için tekrar kayda basın."
 	},
 	"loadingVideo": "Video yükleniyor...",

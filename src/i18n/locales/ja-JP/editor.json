@@ -56,6 +56,8 @@
 		"permissionDenied": "録画の権限が拒否されました。画面録画を許可してください。",
 		"cameraDisconnected": "ウェブカメラが切断されました。",
 		"cameraNotFound": "カメラが見つかりません。",
+		"cameraFormatChanged": "カメラ形式が{{before}}から{{after}}に変更されました。映像のぼやけや黒帯を防ぐため、録画を停止しました。",
+		"cameraResolutionTooLow": "仮想カメラは{{resolution}}しか出力していません。Camera Labを1280x720以上に設定してから、もう一度録画を開始してください。",
 		"accessibilityAllowAndRetry": "Videtioにアクセシビリティアクセスを許可してから、もう一度録画を押してカウントダウンを開始してください。"
 	},
 	"autoCaptions": {

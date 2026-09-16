@@ -63,6 +63,8 @@
 		"cameraDenied": "Accesso alla fotocamera negato. La registrazione continuerà senza webcam.",
 		"cameraDisconnected": "Webcam disconnessa.",
 		"cameraNotFound": "Fotocamera non trovata.",
+		"cameraFormatChanged": "Il formato della fotocamera è cambiato da {{before}} a {{after}}. La registrazione è stata interrotta per evitare video sfocati o bande nere.",
+		"cameraResolutionTooLow": "La fotocamera virtuale fornisce solo {{resolution}}. Imposta Camera Lab almeno su 1280x720, quindi avvia di nuovo la registrazione.",
 		"permissionDenied": "Autorizzazione di registrazione negata. Consenti la registrazione dello schermo.",
 		"accessibilityAllowAndRetry": "Consenti l'accesso all'accessibilità per Videtio, poi premi di nuovo registra per avviare il conto alla rovescia."
 	},

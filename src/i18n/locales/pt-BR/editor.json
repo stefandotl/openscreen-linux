@@ -63,6 +63,8 @@
 		"cameraDenied": "Acesso à câmera negado. A gravação continuará sem webcam.",
 		"cameraDisconnected": "Webcam desconectada.",
 		"cameraNotFound": "Câmera não encontrada.",
+		"cameraFormatChanged": "O formato da câmera mudou de {{before}} para {{after}}. A gravação foi interrompida para evitar vídeo desfocado ou barras pretas.",
+		"cameraResolutionTooLow": "A câmera virtual está fornecendo apenas {{resolution}}. Defina o Camera Lab para pelo menos 1280x720 e inicie a gravação novamente.",
 		"permissionDenied": "Permissão de gravação negada. Por favor, permita a gravação de tela."
 	},
 	"autoCaptions": {

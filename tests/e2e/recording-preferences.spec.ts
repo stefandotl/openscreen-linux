@@ -138,6 +138,15 @@ test("retains a virtual camera while enumeration is incomplete and recovers its 
 	try {
 		const page = await app.firstWindow({ timeout: 60_000 });
 		await page.waitForLoadState("domcontentloaded");
+		// Wait until the launch window has consumed its initial preference load.
+		// Otherwise this test-only IPC update can race that hydration and be replaced
+		// by the window's default values before reload.
+		await page.evaluate(async () => {
+			await window.electronAPI.initializeRecordingPreferences({});
+			await new Promise<void>((resolve) =>
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+			);
+		});
 		await page.evaluate(() =>
 			window.electronAPI.updateRecordingPreferences({
 				webcamEnabled: true,

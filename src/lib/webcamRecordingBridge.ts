@@ -1,6 +1,20 @@
 const DEFAULT_WEBCAM_WIDTH = 640;
 const DEFAULT_WEBCAM_HEIGHT = 480;
 
+export type WebcamDimensions = {
+	width: number;
+	height: number;
+};
+
+export type WebcamFormatChange = {
+	previous: WebcamDimensions;
+	current: WebcamDimensions;
+};
+
+type WebcamRecordingBridgeOptions = {
+	onLockedFormatChange?: (change: WebcamFormatChange) => void;
+};
+
 function positiveDimension(value: number | undefined, fallback: number) {
 	return typeof value === "number" && Number.isFinite(value) && value > 0
 		? Math.round(value)
@@ -27,9 +41,15 @@ export class WebcamRecordingBridge {
 	private sourceFrameCallbackGeneration = 0;
 	private receivedSourceFrameSinceWatchdog = false;
 	private outputDimensionsInitialized = false;
+	private lockedDimensions: WebcamDimensions | null = null;
+	private lockedFormatChangeNotified = false;
 	private destroyed = false;
 
-	private constructor(sourceStream: MediaStream, frameRate: number) {
+	private constructor(
+		sourceStream: MediaStream,
+		frameRate: number,
+		private readonly options: WebcamRecordingBridgeOptions,
+	) {
 		const sourceSettings = sourceStream.getVideoTracks()[0]?.getSettings();
 		this.canvas.width = positiveDimension(sourceSettings?.width, DEFAULT_WEBCAM_WIDTH);
 		this.canvas.height = positiveDimension(sourceSettings?.height, DEFAULT_WEBCAM_HEIGHT);
@@ -66,8 +86,12 @@ export class WebcamRecordingBridge {
 		this.frameWatchdogId = window.setInterval(() => this.runFrameWatchdog(), this.frameIntervalMs);
 	}
 
-	static async create(sourceStream: MediaStream, frameRate: number) {
-		const bridge = new WebcamRecordingBridge(sourceStream, frameRate);
+	static async create(
+		sourceStream: MediaStream,
+		frameRate: number,
+		options: WebcamRecordingBridgeOptions = {},
+	) {
+		const bridge = new WebcamRecordingBridge(sourceStream, frameRate, options);
 		try {
 			await bridge.attachSource(sourceStream);
 			return bridge;
@@ -79,6 +103,32 @@ export class WebcamRecordingBridge {
 
 	get stream() {
 		return this.outputStream;
+	}
+
+	/**
+	 * Synchronize the stable canvas with the currently displayed camera format,
+	 * then prevent its encoded dimensions from changing until the recorder stops.
+	 */
+	prepareForRecording() {
+		if (this.destroyed) {
+			throw new Error("Cannot prepare a destroyed webcam recording bridge.");
+		}
+		const dimensions = this.getPlayableDimensions();
+		this.setOutputDimensions(dimensions);
+		this.lockedDimensions = dimensions;
+		this.lockedFormatChangeNotified = false;
+		return dimensions;
+	}
+
+	finishRecording() {
+		if (this.destroyed) {
+			return;
+		}
+		this.lockedDimensions = null;
+		this.lockedFormatChangeNotified = false;
+		if (this.video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+			this.setOutputDimensions(this.getPlayableDimensions());
+		}
 	}
 
 	async attachSource(sourceStream: MediaStream) {
@@ -96,15 +146,11 @@ export class WebcamRecordingBridge {
 		this.video.srcObject = sourceStream;
 		await this.video.play();
 		if (!this.destroyed && this.sourceStream === sourceStream) {
-			if (!this.outputDimensionsInitialized) {
+			if (!this.lockedDimensions) {
 				// Track settings can still describe the pre-rotation camera format.
-				// Lock the recording to the first playable image's display dimensions.
-				if (this.video.videoWidth <= 0 || this.video.videoHeight <= 0) {
-					throw new Error("Webcam source did not provide valid video dimensions.");
-				}
-				this.canvas.width = this.video.videoWidth;
-				this.canvas.height = this.video.videoHeight;
-				this.outputDimensionsInitialized = true;
+				// Use the playable image so an idle source switch cannot leave the next
+				// recording stuck at the previous camera's resolution or orientation.
+				this.setOutputDimensions(this.getPlayableDimensions());
 			}
 			this.scheduleSourceFrameCallback(sourceStream);
 		}
@@ -182,26 +228,50 @@ export class WebcamRecordingBridge {
 			this.video.videoWidth > 0 &&
 			this.video.videoHeight > 0
 		) {
-			// Preserve the full image if a phone rotates or a recovered source changes
-			// aspect ratio. Keep the encoded dimensions stable throughout the recording.
-			const scale = Math.min(
-				this.canvas.width / this.video.videoWidth,
-				this.canvas.height / this.video.videoHeight,
-			);
-			const width = this.video.videoWidth * scale;
-			const height = this.video.videoHeight * scale;
-			this.context.fillStyle = "#000";
-			this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
-			this.context.drawImage(
-				this.video,
-				(this.canvas.width - width) / 2,
-				(this.canvas.height - height) / 2,
-				width,
-				height,
-			);
+			const sourceDimensions = this.getPlayableDimensions();
+			if (!this.lockedDimensions) {
+				this.setOutputDimensions(sourceDimensions);
+			} else if (
+				sourceDimensions.width !== this.lockedDimensions.width ||
+				sourceDimensions.height !== this.lockedDimensions.height
+			) {
+				if (!this.lockedFormatChangeNotified) {
+					this.lockedFormatChangeNotified = true;
+					this.options.onLockedFormatChange?.({
+						previous: this.lockedDimensions,
+						current: sourceDimensions,
+					});
+				}
+				// Keep publishing the last complete frame until the recorder has stopped.
+				// Stretching or letterboxing a changed source would silently corrupt the
+				// webcam sidecar that the editor later treats as authoritative media.
+				this.outputTrack.requestFrame();
+				return;
+			}
+			this.context.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
 			this.receivedSourceFrameSinceWatchdog = true;
 		}
 		this.outputTrack.requestFrame();
+	}
+
+	private getPlayableDimensions(): WebcamDimensions {
+		if (this.video.videoWidth <= 0 || this.video.videoHeight <= 0) {
+			throw new Error("Webcam source did not provide valid video dimensions.");
+		}
+		return {
+			width: Math.round(this.video.videoWidth),
+			height: Math.round(this.video.videoHeight),
+		};
+	}
+
+	private setOutputDimensions({ width, height }: WebcamDimensions) {
+		if (this.canvas.width !== width) {
+			this.canvas.width = width;
+		}
+		if (this.canvas.height !== height) {
+			this.canvas.height = height;
+		}
+		this.outputDimensionsInitialized = true;
 	}
 
 	private runFrameWatchdog() {

@@ -55,6 +55,8 @@
 		"cameraDenied": "摄像头权限被拒绝。录制将继续，但不包含摄像头画面。",
 		"cameraDisconnected": "摄像头已断开连接。",
 		"cameraNotFound": "未找到摄像头。",
+		"cameraFormatChanged": "摄像头格式已从 {{before}} 更改为 {{after}}。为避免视频模糊或出现黑边，录制已停止。",
+		"cameraResolutionTooLow": "虚拟摄像头仅提供 {{resolution}}。请将 Camera Lab 设置为至少 1280x720，然后重新开始录制。",
 		"permissionDenied": "录屏权限被拒绝。请允许屏幕录制。",
 		"accessibilityAllowAndRetry": "允许 Videtio 使用辅助功能权限，然后再次按录制以开始倒计时。"
 	},

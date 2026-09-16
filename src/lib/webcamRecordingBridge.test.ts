@@ -169,10 +169,7 @@ describe("WebcamRecordingBridge", () => {
 		}
 	});
 
-	it.each([
-		false,
-		true,
-	])("preserves proportions after a format change (reconnect: %s)", async (reconnect) => {
+	it.each([false, true])("adapts to an idle format change (reconnect: %s)", async (reconnect) => {
 		const bridge = await WebcamRecordingBridge.create(sourceStream, 30);
 		try {
 			presentNextSourceFrame();
@@ -183,15 +180,50 @@ describe("WebcamRecordingBridge", () => {
 				await bridge.attachSource(recoveredSourceStream);
 			}
 			presentNextSourceFrame();
-			expect(canvas.width).toBe(1280);
-			expect(canvas.height).toBe(720);
-			expect(fillRect).toHaveBeenLastCalledWith(0, 0, 1280, 720);
-			expect(drawImage).toHaveBeenLastCalledWith(video, 437.5, 0, 405, 720);
+			expect(canvas.width).toBe(720);
+			expect(canvas.height).toBe(1280);
+			expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 720, 1280);
 			expect(bridge.stream).toBe(outputStream);
 			video.videoWidth = 640;
 			video.videoHeight = 360;
 			presentNextSourceFrame();
-			expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 1280, 720);
+			expect(canvas.width).toBe(640);
+			expect(canvas.height).toBe(360);
+			expect(drawImage).toHaveBeenLastCalledWith(video, 0, 0, 640, 360);
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("stops drawing and reports a format change while recording dimensions are locked", async () => {
+		const onLockedFormatChange = vi.fn();
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, {
+			onLockedFormatChange,
+		});
+		try {
+			expect(bridge.prepareForRecording()).toEqual({ width: 1280, height: 720 });
+			presentNextSourceFrame();
+			expect(drawImage).toHaveBeenCalledOnce();
+
+			video.videoWidth = 720;
+			video.videoHeight = 1280;
+			presentNextSourceFrame();
+			presentNextSourceFrame();
+
+			expect(canvas.width).toBe(1280);
+			expect(canvas.height).toBe(720);
+			expect(drawImage).toHaveBeenCalledOnce();
+			expect(onLockedFormatChange).toHaveBeenCalledOnce();
+			expect(onLockedFormatChange).toHaveBeenCalledWith({
+				previous: { width: 1280, height: 720 },
+				current: { width: 720, height: 1280 },
+			});
+
+			bridge.finishRecording();
+			presentNextSourceFrame();
+			expect(canvas.width).toBe(720);
+			expect(canvas.height).toBe(1280);
+			expect(drawImage).toHaveBeenCalledTimes(2);
 		} finally {
 			bridge.destroy();
 		}
