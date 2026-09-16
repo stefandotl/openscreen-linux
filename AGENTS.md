@@ -14,6 +14,7 @@
 | Renderer, main, and preload build | `npm run build-vite` |
 | Build Linux cursor helper | `npm run build:native:linux-cursor` |
 | Build Linux packages | `npm run build:linux` |
+| Build Mac packages | `npm run build:mac` |
 
 Run commands from the repository root unless the command says otherwise. Use targeted tests while iterating, then run the relevant wider suite and `npm run build-vite` for changes that affect Electron boundaries or production bundling.
 
