@@ -20,11 +20,21 @@ let package = Package(
 	targets: [
 		.executableTarget(
 			name: "VidetioScreenCaptureKitHelper",
+			dependencies: ["MicrophoneDeviceMatching"],
 			path: "Sources/VidetioScreenCaptureKitHelper"
 		),
 		.executableTarget(
 			name: "VidetioMacOSCursorHelper",
 			path: "Sources/VidetioMacOSCursorHelper"
+		),
+		.testTarget(
+			name: "MicrophoneDeviceMatchingTests",
+			dependencies: ["MicrophoneDeviceMatching"],
+			path: "Tests/MicrophoneDeviceMatchingTests"
+		),
+		.target(
+			name: "MicrophoneDeviceMatching",
+			path: "Sources/MicrophoneDeviceMatching"
 		)
 	]
 )

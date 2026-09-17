@@ -2,6 +2,7 @@ import AVFoundation
 import CoreGraphics
 import CoreMedia
 import Foundation
+import MicrophoneDeviceMatching
 import ScreenCaptureKit
 
 struct Rectangle: Decodable {
@@ -616,14 +617,18 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		if let deviceName = request.audio.microphone.deviceName?.trimmingCharacters(in: .whitespacesAndNewlines),
 			!deviceName.isEmpty
 		{
-			let matches = devices.filter { $0.localizedName == deviceName }
-			if matches.count == 1, let device = matches.first {
-				return device.uniqueID
-			}
-			if matches.count > 1 {
+			switch uniqueDeviceNameMatch(
+				candidateNames: devices.map(\.localizedName),
+				requestedName: deviceName
+			) {
+			case .match(let index):
+				return devices[index].uniqueID
+			case .ambiguous:
 				throw HelperError.sourceNotFound(
 					"Multiple microphones match the selected device name \"\(deviceName)\". Select a uniquely named input device."
 				)
+			case .none:
+				break
 			}
 		}
 
