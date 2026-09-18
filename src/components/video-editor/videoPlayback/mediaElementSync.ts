@@ -1,6 +1,7 @@
 const SOFT_SYNC_THRESHOLD_SECONDS = 0.015;
-const HARD_SYNC_THRESHOLD_SECONDS = 0.075;
-const MAX_PLAYBACK_RATE_CORRECTION = 0.05;
+const HARD_SYNC_THRESHOLD_SECONDS = 0.35;
+const HARD_SEEK_COOLDOWN_MS = 1500;
+const MAX_PLAYBACK_RATE_CORRECTION = 0.08;
 
 type MediaClock = Pick<HTMLMediaElement, "currentTime" | "duration" | "playbackRate"> & {
 	seeking?: boolean;
@@ -11,6 +12,19 @@ type PlaybackMediaFollower = MediaClock &
 export type OffsetMediaBoundary = "start" | "end" | null;
 export type MediaSyncResult = "aligned" | "rate-adjusted" | "seeked" | "seeking" | "unavailable";
 export type MediaPlaybackSyncResult = MediaSyncResult | "held";
+
+export interface MediaFollowerSyncState {
+	lastHardSeekAtMs: number;
+}
+
+interface MediaFollowerSyncOptions {
+	state?: MediaFollowerSyncState;
+	nowMs?: number;
+}
+
+export function createMediaFollowerSyncState(): MediaFollowerSyncState {
+	return { lastHardSeekAtMs: Number.NEGATIVE_INFINITY };
+}
 
 function clamp(value: number, min: number, max: number) {
 	return Math.min(max, Math.max(min, value));
@@ -54,6 +68,7 @@ export function synchronizeMediaFollower(
 	master: MediaClock,
 	follower: MediaClock,
 	offsetMs: number,
+	options: MediaFollowerSyncOptions = {},
 ): MediaSyncResult {
 	if (
 		!Number.isFinite(master.currentTime) ||
@@ -67,17 +82,28 @@ export function synchronizeMediaFollower(
 	const driftSeconds = targetTime - follower.currentTime;
 	const masterPlaybackRate =
 		Number.isFinite(master.playbackRate) && master.playbackRate > 0 ? master.playbackRate : 1;
+	const nowMs = options.nowMs ?? Date.now();
 	if (follower.seeking) {
+		if (options.state) {
+			// Start the cooldown after the browser finishes seeking, not when a potentially
+			// slow unindexed seek began.
+			options.state.lastHardSeekAtMs = nowMs;
+		}
 		if (follower.playbackRate !== masterPlaybackRate) {
 			follower.playbackRate = masterPlaybackRate;
 		}
 		return "seeking";
 	}
 
-	if (Math.abs(driftSeconds) >= HARD_SYNC_THRESHOLD_SECONDS) {
+	const mayHardSeek =
+		!options.state || nowMs - options.state.lastHardSeekAtMs >= HARD_SEEK_COOLDOWN_MS;
+	if (Math.abs(driftSeconds) >= HARD_SYNC_THRESHOLD_SECONDS && mayHardSeek) {
 		follower.currentTime = targetTime;
 		if (follower.playbackRate !== masterPlaybackRate) {
 			follower.playbackRate = masterPlaybackRate;
+		}
+		if (options.state) {
+			options.state.lastHardSeekAtMs = nowMs;
 		}
 		return "seeked";
 	}
@@ -107,6 +133,8 @@ export function synchronizeMediaFollowerPlayback(
 		playing: boolean;
 		scrubbing: boolean;
 		heldPlaybackRate?: number;
+		syncState?: MediaFollowerSyncState;
+		nowMs?: number;
 	},
 ): MediaPlaybackSyncResult {
 	const position = getOffsetMediaPosition(master.currentTime, offsetMs, follower.duration);
@@ -144,7 +172,10 @@ export function synchronizeMediaFollowerPlayback(
 		return "seeked";
 	}
 
-	const syncResult = synchronizeMediaFollower(master, follower, offsetMs);
+	const syncResult = synchronizeMediaFollower(master, follower, offsetMs, {
+		state: options.syncState,
+		nowMs: options.nowMs,
+	});
 	if (syncResult !== "seeked" && syncResult !== "seeking" && follower.paused) {
 		void follower.play().catch(() => {
 			// The primary media remains authoritative if a muted sidecar cannot resume.

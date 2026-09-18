@@ -279,6 +279,13 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		preparePreviewVideo: (filePath: string) => Promise<{
+			success: boolean;
+			path?: string;
+			cached?: boolean;
+			message?: string;
+			error?: string;
+		}>;
 		detectSilence: (
 			filePath: string,
 			settings: import("../src/lib/silenceDetection").SilenceDetectionSettings,

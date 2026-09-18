@@ -225,6 +225,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	preparePreviewAudioTrack: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-audio-track", filePath);
 	},
+	preparePreviewVideo: (filePath: string) => {
+		return ipcRenderer.invoke("prepare-preview-video", filePath);
+	},
 	detectSilence: (
 		filePath: string,
 		settings: SilenceDetectionSettings,

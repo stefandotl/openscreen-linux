@@ -66,6 +66,7 @@ import { RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
+import { prepareSeekablePreview } from "../previewVideo";
 import {
 	approveContainedProjectAssets,
 	inspectProjectFolder,
@@ -114,6 +115,7 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 	".ts",
 ]);
 const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
+const PREVIEW_VIDEO_DIR = path.join(app.getPath("userData"), "preview-video");
 const recordingPreferencesStore = new RecordingPreferencesStore(
 	path.join(app.getPath("userData"), "recording-preferences.json"),
 );
@@ -467,6 +469,42 @@ async function prepareSupplementalPreviewAudioTrack(videoPath: string) {
 	}
 
 	return { success: true, path: pathToFileURL(outputPath).toString() };
+}
+
+const previewVideoJobs = new Map<string, Promise<{ path: string; cached: boolean }>>();
+
+async function preparePreviewVideoFile(videoPath: string) {
+	const normalizedPath = await approveReadableVideoPath(videoPath);
+	if (!normalizedPath) {
+		return {
+			success: false as const,
+			message: "File path is not approved or is not a supported video file",
+		};
+	}
+
+	let job = previewVideoJobs.get(normalizedPath);
+	if (!job) {
+		job = prepareSeekablePreview({
+			sourcePath: normalizedPath,
+			cacheDir: PREVIEW_VIDEO_DIR,
+			ffmpegBinary: getFfmpegBinary(),
+			runProcess,
+		});
+		previewVideoJobs.set(normalizedPath, job);
+		const clearJob = () => {
+			if (previewVideoJobs.get(normalizedPath) === job) {
+				previewVideoJobs.delete(normalizedPath);
+			}
+		};
+		void job.then(clearJob, clearJob);
+	}
+
+	const prepared = await job;
+	return {
+		success: true as const,
+		path: pathToFileURL(prepared.path).toString(),
+		cached: prepared.cached,
+	};
 }
 
 async function approveReadableVideoPath(
@@ -3118,6 +3156,19 @@ export function registerIpcHandlers(
 				success: false,
 				message: "Failed to prepare preview audio track",
 				error: String(error),
+			};
+		}
+	});
+
+	ipcMain.handle("prepare-preview-video", async (_, filePath: string) => {
+		try {
+			return await preparePreviewVideoFile(filePath);
+		} catch (error) {
+			console.error("Failed to prepare indexed preview video:", error);
+			return {
+				success: false,
+				message: "Failed to prepare seekable preview video",
+				error: error instanceof Error ? error.message : String(error),
 			};
 		}
 	});

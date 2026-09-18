@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	createMediaFollowerSyncState,
 	getOffsetMediaPosition,
 	getOffsetMediaTime,
 	synchronizeMediaFollower,
@@ -38,12 +39,13 @@ function playbackFollower(currentTime: number, paused = false) {
 }
 
 describe("mediaElementSync", () => {
-	it("advances the webcam by the configured offset", () => {
+	it("corrects an ordinary offset without forcing a seek", () => {
 		const master = mediaClock(2);
 		const follower = mediaClock(2);
 
-		expect(synchronizeMediaFollower(master, follower, 200)).toBe("seeked");
-		expect(follower.currentTime).toBeCloseTo(2.2);
+		expect(synchronizeMediaFollower(master, follower, 200)).toBe("rate-adjusted");
+		expect(follower.currentTime).toBe(2);
+		expect(follower.playbackRate).toBeCloseTo(1.08);
 	});
 
 	it("uses a small playback-rate correction instead of repeatedly seeking", () => {
@@ -77,10 +79,32 @@ describe("mediaElementSync", () => {
 	it("does not restart an in-flight webcam seek on every primary frame", () => {
 		const master = mediaClock(2);
 		const follower = { ...mediaClock(6, 10, 1.04), seeking: true };
+		const state = createMediaFollowerSyncState();
 
-		expect(synchronizeMediaFollower(master, follower, 350)).toBe("seeking");
+		expect(synchronizeMediaFollower(master, follower, 350, { state, nowMs: 5000 })).toBe("seeking");
 		expect(follower.currentTime).toBe(6);
 		expect(follower.playbackRate).toBe(1);
+		follower.seeking = false;
+		expect(synchronizeMediaFollower(master, follower, 350, { state, nowMs: 5100 })).toBe(
+			"rate-adjusted",
+		);
+		expect(follower.currentTime).toBe(6);
+	});
+
+	it("rate-corrects during the hard-seek cooldown instead of seeking again", () => {
+		const state = createMediaFollowerSyncState();
+		const master = mediaClock(5);
+		const follower = mediaClock(2);
+
+		expect(synchronizeMediaFollower(master, follower, 0, { state, nowMs: 1000 })).toBe("seeked");
+		follower.currentTime = 3;
+		expect(synchronizeMediaFollower(master, follower, 0, { state, nowMs: 1200 })).toBe(
+			"rate-adjusted",
+		);
+		expect(follower.currentTime).toBe(3);
+		expect(follower.playbackRate).toBeCloseTo(1.08);
+		expect(synchronizeMediaFollower(master, follower, 0, { state, nowMs: 2600 })).toBe("seeked");
+		expect(follower.currentTime).toBe(5);
 	});
 
 	it("identifies offset boundaries where the webcam frame must be held", () => {
@@ -98,7 +122,7 @@ describe("mediaElementSync", () => {
 		});
 	});
 
-	it("does not pause a playing webcam when the offset changes", () => {
+	it("does not pause or seek a playing webcam for an ordinary offset correction", () => {
 		const master = mediaClock(2);
 		const { follower, pause } = playbackFollower(2);
 
@@ -107,8 +131,9 @@ describe("mediaElementSync", () => {
 				playing: true,
 				scrubbing: false,
 			}),
-		).toBe("seeked");
-		expect(follower.currentTime).toBeCloseTo(2.2);
+		).toBe("rate-adjusted");
+		expect(follower.currentTime).toBe(2);
+		expect(follower.playbackRate).toBeCloseTo(1.08);
 		expect(pause).not.toHaveBeenCalled();
 	});
 

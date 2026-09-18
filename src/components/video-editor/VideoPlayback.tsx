@@ -82,7 +82,10 @@ import { clampFocusToScale } from "./videoPlayback/focusUtils";
 import { layoutVideoContent as layoutVideoContentUtil } from "./videoPlayback/layoutUtils";
 import { clamp01 } from "./videoPlayback/mathUtils";
 import { seekMediaElement } from "./videoPlayback/mediaElementPlayback";
-import { synchronizeMediaFollowerPlayback } from "./videoPlayback/mediaElementSync";
+import {
+	createMediaFollowerSyncState,
+	synchronizeMediaFollowerPlayback,
+} from "./videoPlayback/mediaElementSync";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
 import {
 	getPreviewRendererResolution,
@@ -297,6 +300,12 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		},
 		ref,
 	) => {
+		const [preparedMediaPaths, setPreparedMediaPaths] = useState<{
+			videoPath: string;
+			webcamVideoPath?: string;
+		} | null>(null);
+		const effectiveVideoPath = preparedMediaPaths?.videoPath ?? "";
+		const effectiveWebcamVideoPath = preparedMediaPaths?.webcamVideoPath;
 		const videoRef = useRef<HTMLVideoElement | null>(null);
 		const supplementalAudioRef = useRef<HTMLAudioElement | null>(null);
 		const webcamVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -356,6 +365,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const isSeekingRef = useRef(false);
 		const isScrubbingRef = useRef(false);
 		const webcamVideoOffsetMsRef = useRef(webcamVideoOffsetMs);
+		const webcamSyncStateRef = useRef(createMediaFollowerSyncState());
 		const scrubEndTimerRef = useRef<number | null>(null);
 		const [isScrubbing, setIsScrubbing] = useState(false);
 		const allowPlaybackRef = useRef(false);
@@ -690,6 +700,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						playing,
 						scrubbing,
 						heldPlaybackRate: activeSpeedRegion?.speed,
+						syncState: webcamSyncStateRef.current,
+						nowMs: performance.now(),
 					},
 				);
 			},
@@ -860,6 +872,62 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			}
 			onWebcamPositionDragEnd?.();
 		};
+
+		useEffect(() => {
+			let cancelled = false;
+			const preparePreviewVideo = (
+				window.electronAPI as Partial<typeof window.electronAPI> | undefined
+			)?.preparePreviewVideo;
+			if (!videoPath || !preparePreviewVideo) {
+				setPreparedMediaPaths({
+					videoPath,
+					...(webcamVideoPath ? { webcamVideoPath } : {}),
+				});
+				return;
+			}
+
+			setPreparedMediaPaths(null);
+			const screenPreview = preparePreviewVideo(videoPath);
+			const webcamPreview = webcamVideoPath
+				? preparePreviewVideo(webcamVideoPath)
+				: Promise.resolve(null);
+			void Promise.all([screenPreview, webcamPreview])
+				.then(([screenResult, webcamResult]) => {
+					if (cancelled) return;
+					if (!screenResult.success || !screenResult.path) {
+						const detail = screenResult.error || screenResult.message || "Unknown preview error";
+						onErrorRef.current(`Screen preview optimization failed: ${detail}`);
+					}
+					if (webcamResult && (!webcamResult.success || !webcamResult.path)) {
+						const detail = webcamResult.error || webcamResult.message || "Unknown preview error";
+						onErrorRef.current(`Webcam preview optimization failed: ${detail}`);
+					}
+					setPreparedMediaPaths({
+						videoPath: screenResult.success && screenResult.path ? screenResult.path : videoPath,
+						...(webcamVideoPath
+							? {
+									webcamVideoPath:
+										webcamResult?.success && webcamResult.path
+											? webcamResult.path
+											: webcamVideoPath,
+								}
+							: {}),
+					});
+				})
+				.catch((error) => {
+					if (cancelled) return;
+					const detail = error instanceof Error ? error.message : String(error);
+					onErrorRef.current(`Preview optimization failed: ${detail}`);
+					setPreparedMediaPaths({
+						videoPath,
+						...(webcamVideoPath ? { webcamVideoPath } : {}),
+					});
+				});
+
+			return () => {
+				cancelled = true;
+			};
+		}, [videoPath, webcamVideoPath]);
 
 		useEffect(() => {
 			zoomRegionsRef.current = zoomRegions;
@@ -1191,7 +1259,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, []);
 
 		useEffect(() => {
-			if (!videoPath) {
+			if (!effectiveVideoPath) {
 				lastResolvedDurationRef.current = null;
 				isResolvingDurationRef.current = false;
 				setVideoReady(false);
@@ -1239,7 +1307,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			return () => {
 				cancelled = true;
 			};
-		}, [videoPath]);
+		}, [effectiveVideoPath, videoPath]);
 
 		useEffect(() => {
 			const video = videoRef.current;
@@ -1955,7 +2023,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 
 		useEffect(() => {
 			const webcamVideo = webcamVideoRef.current;
-			if (!webcamVideo || !webcamVideoPath) {
+			if (!webcamVideo || !effectiveWebcamVideoPath) {
 				setWebcamDimensions(null);
 				return;
 			}
@@ -1988,10 +2056,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				webcamVideo.removeEventListener("seeked", handleSeeked);
 				webcamVideo.removeEventListener("error", handleError);
 			};
-		}, [syncWebcamPlayback, webcamVideoPath]);
+		}, [effectiveWebcamVideoPath, syncWebcamPlayback]);
 
 		useEffect(() => {
-			if (!webcamVideoPath) return;
+			if (!effectiveWebcamVideoPath) return;
 			// Normal playback is synchronized by the primary video's frame callback below.
 			// Keep this state-driven path for paused seeks, scrubbing and setting changes.
 			if (isPlaying && !isScrubbing) return;
@@ -2009,13 +2077,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			speedRegions,
 			syncWebcamPlayback,
 			webcamVideoOffsetMs,
-			webcamVideoPath,
+			effectiveWebcamVideoPath,
 		]);
 
 		useEffect(() => {
 			const primaryVideo = videoRef.current;
 			const webcamVideo = webcamVideoRef.current;
-			if (!isPlaying || !primaryVideo || !webcamVideo || !webcamVideoPath) {
+			if (!isPlaying || !primaryVideo || !webcamVideo || !effectiveWebcamVideoPath) {
 				return;
 			}
 
@@ -2046,7 +2114,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					cancelAnimationFrame(animationFrameId);
 				}
 			};
-		}, [isPlaying, syncWebcamPlayback, webcamVideoPath]);
+		}, [effectiveWebcamVideoPath, isPlaying, syncWebcamPlayback]);
 
 		useEffect(() => {
 			return () => {
@@ -2121,7 +2189,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 									: "none",
 						}}
 					/>
-					{webcamVideoPath &&
+					{effectiveWebcamVideoPath &&
 						(() => {
 							const clipPath = getCssClipPath(webcamLayout?.maskShape ?? "rectangle");
 							const useClipPath = !!clipPath;
@@ -2149,7 +2217,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								>
 									<video
 										ref={webcamVideoRef}
-										src={webcamVideoPath}
+										src={effectiveWebcamVideoPath}
 										className={`absolute object-cover ${webcamLayoutPreset === "picture-in-picture" ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}
 										style={
 											webcamDimensions && webcamLayout
@@ -2333,7 +2401,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				</div>
 				<video
 					ref={videoRef}
-					src={videoPath}
+					src={effectiveVideoPath || undefined}
 					className="hidden"
 					preload="auto"
 					playsInline
@@ -2356,7 +2424,9 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 							forceResolveDuration(e.currentTarget);
 						}
 					}}
-					onError={() => onError("Failed to load video")}
+					onError={() => {
+						if (effectiveVideoPath) onError("Failed to load video");
+					}}
 				/>
 				{supplementalAudioPath && (
 					<audio ref={supplementalAudioRef} src={supplementalAudioPath} preload="auto" />
