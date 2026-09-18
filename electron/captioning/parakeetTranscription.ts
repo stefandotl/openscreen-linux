@@ -22,8 +22,16 @@ interface SherpaRecognitionResult {
 
 interface ParakeetWorkerResponse {
 	ok: boolean;
-	result?: SherpaRecognitionResult;
+	result?: SherpaRecognitionChunk[];
 	error?: string;
+}
+
+interface SherpaRecognitionChunk {
+	result: SherpaRecognitionResult;
+	audioStartSec: number;
+	keepStartSec: number;
+	keepEndSec: number;
+	isLast: boolean;
 }
 
 function isParakeetWorkerResponse(message: unknown): message is ParakeetWorkerResponse {
@@ -51,9 +59,9 @@ function workerExitError(
 
 async function recognizeInWorker(options: {
 	workerPath: string;
-	wavPath: string;
+	pcmPath: string;
 	modelFiles: ParakeetModelFiles;
-}): Promise<SherpaRecognitionResult> {
+}): Promise<SherpaRecognitionChunk[]> {
 	return new Promise((resolve, reject) => {
 		const worker = fork(options.workerPath, [], {
 			env: {
@@ -101,13 +109,20 @@ async function recognizeInWorker(options: {
 				);
 				return;
 			}
-			settle(() => resolve(message.result as SherpaRecognitionResult));
+			if (!Array.isArray(message.result)) {
+				settle(() =>
+					reject(new Error("Parakeet transcription process returned invalid chunk results")),
+				);
+				return;
+			}
+			const chunks = message.result;
+			settle(() => resolve(chunks));
 		});
 
 		worker.send(
 			{
 				sherpaModulePath: require.resolve("sherpa-onnx-node"),
-				wavPath: options.wavPath,
+				pcmPath: options.pcmPath,
 				modelFiles: options.modelFiles,
 				numThreads: Math.max(1, Math.min(4, Number(process.env.VIDETIO_CAPTION_THREADS) || 2)),
 			},
@@ -201,6 +216,26 @@ export function parakeetResultToWordSegments(result: SherpaRecognitionResult): C
 	return segments;
 }
 
+export function parakeetChunkResultsToWordSegments(
+	chunks: SherpaRecognitionChunk[],
+): CaptionSegment[] {
+	return chunks.flatMap((chunk) =>
+		parakeetResultToWordSegments(chunk.result)
+			.map((segment) => ({
+				...segment,
+				startSec: normalizeTimestamp(segment.startSec + chunk.audioStartSec),
+				endSec: normalizeTimestamp(segment.endSec + chunk.audioStartSec),
+			}))
+			.filter((segment) => {
+				const midpoint = (segment.startSec + segment.endSec) / 2;
+				return (
+					midpoint >= chunk.keepStartSec &&
+					(chunk.isLast ? midpoint <= chunk.keepEndSec : midpoint < chunk.keepEndSec)
+				);
+			}),
+	);
+}
+
 function overlapsTrimRegion(segment: CaptionSegment, trimRegions: TrimRegion[]): boolean {
 	const startMs = Math.round(segment.startSec * 1000);
 	const endMs = Math.round(segment.endSec * 1000);
@@ -236,6 +271,8 @@ function extractCaptionAudio(
 				"16000",
 				"-c:a",
 				"pcm_s16le",
+				"-f",
+				"s16le",
 				outputPath,
 			],
 			{ stdio: ["ignore", "ignore", "pipe"] },
@@ -265,15 +302,15 @@ export class ParakeetTranscriptionService {
 		sourceDurationSec?: number;
 	}): Promise<CaptionTranscriptionResult> {
 		const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "videtio-captions-"));
-		const wavPath = path.join(tempDirectory, "caption-audio.wav");
+		const pcmPath = path.join(tempDirectory, "caption-audio.pcm");
 		try {
-			await extractCaptionAudio(options.ffmpegBinary, options.videoPath, wavPath);
-			const result = await recognizeInWorker({
+			await extractCaptionAudio(options.ffmpegBinary, options.videoPath, pcmPath);
+			const chunks = await recognizeInWorker({
 				workerPath: this.workerPath,
-				wavPath,
+				pcmPath,
 				modelFiles: options.modelFiles,
 			});
-			const segments = parakeetResultToWordSegments(result).filter(
+			const segments = parakeetChunkResultsToWordSegments(chunks).filter(
 				(segment) => !overlapsTrimRegion(segment, options.trimRegions),
 			);
 			return {

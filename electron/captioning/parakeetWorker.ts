@@ -1,9 +1,11 @@
+import fs, { type FileHandle } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { createParakeetChunkWindows, PARAKEET_SAMPLE_RATE } from "./parakeetChunking";
 import type { ParakeetModelFiles } from "./parakeetModelManager";
 
 interface ParakeetWorkerRequest {
 	sherpaModulePath: string;
-	wavPath: string;
+	pcmPath: string;
 	modelFiles: ParakeetModelFiles;
 	numThreads: number;
 }
@@ -13,6 +15,14 @@ interface SherpaRecognitionResult {
 	tokens?: string[];
 	timestamps?: number[];
 	durations?: number[];
+}
+
+interface SherpaRecognitionChunk {
+	result: SherpaRecognitionResult;
+	audioStartSec: number;
+	keepStartSec: number;
+	keepEndSec: number;
+	isLast: boolean;
 }
 
 interface SherpaRecognizer {
@@ -26,10 +36,6 @@ interface SherpaModule {
 	OfflineRecognizer: {
 		createAsync(config: Record<string, unknown>): Promise<SherpaRecognizer>;
 	};
-	readWave(
-		filePath: string,
-		exposeExternalArrayBuffer: boolean,
-	): { sampleRate: number; samples: Float32Array };
 }
 
 function isWorkerRequest(message: unknown): message is ParakeetWorkerRequest {
@@ -37,7 +43,7 @@ function isWorkerRequest(message: unknown): message is ParakeetWorkerRequest {
 	const candidate = message as Partial<ParakeetWorkerRequest>;
 	return (
 		typeof candidate.sherpaModulePath === "string" &&
-		typeof candidate.wavPath === "string" &&
+		typeof candidate.pcmPath === "string" &&
 		Boolean(candidate.modelFiles) &&
 		typeof candidate.modelFiles?.encoder === "string" &&
 		typeof candidate.modelFiles.decoder === "string" &&
@@ -50,11 +56,40 @@ function isWorkerRequest(message: unknown): message is ParakeetWorkerRequest {
 	);
 }
 
-async function recognize(request: ParakeetWorkerRequest): Promise<SherpaRecognitionResult> {
+async function readPcm16LeChunk(
+	file: FileHandle,
+	startSample: number,
+	endSample: number,
+): Promise<Float32Array> {
+	const sampleCount = endSample - startSample;
+	const pcm = Buffer.allocUnsafe(sampleCount * 2);
+	let bytesRead = 0;
+	while (bytesRead < pcm.byteLength) {
+		const result = await file.read(
+			pcm,
+			bytesRead,
+			pcm.byteLength - bytesRead,
+			startSample * 2 + bytesRead,
+		);
+		if (result.bytesRead === 0) {
+			throw new Error("Parakeet PCM audio ended before the requested chunk was read");
+		}
+		bytesRead += result.bytesRead;
+	}
+
+	const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+	const samples = new Float32Array(sampleCount);
+	for (let index = 0; index < sampleCount; index += 1) {
+		samples[index] = view.getInt16(index * 2, true) / 32_768;
+	}
+	return samples;
+}
+
+async function recognize(request: ParakeetWorkerRequest): Promise<SherpaRecognitionChunk[]> {
 	const require = createRequire(import.meta.url);
 	const sherpa = require(request.sherpaModulePath) as SherpaModule;
 	const recognizer = await sherpa.OfflineRecognizer.createAsync({
-		featConfig: { sampleRate: 16_000, featureDim: 80 },
+		featConfig: { sampleRate: PARAKEET_SAMPLE_RATE, featureDim: 80 },
 		modelConfig: {
 			transducer: {
 				encoder: request.modelFiles.encoder,
@@ -69,19 +104,38 @@ async function recognize(request: ParakeetWorkerRequest): Promise<SherpaRecognit
 		},
 	});
 
-	// Electron disables external ArrayBuffers. The worker is deliberately launched in Node mode,
-	// and `false` also keeps waveform ownership explicit on all supported platforms.
-	const wave = sherpa.readWave(request.wavPath, false);
-	if (wave.sampleRate !== 16_000 || wave.samples.length < 800) {
-		throw new Error("This video has no usable audio track for captions");
+	const file = await fs.open(request.pcmPath, "r");
+	try {
+		const stat = await file.stat();
+		if (stat.size % 2 !== 0) {
+			throw new Error("Caption audio extraction returned incomplete PCM data");
+		}
+		const totalSamples = stat.size / 2;
+		if (totalSamples < 800) {
+			throw new Error("This video has no usable audio track for captions");
+		}
+
+		const chunks: SherpaRecognitionChunk[] = [];
+		for (const window of createParakeetChunkWindows(totalSamples)) {
+			const samples = await readPcm16LeChunk(file, window.readStartSample, window.readEndSample);
+			const stream = recognizer.createStream();
+			stream.acceptWaveform({ sampleRate: PARAKEET_SAMPLE_RATE, samples });
+			chunks.push({
+				result: await recognizer.decodeAsync(stream),
+				audioStartSec: window.readStartSample / PARAKEET_SAMPLE_RATE,
+				keepStartSec: window.keepStartSample / PARAKEET_SAMPLE_RATE,
+				keepEndSec: window.keepEndSample / PARAKEET_SAMPLE_RATE,
+				isLast: window.isLast,
+			});
+		}
+		return chunks;
+	} finally {
+		await file.close();
 	}
-	const stream = recognizer.createStream();
-	stream.acceptWaveform({ sampleRate: wave.sampleRate, samples: wave.samples });
-	return recognizer.decodeAsync(stream);
 }
 
 function finish(
-	message: { ok: true; result: SherpaRecognitionResult } | { ok: false; error: string },
+	message: { ok: true; result: SherpaRecognitionChunk[] } | { ok: false; error: string },
 ) {
 	if (!process.send) {
 		process.exitCode = 1;

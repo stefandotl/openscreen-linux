@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parakeetResultToWordSegments } from "./parakeetTranscription";
+import {
+	parakeetChunkResultsToWordSegments,
+	parakeetResultToWordSegments,
+} from "./parakeetTranscription";
 
 describe("parakeetResultToWordSegments", () => {
 	it("combines timestamped BPE pieces into editor word segments", () => {
@@ -61,5 +64,39 @@ describe("parakeetResultToWordSegments", () => {
 		expect(() => parakeetResultToWordSegments({ text: "untimed" })).toThrow(
 			"without token timestamps",
 		);
+	});
+});
+
+describe("parakeetChunkResultsToWordSegments", () => {
+	it("uses overlap as context while keeping every boundary word once", () => {
+		expect(
+			parakeetChunkResultsToWordSegments([
+				{
+					result: {
+						tokens: [" before", " after"],
+						timestamps: [58.5, 60.5],
+						durations: [0.4, 0.4],
+					},
+					audioStartSec: 0,
+					keepStartSec: 0,
+					keepEndSec: 60,
+					isLast: false,
+				},
+				{
+					result: {
+						tokens: [" before", " after"],
+						timestamps: [0.5, 2.5],
+						durations: [0.4, 0.4],
+					},
+					audioStartSec: 58,
+					keepStartSec: 60,
+					keepEndSec: 120,
+					isLast: true,
+				},
+			]),
+		).toEqual([
+			{ startSec: 58.5, endSec: 58.9, text: "before" },
+			{ startSec: 60.5, endSec: 60.9, text: "after" },
+		]);
 	});
 });
