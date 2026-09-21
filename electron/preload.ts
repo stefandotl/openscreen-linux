@@ -228,6 +228,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	preparePreviewVideo: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-video", filePath);
 	},
+	aiCut: {
+		getSettings: () => ipcRenderer.invoke("ai-cut-settings"),
+		updateSettings: (update: import("../src/lib/aiCut").AiCutSettingsUpdate) =>
+			ipcRenderer.invoke("ai-cut-update-settings", update),
+		listModels: () => ipcRenderer.invoke("ai-cut-models"),
+		analyze: (request: import("../src/lib/aiCut").AiCutRequest) =>
+			ipcRenderer.invoke("ai-cut-analyze", request),
+		cancel: (requestId: string) => ipcRenderer.invoke("ai-cut-cancel", requestId),
+	},
 	detectSilence: (
 		filePath: string,
 		settings: SilenceDetectionSettings,

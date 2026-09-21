@@ -114,6 +114,9 @@ interface TimelineEditorProps {
 	onDetectSilence?: () => void;
 	isDetectingSilence?: boolean;
 	detectSilenceLabel?: string;
+	onAiCut?: () => void;
+	aiCutLabel?: string;
+	aiCutDisabled?: boolean;
 }
 
 interface TimelineScaleConfig {
@@ -994,6 +997,9 @@ export default function TimelineEditor({
 	onDetectSilence,
 	isDetectingSilence = false,
 	detectSilenceLabel,
+	onAiCut,
+	aiCutLabel,
+	aiCutDisabled,
 }: TimelineEditorProps) {
 	const t = useScopedT("timeline");
 	const totalMs = useMemo(() => Math.max(0, Math.round(videoDuration * 1000)), [videoDuration]);
@@ -1654,6 +1660,19 @@ export default function TimelineEditor({
 							title={detectSilenceLabel}
 						>
 							<AudioWaveform className="w-4 h-4" />
+						</Button>
+					)}
+					{onAiCut && (
+						<Button
+							onClick={onAiCut}
+							disabled={aiCutDisabled || !videoUrl}
+							variant="ghost"
+							size="sm"
+							className="h-7 gap-1 text-violet-300 hover:text-violet-200 hover:bg-violet-500/10"
+							title={aiCutLabel}
+						>
+							<WandSparkles className="w-4 h-4" />
+							{aiCutLabel}
 						</Button>
 					)}
 					{BLUR_REGIONS_ENABLED && (

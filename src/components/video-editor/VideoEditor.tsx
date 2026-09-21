@@ -41,6 +41,7 @@ import {
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { type EditorState, INITIAL_EDITOR_STATE, useEditorHistory } from "@/hooks/useEditorHistory";
+import { aiCutSuggestionsToTrims } from "@/lib/aiCut";
 import {
 	type CaptionEngine,
 	type CaptionTranscriptionResult,
@@ -97,6 +98,7 @@ import {
 	getNativeAspectRatioValue,
 	isPortraitAspectRatio,
 } from "@/utils/aspectRatioUtils";
+import { AiCutDialog } from "./AiCutDialog";
 import { AudioClipSettings } from "./AudioClipSettings";
 import { resizeAudioRegion } from "./audioRegions";
 import {
@@ -463,6 +465,7 @@ export default function VideoEditor() {
 	const isAutoCaptioningRef = useRef(false);
 	const [isAutoCaptioning, setIsAutoCaptioning] = useState(false);
 	const [showAutoCaptionsDialog, setShowAutoCaptionsDialog] = useState(false);
+	const [showAiCutDialog, setShowAiCutDialog] = useState(false);
 	const [captionEngine, setCaptionEngine] = useState<CaptionEngine>("parakeet");
 	const [captionWordsMin, setCaptionWordsMin] = useState(2);
 	const [showSilenceDetectionDialog, setShowSilenceDetectionDialog] = useState(false);
@@ -4478,6 +4481,25 @@ export default function VideoEditor() {
 				</DialogContent>
 			</Dialog>
 
+			{showAiCutDialog && videoPath && duration > 0 && (
+				<AiCutDialog
+					key={`${activeSceneId}:${videoPath}:${duration}:${JSON.stringify(trimRegions)}`}
+					videoPath={videoPath}
+					durationMs={Math.round(duration * 1000)}
+					trimRegions={trimRegions}
+					onClose={() => setShowAiCutDialog(false)}
+					onApply={(suggestions) => {
+						const newTrims = aiCutSuggestionsToTrims(suggestions, trimRegions);
+						if (newTrims.length) {
+							pushState((previous) => ({
+								trimRegions: mergeConnectedTrimRegions([...previous.trimRegions, ...newTrims]),
+							}));
+							toast.success(t("aiCut.applied", { count: newTrims.length }));
+						}
+						setShowAiCutDialog(false);
+					}}
+				/>
+			)}
 			<Dialog open={showAutoCaptionsDialog} onOpenChange={setShowAutoCaptionsDialog}>
 				<DialogContent
 					className="sm:max-w-md"
@@ -5226,6 +5248,14 @@ export default function VideoEditor() {
 									hasVideoSource={Boolean(videoPath)}
 									showTrimWaveform={showTrimWaveform}
 									detectSilenceLabel={t("silenceDetection.button")}
+									onAiCut={() => {
+										videoPlaybackRef.current?.pause();
+										setShowAiCutDialog(true);
+									}}
+									aiCutLabel={t("aiCut.title")}
+									aiCutDisabled={
+										isAutoCaptioning || isDetectingSilence || isExporting || duration <= 0
+									}
 									isDetectingSilence={isDetectingSilence}
 									onDetectSilence={() => {
 										if (!videoSourcePath && !videoPath) {

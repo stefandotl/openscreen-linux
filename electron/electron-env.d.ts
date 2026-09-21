@@ -286,6 +286,7 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		aiCut: import("../src/lib/aiCut").AiCutAPI;
 		detectSilence: (
 			filePath: string,
 			settings: import("../src/lib/silenceDetection").SilenceDetectionSettings,

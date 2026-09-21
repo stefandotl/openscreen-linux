@@ -86,6 +86,7 @@ import {
 	RecordingProjectTransitionState,
 } from "../recordingProjectTransition";
 import { openRecordingsFolder } from "../recordingsFolder";
+import { registerAiCutHandlers } from "./aiCut";
 import { registerAudioAssetHandlers } from "./audioAssets";
 import { registerEditorWindowActions } from "./editorWindowActions";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
@@ -1636,6 +1637,7 @@ export function registerIpcHandlers(
 	_switchToHud?: () => void,
 ) {
 	registerEditorWindowActions(getMainWindow);
+	registerAiCutHandlers(getMainWindow);
 	const customFontStore = new CustomFontStore(
 		path.join(app.getPath("appData"), "videtio-shared", "fonts"),
 	);

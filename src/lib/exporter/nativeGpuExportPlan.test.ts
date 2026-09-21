@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationRegion } from "@/components/video-editor/types";
+import { aiCutSuggestionsToTrims } from "../aiCut";
 import { createNativeGpuExportPlan, getNativeGpuExportBlockers } from "./nativeGpuExportPlan";
 import type { VideoExporterConfig } from "./videoExporter";
 
@@ -118,6 +119,37 @@ describe("native GPU export plan", () => {
 		expect(first.frames.every((frame) => frame.motionBlurX === 0 && frame.motionBlurY === 0)).toBe(
 			true,
 		);
+	});
+
+	it("accepts reviewed AI cuts alongside captions, overlapping annotations and scene boundaries", () => {
+		const trimRegions = [
+			{ id: "scene-start", startMs: 0, endMs: 1000, source: "scene-split" as const },
+			...aiCutSuggestionsToTrims(
+				[{ id: "proposal", startMs: 2500, endMs: 3200, text: "um", reason: "Filler" }],
+				[],
+			),
+		];
+		const config = createConfig({
+			trimRegions,
+			annotationRegions: [
+				highlightedCaption({ id: "c1", startMs: 1000, endMs: 2000, zIndex: 1 }),
+				highlightedCaption({ id: "c2", startMs: 2000, endMs: 3500, zIndex: 2 }),
+				highlightedCaption({ id: "c3", startMs: 3500, endMs: 4500, zIndex: 3 }),
+				staticTextAnnotation({ id: "overlay1", startMs: 1000, endMs: 4500, zIndex: 4 }),
+				staticTextAnnotation({ id: "overlay2", startMs: 2000, endMs: 4000, zIndex: 5 }),
+			],
+		});
+		const info = { ...videoInfo, duration: 5 };
+		expect(getNativeGpuExportBlockers(config, info)).toEqual([]);
+		const plan = createNativeGpuExportPlan(config, info);
+		expect(plan.frames).toHaveLength(99);
+		expect(
+			plan.frames.every(
+				(frame) =>
+					frame.sourceTimestampMs >= 1000 &&
+					(frame.sourceTimestampMs < 2500 || frame.sourceTimestampMs >= 3200),
+			),
+		).toBe(true);
 	});
 
 	it("accepts silence trims inside scene exclusions and keeps audio-length frame timing", () => {
