@@ -111,6 +111,8 @@
 		"supportedFormats": "Desteklenen formatlar: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
 		"dragDropHint": "Video dosyası veya .videtio projesi",
 		"dropOverlay": "Videoyu veya projeyi buraya bırakın",
+		"sceneDragDropHint": "Desteklenen video dosyası",
+		"sceneDropOverlay": "Videoyu buraya bırakın",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Desteklenmeyen Format",
 			"unsupportedFormatMessage": "Buraya yalnızca .videtio proje dosyaları bırakılabilir. Video içe aktarmak için \"Video Dosyası İçe Aktar...\" düğmesini kullanın.",

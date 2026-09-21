@@ -87,6 +87,7 @@ import {
 	synchronizeMediaFollowerPlayback,
 } from "./videoPlayback/mediaElementSync";
 import { updateOverlayIndicator } from "./videoPlayback/overlayUtils";
+import { usePreparedPreviewMedia } from "./videoPlayback/preparedPreviewMedia";
 import {
 	getPreviewRendererResolution,
 	shouldRenderScreenPreview,
@@ -300,10 +301,21 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		},
 		ref,
 	) => {
-		const [preparedMediaPaths, setPreparedMediaPaths] = useState<{
-			videoPath: string;
-			webcamVideoPath?: string;
-		} | null>(null);
+		const onErrorRef = useRef(onError);
+		const reportPreviewPreparationError = useCallback(
+			(message: string) => onErrorRef.current(message),
+			[],
+		);
+		const preparePreviewVideo = (
+			window.electronAPI as Partial<typeof window.electronAPI> | undefined
+		)?.preparePreviewVideo;
+		const preparedMediaPaths = usePreparedPreviewMedia({
+			videoPath,
+			webcamVideoPath,
+			preparePreviewVideo,
+			onError: reportPreviewPreparationError,
+		});
+		const preparedSourceVideoPath = preparedMediaPaths?.sourceVideoPath ?? "";
 		const effectiveVideoPath = preparedMediaPaths?.videoPath ?? "";
 		const effectiveWebcamVideoPath = preparedMediaPaths?.webcamVideoPath;
 		const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -321,7 +333,8 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const cameraContainerRef = useRef<Container | null>(null);
 		const timeUpdateAnimationRef = useRef<number | null>(null);
 		const [pixiReady, setPixiReady] = useState(false);
-		const [videoReady, setVideoReady] = useState(false);
+		const [readyVideoPath, setReadyVideoPath] = useState<string | null>(null);
+		const videoReady = Boolean(effectiveVideoPath && readyVideoPath === effectiveVideoPath);
 		const [supplementalAudioPath, setSupplementalAudioPath] = useState<string | null>(null);
 		const [overlaySize, setOverlaySize] = useState({ width: 800, height: 600 });
 		const [overlayElement, setOverlayElement] = useState<HTMLDivElement | null>(null);
@@ -390,7 +403,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const onTimeUpdateRef = useRef(onTimeUpdate);
 		const onPlayStateChangeRef = useRef(onPlayStateChange);
 		const onEndedRef = useRef(onEnded);
-		const onErrorRef = useRef(onError);
 		const videoReadyRafRef = useRef<number | null>(null);
 		const smoothedAutoFocusRef = useRef<ZoomFocus | null>(null);
 		const prevTargetProgressRef = useRef(0);
@@ -874,62 +886,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		};
 
 		useEffect(() => {
-			let cancelled = false;
-			const preparePreviewVideo = (
-				window.electronAPI as Partial<typeof window.electronAPI> | undefined
-			)?.preparePreviewVideo;
-			if (!videoPath || !preparePreviewVideo) {
-				setPreparedMediaPaths({
-					videoPath,
-					...(webcamVideoPath ? { webcamVideoPath } : {}),
-				});
-				return;
-			}
-
-			setPreparedMediaPaths(null);
-			const screenPreview = preparePreviewVideo(videoPath);
-			const webcamPreview = webcamVideoPath
-				? preparePreviewVideo(webcamVideoPath)
-				: Promise.resolve(null);
-			void Promise.all([screenPreview, webcamPreview])
-				.then(([screenResult, webcamResult]) => {
-					if (cancelled) return;
-					if (!screenResult.success || !screenResult.path) {
-						const detail = screenResult.error || screenResult.message || "Unknown preview error";
-						onErrorRef.current(`Screen preview optimization failed: ${detail}`);
-					}
-					if (webcamResult && (!webcamResult.success || !webcamResult.path)) {
-						const detail = webcamResult.error || webcamResult.message || "Unknown preview error";
-						onErrorRef.current(`Webcam preview optimization failed: ${detail}`);
-					}
-					setPreparedMediaPaths({
-						videoPath: screenResult.success && screenResult.path ? screenResult.path : videoPath,
-						...(webcamVideoPath
-							? {
-									webcamVideoPath:
-										webcamResult?.success && webcamResult.path
-											? webcamResult.path
-											: webcamVideoPath,
-								}
-							: {}),
-					});
-				})
-				.catch((error) => {
-					if (cancelled) return;
-					const detail = error instanceof Error ? error.message : String(error);
-					onErrorRef.current(`Preview optimization failed: ${detail}`);
-					setPreparedMediaPaths({
-						videoPath,
-						...(webcamVideoPath ? { webcamVideoPath } : {}),
-					});
-				});
-
-			return () => {
-				cancelled = true;
-			};
-		}, [videoPath, webcamVideoPath]);
-
-		useEffect(() => {
 			zoomRegionsRef.current = zoomRegions;
 		}, [zoomRegions]);
 
@@ -1040,6 +996,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		}, [cursorSize, cursorSmoothing, cursorMotionBlur, cursorClickBounce]);
 
 		useEffect(() => {
+			onErrorRef.current = onError;
+		}, [onError]);
+
+		useEffect(() => {
 			onTimeUpdateRef.current = onTimeUpdate;
 		}, [onTimeUpdate]);
 
@@ -1050,10 +1010,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		useEffect(() => {
 			onEndedRef.current = onEnded;
 		}, [onEnded]);
-
-		useEffect(() => {
-			onErrorRef.current = onError;
-		}, [onError]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
@@ -1262,14 +1218,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			if (!effectiveVideoPath) {
 				lastResolvedDurationRef.current = null;
 				isResolvingDurationRef.current = false;
-				setVideoReady(false);
+				setReadyVideoPath(null);
 				setSupplementalAudioPath(null);
 				return;
 			}
 
 			let cancelled = false;
 			window.electronAPI
-				?.preparePreviewAudioTrack?.(videoPath)
+				?.preparePreviewAudioTrack?.(preparedSourceVideoPath)
 				.then((result) => {
 					if (!cancelled) {
 						setSupplementalAudioPath(result.success ? (result.path ?? null) : null);
@@ -1297,7 +1253,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				clearTimeout(durationResolutionTimeoutRef.current);
 				durationResolutionTimeoutRef.current = null;
 			}
-			setVideoReady(false);
+			setReadyVideoPath(null);
 			if (videoReadyRafRef.current) {
 				cancelAnimationFrame(videoReadyRafRef.current);
 				videoReadyRafRef.current = null;
@@ -1307,7 +1263,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			return () => {
 				cancelled = true;
 			};
-		}, [effectiveVideoPath, videoPath]);
+		}, [effectiveVideoPath, preparedSourceVideoPath]);
 
 		useEffect(() => {
 			const video = videoRef.current;
@@ -1400,26 +1356,28 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			layoutVideoContentRef.current?.();
 			video.pause();
 
-			const { handlePlay, handlePause, handleSeeked, handleSeeking } = createVideoEventHandlers({
-				video,
-				isSeekingRef,
-				isPlayingRef,
-				allowPlaybackRef,
-				currentTimeRef,
-				timeUpdateAnimationRef,
-				onPlayStateChange: (playing) => onPlayStateChangeRef.current(playing),
-				onTimeUpdate: (time) => onTimeUpdateRef.current(time),
-				onTerminalTrim: () => onEndedRef.current?.(),
-				onPlaybackError: (message) => onErrorRef.current(message),
-				trimRegionsRef,
-				speedRegionsRef,
-				isScrubbingRef,
-				scrubEndTimerRef,
-				onScrubChange: (scrubbing) => setIsScrubbing(scrubbing),
-			});
+			const { handlePlay, handlePause, handleTimeUpdate, handleSeeked, handleSeeking } =
+				createVideoEventHandlers({
+					video,
+					isSeekingRef,
+					isPlayingRef,
+					allowPlaybackRef,
+					currentTimeRef,
+					timeUpdateAnimationRef,
+					onPlayStateChange: (playing) => onPlayStateChangeRef.current(playing),
+					onTimeUpdate: (time) => onTimeUpdateRef.current(time),
+					onTerminalTrim: () => onEndedRef.current?.(),
+					onPlaybackError: (message) => onErrorRef.current(message),
+					trimRegionsRef,
+					speedRegionsRef,
+					isScrubbingRef,
+					scrubEndTimerRef,
+					onScrubChange: (scrubbing) => setIsScrubbing(scrubbing),
+				});
 
 			video.addEventListener("play", handlePlay);
 			video.addEventListener("pause", handlePause);
+			video.addEventListener("timeupdate", handleTimeUpdate);
 			video.addEventListener("ended", handlePause);
 			const handleEnded = () => onEndedRef.current?.();
 			video.addEventListener("ended", handleEnded);
@@ -1429,6 +1387,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			return () => {
 				video.removeEventListener("play", handlePlay);
 				video.removeEventListener("pause", handlePause);
+				video.removeEventListener("timeupdate", handleTimeUpdate);
 				video.removeEventListener("ended", handlePause);
 				video.removeEventListener("ended", handleEnded);
 				video.removeEventListener("seeked", handleSeeked);
@@ -1463,7 +1422,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					motionBlurFilterRef.current.destroy();
 					motionBlurFilterRef.current = null;
 				}
-				videoTexture.destroy(true);
+				// The HTMLVideoElement is deliberately reused for seamless project handoffs.
+				// Destroying the Pixi source here clears that element's src after React has
+				// already assigned the next scene, leaving a wallpaper-only frame.
+				videoTexture.destroy(false);
 
 				videoSpriteRef.current = null;
 				videoSourceRef.current = null;
@@ -1980,15 +1942,25 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			}
 
 			const waitForRenderableFrame = () => {
+				// React updates the src attribute before Chromium has necessarily replaced
+				// currentSrc/decoded data. Do not mark the next scene ready from the previous
+				// scene's still-populated readyState and dimensions.
+				const hasCurrentSource = video.currentSrc === effectiveVideoPath;
 				const hasDimensions = video.videoWidth > 0 && video.videoHeight > 0;
 				const hasData = video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA;
 				const hasResolvedDuration = syncResolvedDuration(video);
 				if (!hasResolvedDuration) {
 					forceResolveDuration(video);
 				}
-				if (hasDimensions && hasData && hasResolvedDuration && !isResolvingDurationRef.current) {
+				if (
+					hasCurrentSource &&
+					hasDimensions &&
+					hasData &&
+					hasResolvedDuration &&
+					!isResolvingDurationRef.current
+				) {
 					videoReadyRafRef.current = null;
-					setVideoReady(true);
+					setReadyVideoPath(effectiveVideoPath);
 					return;
 				}
 				videoReadyRafRef.current = requestAnimationFrame(waitForRenderableFrame);
@@ -2217,6 +2189,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								>
 									<video
 										ref={webcamVideoRef}
+										data-testid="preview-webcam-video"
 										src={effectiveWebcamVideoPath}
 										className={`absolute object-cover ${webcamLayoutPreset === "picture-in-picture" ? "cursor-grab active:cursor-grabbing" : "pointer-events-none"}`}
 										style={

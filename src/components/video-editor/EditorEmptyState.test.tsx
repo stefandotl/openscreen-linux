@@ -15,6 +15,8 @@ const { importVideoFileFromPath, setCurrentVideoPath, translate } = vi.hoisted((
 		"emptyState.supportedFormats": "Supported formats",
 		"emptyState.dragDropHint": "Video file or project",
 		"emptyState.dropOverlay": "Drop video or project here",
+		"emptyState.sceneDragDropHint": "Supported video file",
+		"emptyState.sceneDropOverlay": "Drop video here",
 	};
 	return {
 		importVideoFileFromPath: vi.fn(),
@@ -59,6 +61,31 @@ describe("EditorEmptyState scene mode", () => {
 		expect(onStartRecording).toHaveBeenCalledOnce();
 		expect(screen.getByRole("button", { name: "Import Video File…" })).toBeInTheDocument();
 		expect(screen.queryByRole("button", { name: "Load Project…" })).not.toBeInTheDocument();
+	});
+
+	it("imports a supported video dropped into the empty scene", async () => {
+		const recordingPath = "/app-data/recordings/scene.mp4";
+		importVideoFileFromPath.mockResolvedValue({ success: true, path: recordingPath });
+		const onVideoImported = vi.fn();
+		const getPathForFile = vi.fn().mockReturnValue(recordingPath);
+		Object.defineProperty(window, "electronAPI", {
+			configurable: true,
+			value: { getPathForFile },
+		});
+
+		render(
+			<EditorEmptyState mode="scene" onVideoImported={onVideoImported} onProjectOpened={vi.fn()} />,
+		);
+
+		const videoFile = new File(["video"], "scene.mp4", { type: "video/mp4" });
+		fireEvent.drop(screen.getByTestId("scene-video-drop-zone"), {
+			dataTransfer: { files: [videoFile] },
+		});
+
+		await waitFor(() => {
+			expect(importVideoFileFromPath).toHaveBeenCalledWith(recordingPath);
+			expect(onVideoImported).toHaveBeenCalledWith(recordingPath);
+		});
 	});
 });
 

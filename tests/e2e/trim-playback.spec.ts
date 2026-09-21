@@ -396,8 +396,9 @@ test("continues project playback from split scenes into a different recording wi
 				{
 					id: "split-left",
 					name: "Split left",
-					media: { screenVideoPath: firstVideoPath },
+					media: { screenVideoPath: firstVideoPath, webcamVideoPath },
 					editor: {
+						webcamLayoutPreset: "only-webcam",
 						trimRegions: [
 							{
 								id: "after-split",
@@ -411,8 +412,9 @@ test("continues project playback from split scenes into a different recording wi
 				{
 					id: "split-right",
 					name: "Split right",
-					media: { screenVideoPath: firstVideoPath },
+					media: { screenVideoPath: firstVideoPath, webcamVideoPath },
 					editor: {
+						webcamLayoutPreset: "only-webcam",
 						trimRegions: [
 							{ id: "before-split", startMs: 0, endMs: splitTimeMs, source: "scene-split" },
 						],
@@ -422,7 +424,7 @@ test("continues project playback from split scenes into a different recording wi
 					id: "different-recording",
 					name: "Different recording",
 					media: { screenVideoPath: secondVideoPath, webcamVideoPath },
-					editor: {},
+					editor: { webcamLayoutPreset: "only-webcam" },
 				},
 			],
 		};
@@ -496,6 +498,16 @@ test("continues project playback from split scenes into a different recording wi
 			range.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		await expect(firstScene).toHaveAttribute("aria-current", "true", { timeout: 10_000 });
+		if (!HANDOFF_PROJECT_PATH) {
+			const webcamPreview = editorWindow.getByTestId("preview-webcam-video");
+			await expect(webcamPreview).toBeVisible({ timeout: 10_000 });
+			await webcamPreview.evaluate((video) => {
+				const testWindow = window as typeof window & {
+					__webcamOnlyHandoffProbe?: HTMLVideoElement;
+				};
+				testWindow.__webcamOnlyHandoffProbe = video as HTMLVideoElement;
+			});
+		}
 		await editorWindow.getByRole("button", { name: "Play", exact: true }).click();
 
 		const thirdScene = editorWindow.getByRole("button", {
@@ -504,6 +516,19 @@ test("continues project playback from split scenes into a different recording wi
 		await expect(thirdScene).toHaveAttribute("aria-current", "true", {
 			timeout: HANDOFF_FIRST_DURATION_SECONDS * 1000 + 15_000,
 		});
+		if (!HANDOFF_PROJECT_PATH) {
+			expect(
+				await editorWindow.evaluate(() => {
+					const testWindow = window as typeof window & {
+						__webcamOnlyHandoffProbe?: HTMLVideoElement;
+					};
+					return (
+						testWindow.__webcamOnlyHandoffProbe ===
+						document.querySelector('[data-testid="preview-webcam-video"]')
+					);
+				}),
+			).toBe(true);
+		}
 		await expect
 			.poll(
 				async () =>

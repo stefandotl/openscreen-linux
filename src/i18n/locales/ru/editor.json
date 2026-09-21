@@ -111,6 +111,8 @@
 		"supportedFormats": "Поддерживаемые форматы: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
 		"dragDropHint": "Видеофайл или проект .videtio",
 		"dropOverlay": "Перетащите видео или проект сюда",
+		"sceneDragDropHint": "Поддерживаемый видеофайл",
+		"sceneDropOverlay": "Перетащите видео сюда",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Неподдерживаемый формат",
 			"unsupportedFormatMessage": "Сюда можно перетаскивать только файлы проекта .videtio. Для импорта видео используйте кнопку «Импортировать видеофайл...».",

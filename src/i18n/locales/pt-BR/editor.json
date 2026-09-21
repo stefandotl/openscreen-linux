@@ -18,6 +18,8 @@
 		"sceneTitle": "Esta cena está vazia",
 		"sceneDescription": "Grave um novo vídeo para esta cena ou importe um arquivo de vídeo existente.",
 		"recordSceneButton": "Gravar cena",
+		"sceneDragDropHint": "Arquivo de vídeo compatível",
+		"sceneDropOverlay": "Solte o vídeo aqui",
 		"dropErrors": {
 			"unsupportedVideoOrProjectMessage": "Solte aqui um arquivo de vídeo compatível ou um projeto .videtio.",
 			"couldNotOpenDroppedMessage": "Não foi possível abrir o arquivo solto. Ele pode ter sido movido, excluído ou estar ilegível."

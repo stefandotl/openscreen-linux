@@ -91,9 +91,23 @@ describe("trimmed playback", () => {
 
 	it("continues playing after skipping a trim in the middle of the video", async () => {
 		const video = await loadSampleVideo();
-		const trimStartSeconds = video.duration * 0.2;
-		const trimEndSeconds = video.duration * 0.4;
+		const webcam = await loadSampleVideo();
+		const firstTrimStartSeconds = video.duration * 0.2;
+		const firstTrimEndSeconds = video.duration * 0.3;
+		const secondTrimStartSeconds = video.duration * 0.35;
+		const trimEndSeconds = video.duration * 0.5;
+		const webcamOffsetMs = Math.min(510, video.duration * 0.2 * 1000);
 		let animationFrame: number | null = null;
+		let webcamSyncFrame: number | null = null;
+		const syncWebcam = () =>
+			synchronizeMediaFollowerPlayback(video, webcam, webcamOffsetMs, {
+				playing: true,
+				scrubbing: false,
+			});
+		const syncWebcamFrame = () => {
+			syncWebcam();
+			webcamSyncFrame = requestAnimationFrame(syncWebcamFrame);
+		};
 		const handlers = createVideoEventHandlers({
 			video,
 			isSeekingRef: { current: false },
@@ -113,8 +127,13 @@ describe("trimmed playback", () => {
 			trimRegionsRef: {
 				current: [
 					{
-						id: "middle-trim",
-						startMs: trimStartSeconds * 1000,
+						id: "first-middle-trim",
+						startMs: firstTrimStartSeconds * 1000,
+						endMs: firstTrimEndSeconds * 1000,
+					},
+					{
+						id: "second-middle-trim",
+						startMs: secondTrimStartSeconds * 1000,
 						endMs: trimEndSeconds * 1000,
 					},
 				],
@@ -124,9 +143,19 @@ describe("trimmed playback", () => {
 
 		video.addEventListener("play", handlers.handlePlay);
 		video.addEventListener("pause", handlers.handlePause);
+		video.addEventListener("timeupdate", handlers.handleTimeUpdate);
 		video.addEventListener("seeked", handlers.handleSeeked);
 		video.addEventListener("seeking", handlers.handleSeeking);
+		let pauseEvents = 0;
+		const countPause = () => {
+			pauseEvents++;
+		};
+		video.addEventListener("pause", countPause);
+		video.addEventListener("seeking", syncWebcam);
+		video.addEventListener("seeked", syncWebcam);
+		webcam.addEventListener("seeked", syncWebcam);
 		await video.play();
+		syncWebcamFrame();
 
 		await new Promise<void>((resolve, reject) => {
 			const timeout = window.setTimeout(
@@ -139,11 +168,6 @@ describe("trimmed playback", () => {
 					resolve();
 					return;
 				}
-				if (video.paused) {
-					window.clearTimeout(timeout);
-					reject(new Error(`Playback paused at ${video.currentTime.toFixed(3)}s`));
-					return;
-				}
 				requestAnimationFrame(checkPlayback);
 			};
 			requestAnimationFrame(checkPlayback);
@@ -151,11 +175,27 @@ describe("trimmed playback", () => {
 
 		expect(video.paused).toBe(false);
 		expect(video.currentTime).toBeGreaterThan(trimEndSeconds);
+		expect(pauseEvents).toBeGreaterThanOrEqual(2);
+		await expect
+			.poll(
+				() =>
+					!webcam.paused &&
+					!webcam.seeking &&
+					Math.abs(webcam.currentTime - (video.currentTime + webcamOffsetMs / 1000)) < 0.1,
+				{ timeout: 3000 },
+			)
+			.toBe(true);
 
 		video.removeEventListener("play", handlers.handlePlay);
 		video.removeEventListener("pause", handlers.handlePause);
+		video.removeEventListener("timeupdate", handlers.handleTimeUpdate);
 		video.removeEventListener("seeked", handlers.handleSeeked);
 		video.removeEventListener("seeking", handlers.handleSeeking);
+		video.removeEventListener("pause", countPause);
+		video.removeEventListener("seeking", syncWebcam);
+		video.removeEventListener("seeked", syncWebcam);
+		webcam.removeEventListener("seeked", syncWebcam);
 		if (animationFrame !== null) cancelAnimationFrame(animationFrame);
+		if (webcamSyncFrame !== null) cancelAnimationFrame(webcamSyncFrame);
 	});
 });

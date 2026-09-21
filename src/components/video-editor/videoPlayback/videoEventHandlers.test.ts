@@ -30,15 +30,17 @@ function createHandlers(
 	const onTimeUpdate = vi.fn();
 	const isScrubbingRef = { current: false };
 	const scrubEndTimerRef = { current: null as number | null };
+	const onPlayStateChange = vi.fn();
+	const isPlayingRef = { current: options.isPlaying ?? false };
 	const handlers = createVideoEventHandlers({
 		video,
 		isSeekingRef: { current: false },
-		isPlayingRef: { current: options.isPlaying ?? false },
+		isPlayingRef,
 		allowPlaybackRef: { current: allowPlayback },
 		currentTimeRef: { current: 0 },
 		timeUpdateAnimationRef: { current: null },
-		onPlayStateChange: vi.fn(),
 		onTimeUpdate,
+		onPlayStateChange,
 		onTerminalTrim: options.onTerminalTrim,
 		trimRegionsRef: { current: options.trimRegions ?? [] },
 		speedRegionsRef: { current: [] },
@@ -52,6 +54,8 @@ function createHandlers(
 		pause,
 		play,
 		onTimeUpdate,
+		onPlayStateChange,
+		isPlayingRef,
 		isScrubbingRef,
 		setPaused: (value: boolean) => {
 			paused = value;
@@ -60,6 +64,18 @@ function createHandlers(
 }
 
 describe("video seeking playback intent", () => {
+	it("ignores a queued pause event after the next source is already playing", () => {
+		const { handlers, isPlayingRef, onPlayStateChange, video } = createHandlers(true, {
+			isPlaying: true,
+		});
+
+		handlers.handlePause();
+
+		expect(video.paused).toBe(false);
+		expect(isPlayingRef.current).toBe(true);
+		expect(onPlayStateChange).not.toHaveBeenCalled();
+	});
+
 	it("does not interrupt a play request that intentionally starts during a seek", () => {
 		const { handlers, pause } = createHandlers(true);
 
@@ -73,6 +89,14 @@ describe("video seeking playback intent", () => {
 
 		handlers.handleSeeking();
 		handlers.handlePlay();
+
+		expect(pause).not.toHaveBeenCalled();
+	});
+
+	it("does not cancel a play request dispatched before the matching seeked listener", () => {
+		const { handlers, pause } = createHandlers(true);
+
+		handlers.handleSeeked();
 
 		expect(pause).not.toHaveBeenCalled();
 	});
@@ -191,7 +215,7 @@ describe("video seeking playback intent", () => {
 				frameCallback = callback;
 				return 1;
 			});
-		const { handlers, play, setPaused } = createHandlers(true, {
+		const { handlers, pause, play, setPaused } = createHandlers(true, {
 			currentTime: 2,
 			duration: 10,
 			trimRegions: [{ id: "middle", startMs: 2000, endMs: 4000 }],
@@ -199,6 +223,7 @@ describe("video seeking playback intent", () => {
 
 		handlers.handlePlay();
 		(frameCallback as FrameRequestCallback)(0);
+		expect(pause).toHaveBeenCalledOnce();
 		setPaused(true);
 		handlers.handlePause();
 		handlers.handleSeeked();

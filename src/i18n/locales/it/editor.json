@@ -18,6 +18,8 @@
 		"sceneTitle": "Questa scena è vuota",
 		"sceneDescription": "Registra un nuovo video per questa scena o importa un file video esistente.",
 		"recordSceneButton": "Registra scena",
+		"sceneDragDropHint": "File video supportato",
+		"sceneDropOverlay": "Trascina qui il video",
 		"dropErrors": {
 			"unsupportedVideoOrProjectMessage": "Trascina qui un file video supportato o un progetto .videtio.",
 			"couldNotOpenDroppedMessage": "Impossibile aprire il file trascinato. Potrebbe essere stato spostato, eliminato o non essere leggibile."

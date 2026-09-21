@@ -111,6 +111,8 @@
 		"supportedFormats": "支持的格式：MP4、MOV、WebM、MKV、AVI、M4V、WMV",
 		"dragDropHint": "视频文件或 .videtio 项目",
 		"dropOverlay": "将视频或项目拖放到此处",
+		"sceneDragDropHint": "支持的视频文件",
+		"sceneDropOverlay": "将视频拖放到此处",
 		"dropErrors": {
 			"unsupportedFormatTitle": "不支持的格式",
 			"unsupportedFormatMessage": "此处只能拖放 .videtio 项目文件。要导入视频，请使用\"导入视频文件...\"按钮。",

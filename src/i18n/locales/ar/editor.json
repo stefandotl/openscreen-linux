@@ -111,6 +111,8 @@
 		"supportedFormats": "الصيغ المدعومة: MP4، MOV، WebM، MKV، AVI، M4V، WMV",
 		"dragDropHint": "ملف فيديو أو مشروع .videtio",
 		"dropOverlay": "أفلت الفيديو أو المشروع هنا",
+		"sceneDragDropHint": "ملف فيديو مدعوم",
+		"sceneDropOverlay": "أفلت الفيديو هنا",
 		"dropErrors": {
 			"unsupportedFormatTitle": "تنسيق غير مدعوم",
 			"unsupportedFormatMessage": "يمكن إسقاط ملفات مشروع .videtio فقط هنا. لاستيراد مقطع فيديو، استخدم زر \"استيراد ملف فيديو...\" بدلاً من ذلك.",

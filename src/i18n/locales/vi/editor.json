@@ -111,6 +111,8 @@
 		"supportedFormats": "Định dạng được hỗ trợ: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
 		"dragDropHint": "Tệp video hoặc dự án .videtio",
 		"dropOverlay": "Thả video hoặc dự án vào đây",
+		"sceneDragDropHint": "Tệp video được hỗ trợ",
+		"sceneDropOverlay": "Thả video vào đây",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Định dạng không được hỗ trợ",
 			"unsupportedFormatMessage": "Chỉ có thể thả các tệp dự án .videtio vào đây. Để nhập video, hãy sử dụng nút \"Nhập tệp video...\" thay thế.",

@@ -148,9 +148,9 @@ export function EditorEmptyState({
 	return (
 		<div
 			className="flex h-full w-full flex-col items-center justify-center bg-[#09090b]"
-			onDragOver={isSceneMode ? undefined : handleDragOver}
-			onDragLeave={isSceneMode ? undefined : handleDragLeave}
-			onDrop={isSceneMode ? undefined : handleDrop}
+			onDragOver={handleDragOver}
+			onDragLeave={handleDragLeave}
+			onDrop={handleDrop}
 		>
 			{/* Drop error dialog */}
 			<Dialog open={dropError !== null} onOpenChange={(open) => !open && setDropError(null)}>
@@ -213,20 +213,22 @@ export function EditorEmptyState({
 
 				{/* Actions */}
 				<div className="flex flex-col gap-3 w-full max-w-xs">
-					{!isSceneMode && (
-						<div
-							data-testid="video-project-drop-zone"
-							className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 transition-colors ${
-								isDraggingOver
-									? "border-[#34B27B] bg-[#34B27B]/10 text-[#34B27B]"
-									: "border-white/15 bg-white/[0.025] text-slate-400"
-							}`}
-						>
-							<Upload className="h-6 w-6" />
-							<p className="text-sm font-medium">{te("emptyState.dropOverlay")}</p>
-							<p className="text-[11px] text-slate-600">{te("emptyState.dragDropHint")}</p>
-						</div>
-					)}
+					<div
+						data-testid={isSceneMode ? "scene-video-drop-zone" : "video-project-drop-zone"}
+						className={`flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 transition-colors ${
+							isDraggingOver
+								? "border-[#34B27B] bg-[#34B27B]/10 text-[#34B27B]"
+								: "border-white/15 bg-white/[0.025] text-slate-400"
+						}`}
+					>
+						<Upload className="h-6 w-6" />
+						<p className="text-sm font-medium">
+							{te(isSceneMode ? "emptyState.sceneDropOverlay" : "emptyState.dropOverlay")}
+						</p>
+						<p className="text-[11px] text-slate-600">
+							{te(isSceneMode ? "emptyState.sceneDragDropHint" : "emptyState.dragDropHint")}
+						</p>
+					</div>
 					{isSceneMode && onStartRecording && (
 						<button
 							type="button"

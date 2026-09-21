@@ -108,6 +108,13 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	const seekPastTrim = (skipToTime: number) => {
 		pendingTrimSkipEndSeconds =
 			allowPlaybackRef.current && isPlayingRef.current ? skipToTime : null;
+		// Seeking a playing MediaRecorder WebM can leave Chromium's audio decoder on
+		// the pre-cut timestamp after several nearby trims. Pause the media clock first;
+		// handleSeeked resumes the same playback intent once audio and video have both
+		// landed on the cut boundary.
+		if (!video.paused) {
+			video.pause();
+		}
 		video.currentTime = skipToTime;
 		emitTime(skipToTime);
 	};
@@ -131,7 +138,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		});
 	};
 
-	function updateTime(frameTimestampMs: number) {
+	function updateTime(frameTimestampMs: number, scheduleNextFrame = true) {
 		if (!video) return;
 
 		const currentTimeMs = video.currentTime * 1000;
@@ -157,10 +164,16 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			emitTime(video.currentTime, frameTimestampMs);
 		}
 
-		if (!video.paused && !video.ended) {
+		if (scheduleNextFrame && !video.paused && !video.ended) {
 			timeUpdateAnimationRef.current = requestAnimationFrame(updateTime);
 		}
 	}
+
+	const handleTimeUpdate = () => {
+		// Keep trim boundaries reliable even if rendering load delays requestAnimationFrame
+		// until the media element is already close to its native end.
+		updateTime(performance.now(), false);
+	};
 
 	const startTimeUpdates = () => {
 		if (timeUpdateAnimationRef.current) {
@@ -184,6 +197,13 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	};
 
 	const handlePause = () => {
+		// Chromium can deliver a queued pause event from the previous source after a
+		// retained media element has already started the next source. Treat the
+		// element's current state as authoritative so that stale event cannot turn a
+		// following seek into a real pause.
+		if (!video.paused && !video.ended) {
+			return;
+		}
 		if (pendingTrimSkipEndSeconds !== null && allowPlaybackRef.current) {
 			emitTime(video.currentTime);
 			return;
@@ -241,7 +261,10 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 				issuedFollowupSeek = true;
 			}
 		} else {
-			if (!isPlayingRef.current && !video.paused) {
+			// A seek promise can resolve before Chromium dispatches the matching seeked
+			// listener. If play was requested in that microtask, allowPlayback is already
+			// true even though the later play event has not set isPlaying yet.
+			if (!isPlayingRef.current && !allowPlaybackRef.current && !video.paused) {
 				video.pause();
 			}
 			emitTime(video.currentTime);
@@ -283,6 +306,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 	return {
 		handlePlay,
 		handlePause,
+		handleTimeUpdate,
 		handleSeeked,
 		handleSeeking,
 	};

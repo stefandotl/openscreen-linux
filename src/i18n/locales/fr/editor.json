@@ -111,6 +111,8 @@
 		"supportedFormats": "Formats pris en charge : MP4, MOV, WebM, MKV, AVI, M4V, WMV",
 		"dragDropHint": "Fichier vidéo ou projet .videtio",
 		"dropOverlay": "Déposez la vidéo ou le projet ici",
+		"sceneDragDropHint": "Fichier vidéo pris en charge",
+		"sceneDropOverlay": "Déposez la vidéo ici",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Format non pris en charge",
 			"unsupportedFormatMessage": "Seuls les fichiers .videtio peuvent être déposés ici. Pour importer une vidéo, utilisez plutôt le bouton \"Importer un fichier vidéo...\".",

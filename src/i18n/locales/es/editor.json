@@ -111,6 +111,8 @@
 		"supportedFormats": "Formatos compatibles: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
 		"dragDropHint": "Archivo de video o proyecto .videtio",
 		"dropOverlay": "Suelta el video o proyecto aquí",
+		"sceneDragDropHint": "Archivo de video compatible",
+		"sceneDropOverlay": "Suelta el video aquí",
 		"dropErrors": {
 			"unsupportedFormatTitle": "Formato no compatible",
 			"unsupportedFormatMessage": "Solo se pueden soltar aquí archivos de proyecto .videtio. Para importar un video, usa el botón \"Importar archivo de video...\" en su lugar.",

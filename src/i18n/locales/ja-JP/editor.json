@@ -111,6 +111,8 @@
 		"supportedFormats": "対応フォーマット：MP4、MOV、WebM、MKV、AVI、M4V、WMV",
 		"dragDropHint": "動画ファイルまたは .videtio プロジェクト",
 		"dropOverlay": "動画またはプロジェクトをここにドロップ",
+		"sceneDragDropHint": "対応している動画ファイル",
+		"sceneDropOverlay": "動画をここにドロップ",
 		"dropErrors": {
 			"unsupportedFormatTitle": "非対応フォーマット",
 			"unsupportedFormatMessage": "ここにドロップできるのは .videtio プロジェクトファイルのみです。動画をインポートするには「動画ファイルをインポート...」ボタンをご使用ください。",

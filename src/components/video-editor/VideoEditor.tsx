@@ -4769,11 +4769,15 @@ export default function VideoEditor() {
 												}}
 											>
 												<VideoPlayback
-													key={createScenePlaybackKey(
-														playbackScope === "project" ? null : activeSceneId,
-														videoPath || "",
-														webcamVideoPath,
-													)}
+													key={
+														playbackScope === "project"
+															? "project-playback"
+															: createScenePlaybackKey(
+																	activeSceneId,
+																	videoPath || "",
+																	webcamVideoPath,
+																)
+													}
 													aspectRatio={aspectRatio}
 													ref={videoPlaybackRef}
 													videoPath={videoPath || ""}
