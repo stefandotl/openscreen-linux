@@ -6,6 +6,13 @@ import type { SpeedRegion, TrimRegion } from "../types";
 const SCRUB_END_DEBOUNCE_MS = 150;
 const PLAYBACK_UI_UPDATE_INTERVAL_MS = 1000 / 30;
 
+/** `play()` interrupted by a deliberate pause/load is a superseded request, not a failure. */
+function isAbortError(error: unknown) {
+	return (
+		typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
+	);
+}
+
 interface VideoEventHandlersParams {
 	video: HTMLVideoElement;
 	isSeekingRef: React.MutableRefObject<boolean>;
@@ -133,12 +140,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			// A scene handoff or a newer trim seek may deliberately pause/load this
 			// element while Chromium is still resolving play(). That AbortError is a
 			// superseded request, not a playback failure for the project.
-			if (
-				typeof error === "object" &&
-				error !== null &&
-				"name" in error &&
-				error.name === "AbortError"
-			) {
+			if (isAbortError(error)) {
 				return;
 			}
 			allowPlaybackRef.current = false;
@@ -283,6 +285,11 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 				resumeAfterTrimSeek();
 			} else if (allowPlaybackRef.current && isPlayingRef.current && video.paused) {
 				void video.play().catch((error) => {
+					// A scene handoff can pause or reload this element while a user seek is still
+					// resolving play(). That superseded request must not surface as a project error.
+					if (isAbortError(error)) {
+						return;
+					}
 					allowPlaybackRef.current = false;
 					isPlayingRef.current = false;
 					onPlayStateChange(false);

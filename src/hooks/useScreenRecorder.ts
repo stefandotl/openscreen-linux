@@ -447,10 +447,17 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						);
 						stopRecording.current();
 					};
+					const handleSourceLag = (lagMs: number) => {
+						console.error(
+							`[webcam-recording] Camera fell behind the recording timeline by ${Math.round(lagMs)} ms. The webcam sidecar would be shifted for the rest of the take.`,
+						);
+						toast.error(t("recording.cameraLagging", { lag: `${Math.round(lagMs)} ms` }));
+						stopRecording.current();
+					};
 					webcamRecordingBridge.current = await WebcamRecordingBridge.create(
 						stream,
 						WEBCAM_TARGET_FRAME_RATE,
-						{ onLockedFormatChange: handleLockedFormatChange },
+						{ onLockedFormatChange: handleLockedFormatChange, onSourceLag: handleSourceLag },
 					);
 				}
 				webcamStream.current = webcamRecordingBridge.current.stream;

@@ -19,6 +19,7 @@ import {
 	useState,
 } from "react";
 import {
+	getWebcamLayerBox,
 	getWebcamLayoutCssBoxShadow,
 	getWebcamLayoutMediaBlocker,
 	reactiveWebcamScale,
@@ -43,6 +44,7 @@ import {
 import { classifyWallpaper, DEFAULT_WALLPAPER, resolveImageWallpaperUrl } from "@/lib/wallpaper";
 import { getWebcamVideoStyle } from "@/lib/webcamFraming";
 import { getCssClipPath } from "@/lib/webcamMaskShapes";
+import { inspectWebcamSyncDurations } from "@/lib/webcamSync";
 import type { CursorRecordingData } from "@/native/contracts";
 import {
 	type AspectRatio,
@@ -719,6 +721,42 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			},
 			[],
 		);
+
+		// The webcam sidecar is rendered through a canvas bridge while the screen recording is
+		// captured natively, so the two recordings can end up with different amounts of timeline
+		// for the same take. A constant offset cannot align that; report it instead of silently
+		// playing and exporting a drifting sidecar.
+		const reportedWebcamSyncKeyRef = useRef<string | null>(null);
+		const reportWebcamSyncDurations = useCallback(() => {
+			const report = inspectWebcamSyncDurations(
+				videoRef.current?.duration,
+				webcamVideoRef.current?.duration,
+			);
+			if (!report) return;
+
+			const key = `${Math.round(report.webcamDurationMs)}:${Math.round(report.screenDurationMs)}`;
+			if (reportedWebcamSyncKeyRef.current === key) return;
+			reportedWebcamSyncKeyRef.current = key;
+
+			console.info(
+				`[webcam-sync] ${JSON.stringify({
+					screenDurationMs: Math.round(report.screenDurationMs),
+					webcamDurationMs: Math.round(report.webcamDurationMs),
+					deltaMs: Math.round(report.deltaMs),
+					webcamTimeScale: Number(report.webcamTimeScale.toFixed(6)),
+					offsetMs: webcamVideoOffsetMsRef.current,
+					skewed: report.skewed,
+				})}`,
+			);
+			if (report.skewed) {
+				console.warn(
+					`[webcam-sync] The webcam sidecar is ${Math.round(Math.abs(report.deltaMs))} ms ` +
+						`${report.deltaMs > 0 ? "longer" : "shorter"} than the screen recording, so no ` +
+						"constant webcam offset can keep it aligned. Suggested time scale: " +
+						`${report.webcamTimeScale.toFixed(6)}, offset ${webcamVideoOffsetMsRef.current} ms.`,
+				);
+			}
+		}, []);
 
 		useImperativeHandle(ref, () => ({
 			video: videoRef.current,
@@ -1935,6 +1973,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			video.pause();
 			allowPlaybackRef.current = false;
 			currentTimeRef.current = 0;
+			reportWebcamSyncDurations();
 
 			if (videoReadyRafRef.current) {
 				cancelAnimationFrame(videoReadyRafRef.current);
@@ -2006,6 +2045,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 						width: webcamVideo.videoWidth,
 						height: webcamVideo.videoHeight,
 					});
+					reportWebcamSyncDurations();
 					syncWebcamPlayback();
 				} else if (webcamVideo.readyState >= HTMLMediaElement.HAVE_METADATA) {
 					onErrorRef.current("Webcam video metadata has invalid dimensions");
@@ -2028,7 +2068,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				webcamVideo.removeEventListener("seeked", handleSeeked);
 				webcamVideo.removeEventListener("error", handleError);
 			};
-		}, [effectiveWebcamVideoPath, syncWebcamPlayback]);
+		}, [effectiveWebcamVideoPath, reportWebcamSyncDurations, syncWebcamPlayback]);
 
 		useEffect(() => {
 			if (!effectiveWebcamVideoPath) return;
@@ -2170,10 +2210,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 									ref={webcamWrapperRef}
 									className="absolute"
 									style={{
-										left: webcamLayout?.x ?? 0,
-										top: webcamLayout?.y ?? 0,
-										width: webcamLayout?.width ?? 0,
-										height: webcamLayout?.height ?? 0,
+										...getWebcamLayerBox(webcamLayout, webcamLayoutPreset),
 										zIndex: 20,
 										opacity: webcamLayout ? 1 : 0,
 										filter:

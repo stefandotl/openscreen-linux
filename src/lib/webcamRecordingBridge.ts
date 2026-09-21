@@ -1,6 +1,15 @@
 const DEFAULT_WEBCAM_WIDTH = 640;
 const DEFAULT_WEBCAM_HEIGHT = 480;
 
+/**
+ * Content lag the camera may accumulate while a recording runs. The stable
+ * output track keeps advancing even when the physical source stalls, so the
+ * webcam sidecar can end up the same length as the screen recording while its
+ * picture runs behind by a growing amount. A constant device latency cancels
+ * out of the measurement; only a growing lag is reported.
+ */
+export const MAX_WEBCAM_SOURCE_LAG_MS = 250;
+
 export type WebcamDimensions = {
 	width: number;
 	height: number;
@@ -13,6 +22,7 @@ export type WebcamFormatChange = {
 
 type WebcamRecordingBridgeOptions = {
 	onLockedFormatChange?: (change: WebcamFormatChange) => void;
+	onSourceLag?: (lagMs: number) => void;
 };
 
 function positiveDimension(value: number | undefined, fallback: number) {
@@ -43,6 +53,8 @@ export class WebcamRecordingBridge {
 	private outputDimensionsInitialized = false;
 	private lockedDimensions: WebcamDimensions | null = null;
 	private lockedFormatChangeNotified = false;
+	private sourceLagBaseline: { realMs: number; mediaMs: number } | null = null;
+	private sourceLagNotified = false;
 	private destroyed = false;
 
 	private constructor(
@@ -117,6 +129,7 @@ export class WebcamRecordingBridge {
 		this.setOutputDimensions(dimensions);
 		this.lockedDimensions = dimensions;
 		this.lockedFormatChangeNotified = false;
+		this.resetSourceLagTracking();
 		return dimensions;
 	}
 
@@ -126,6 +139,7 @@ export class WebcamRecordingBridge {
 		}
 		this.lockedDimensions = null;
 		this.lockedFormatChangeNotified = false;
+		this.resetSourceLagTracking();
 		if (this.video.readyState >= HTMLMediaElement.HAVE_METADATA) {
 			this.setOutputDimensions(this.getPlayableDimensions());
 		}
@@ -142,6 +156,7 @@ export class WebcamRecordingBridge {
 
 		this.cancelSourceFrameCallback();
 		this.receivedSourceFrameSinceWatchdog = false;
+		this.resetSourceLagTracking();
 		this.sourceStream = sourceStream;
 		this.video.srcObject = sourceStream;
 		await this.video.play();
@@ -162,6 +177,7 @@ export class WebcamRecordingBridge {
 		}
 		this.cancelSourceFrameCallback();
 		this.receivedSourceFrameSinceWatchdog = false;
+		this.resetSourceLagTracking();
 		this.sourceStream = null;
 		this.video.pause();
 		this.video.srcObject = null;
@@ -191,7 +207,7 @@ export class WebcamRecordingBridge {
 		}
 
 		const callbackGeneration = this.sourceFrameCallbackGeneration;
-		const callbackId = this.video.requestVideoFrameCallback(() => {
+		const callbackId = this.video.requestVideoFrameCallback((now, metadata) => {
 			if (this.sourceFrameCallbackId === callbackId) {
 				this.sourceFrameCallbackId = null;
 			}
@@ -203,10 +219,40 @@ export class WebcamRecordingBridge {
 				return;
 			}
 
+			this.trackSourceFrameLag(now, metadata);
 			this.renderSourceFrame();
 			this.scheduleSourceFrameCallback(sourceStream);
 		});
 		this.sourceFrameCallbackId = callbackId;
+	}
+
+	private resetSourceLagTracking() {
+		this.sourceLagBaseline = null;
+		this.sourceLagNotified = false;
+	}
+
+	/**
+	 * Compare the presented frame's own media time against the wall clock. A source
+	 * that delivers frames late falls behind the recorder's timeline, which no
+	 * constant offset can compensate afterwards.
+	 */
+	private trackSourceFrameLag(nowMs: number, metadata: VideoFrameCallbackMetadata) {
+		const mediaTimeSeconds = metadata?.mediaTime;
+		if (typeof mediaTimeSeconds !== "number" || !Number.isFinite(mediaTimeSeconds)) {
+			return;
+		}
+		const mediaMs = mediaTimeSeconds * 1000;
+		const baseline = this.sourceLagBaseline;
+		if (!baseline) {
+			this.sourceLagBaseline = { realMs: nowMs, mediaMs };
+			return;
+		}
+		const lagMs = nowMs - baseline.realMs - (mediaMs - baseline.mediaMs);
+		if (lagMs < MAX_WEBCAM_SOURCE_LAG_MS || this.sourceLagNotified) {
+			return;
+		}
+		this.sourceLagNotified = true;
+		this.options.onSourceLag?.(lagMs);
 	}
 
 	private cancelSourceFrameCallback() {

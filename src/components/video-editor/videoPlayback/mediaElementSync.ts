@@ -5,6 +5,7 @@ const MAX_PLAYBACK_RATE_CORRECTION = 0.08;
 
 type MediaClock = Pick<HTMLMediaElement, "currentTime" | "duration" | "playbackRate"> & {
 	seeking?: boolean;
+	pause?: () => void;
 };
 type PlaybackMediaFollower = MediaClock &
 	Pick<HTMLMediaElement, "paused" | "ended" | "pause" | "play">;
@@ -98,6 +99,10 @@ export function synchronizeMediaFollower(
 	const mayHardSeek =
 		!options.state || nowMs - options.state.lastHardSeekAtMs >= HARD_SEEK_COOLDOWN_MS;
 	if (Math.abs(driftSeconds) >= HARD_SYNC_THRESHOLD_SECONDS && mayHardSeek) {
+		// Seeking a playing MediaRecorder WebM/Matroska sidecar can leave Chromium's decoder
+		// on the pre-seek position. Pause the follower clock first; the primary-frame loop and
+		// the follower's own `seeked` listener resume it once it has landed on the target.
+		follower.pause?.();
 		follower.currentTime = targetTime;
 		if (follower.playbackRate !== masterPlaybackRate) {
 			follower.playbackRate = masterPlaybackRate;

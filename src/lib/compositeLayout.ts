@@ -203,6 +203,37 @@ export function isFullBleedWebcamLayout(preset?: WebcamLayoutPreset) {
 	return preset === "vertical-stack" || preset === "only-webcam";
 }
 
+export interface WebcamLayerBox {
+	left: number;
+	top: number;
+	width?: number;
+	height?: number;
+	right?: number;
+	bottom?: number;
+}
+
+/**
+ * Positions the DOM webcam layer inside the preview canvas. The canvas rect is computed from
+ * integer `clientWidth`/`clientHeight`, so a full-bleed layer that reproduces canvas width and
+ * height can round down against a fractional canvas box and expose a seam of the chosen
+ * wallpaper along the edge of the frame. Only-webcam therefore pins to the canvas box itself.
+ */
+export function getWebcamLayerBox(
+	layout: StyledRenderRect | null,
+	preset: WebcamLayoutPreset = "picture-in-picture",
+): WebcamLayerBox {
+	if (preset === "only-webcam") {
+		return { left: 0, top: 0, right: 0, bottom: 0 };
+	}
+
+	return {
+		left: layout?.x ?? 0,
+		top: layout?.y ?? 0,
+		width: layout?.width ?? 0,
+		height: layout?.height ?? 0,
+	};
+}
+
 export function getWebcamLayoutMediaBlocker(
 	preset: WebcamLayoutPreset | undefined,
 	webcamVideoUrl: string | undefined,

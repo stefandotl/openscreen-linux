@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { computeCompositeLayout, getWebcamLayoutMediaBlocker } from "./compositeLayout";
+import {
+	computeCompositeLayout,
+	getWebcamLayerBox,
+	getWebcamLayoutMediaBlocker,
+} from "./compositeLayout";
 
 describe("computeCompositeLayout", () => {
 	it("anchors the overlay in the lower-right corner", () => {
@@ -287,6 +291,32 @@ describe("computeCompositeLayout", () => {
 			rectangleLayout?.webcamRect?.borderRadius ?? 0,
 		);
 		expect(roundedLayout?.webcamRect?.maskShape).toBe("rounded");
+	});
+});
+
+describe("getWebcamLayerBox", () => {
+	it("pins the only-webcam layer to the canvas box so rounding cannot expose a seam", () => {
+		expect(
+			getWebcamLayerBox(
+				{ x: 0, y: 0, width: 1080, height: 1919, borderRadius: 0, maskShape: "rectangle" },
+				"only-webcam",
+			),
+		).toEqual({ left: 0, top: 0, right: 0, bottom: 0 });
+	});
+
+	it("positions every other layout from the computed rect", () => {
+		expect(
+			getWebcamLayerBox(
+				{ x: 12, y: 34, width: 300, height: 200, borderRadius: 8, maskShape: "rounded" },
+				"picture-in-picture",
+			),
+		).toEqual({ left: 12, top: 34, width: 300, height: 200 });
+		expect(getWebcamLayerBox(null, "picture-in-picture")).toEqual({
+			left: 0,
+			top: 0,
+			width: 0,
+			height: 0,
+		});
 	});
 });
 

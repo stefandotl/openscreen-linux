@@ -182,6 +182,23 @@ describe("mediaElementSync", () => {
 		expect(pause).toHaveBeenCalledOnce();
 	});
 
+	it("pauses a playing webcam before a hard realign seek and resumes after it lands", () => {
+		const master = mediaClock(4);
+		const { follower, pause, play } = playbackFollower(1);
+
+		expect(
+			synchronizeMediaFollowerPlayback(master, follower, 0, { playing: true, scrubbing: false }),
+		).toBe("seeked");
+		expect(pause).toHaveBeenCalledOnce();
+		expect(follower.currentTime).toBe(4);
+		expect(play).not.toHaveBeenCalled();
+
+		expect(
+			synchronizeMediaFollowerPlayback(master, follower, 0, { playing: true, scrubbing: false }),
+		).toBe("aligned");
+		expect(play).toHaveBeenCalledOnce();
+	});
+
 	it("clamps offset sampling to the webcam duration", () => {
 		expect(getOffsetMediaTime(9.95, 200, 10)).toBeCloseTo(9.999);
 		expect(getOffsetMediaTime(0.05, -200, 10)).toBe(0);

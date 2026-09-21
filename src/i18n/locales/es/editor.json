@@ -81,6 +81,7 @@
 		"cameraDisconnected": "Cámara web desconectada.",
 		"cameraNotFound": "Cámara no encontrada.",
 		"cameraFormatChanged": "El formato de la cámara cambió de {{before}} a {{after}}. La grabación se detuvo para evitar vídeo borroso o barras negras.",
+		"cameraLagging": "La cámara se retrasó {{lag}} respecto a la línea de tiempo. La grabación se detuvo porque el vídeo de la webcam quedaría desfasado durante el resto de la toma.",
 		"cameraResolutionTooLow": "La cámara virtual solo proporciona {{resolution}}. Configura Camera Lab al menos en 1280x720 y vuelve a iniciar la grabación.",
 		"permissionDenied": "Permiso de grabación denegado. Por favor permite la grabación de pantalla.",
 		"accessibilityAllowAndRetry": "Permite el acceso de accesibilidad para Videtio y luego pulsa grabar de nuevo para iniciar la cuenta atrás."

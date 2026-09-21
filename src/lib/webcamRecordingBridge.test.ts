@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WebcamRecordingBridge } from "./webcamRecordingBridge";
+import { MAX_WEBCAM_SOURCE_LAG_MS, WebcamRecordingBridge } from "./webcamRecordingBridge";
 
 describe("WebcamRecordingBridge", () => {
 	type SourceFrameCallback = Parameters<HTMLVideoElement["requestVideoFrameCallback"]>[0];
@@ -66,14 +66,17 @@ describe("WebcamRecordingBridge", () => {
 		getVideoTracks: () => [sourceTrack],
 	} as unknown as MediaStream;
 
-	function presentNextSourceFrame() {
+	function presentNextSourceFrame(
+		metadata: Partial<VideoFrameCallbackMetadata> = {},
+		nowMs = performance.now(),
+	) {
 		const nextCallback = sourceFrameCallbacks.entries().next().value;
 		if (!nextCallback) {
 			throw new Error("No source video-frame callback is pending.");
 		}
 		const [callbackId, callback] = nextCallback;
 		sourceFrameCallbacks.delete(callbackId);
-		callback(performance.now(), {} as VideoFrameCallbackMetadata);
+		callback(nowMs, metadata as VideoFrameCallbackMetadata);
 	}
 
 	beforeEach(() => {
@@ -224,6 +227,56 @@ describe("WebcamRecordingBridge", () => {
 			expect(canvas.width).toBe(720);
 			expect(canvas.height).toBe(1280);
 			expect(drawImage).toHaveBeenCalledTimes(2);
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("reports a source that falls behind the recording timeline", async () => {
+		const onSourceLag = vi.fn();
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, { onSourceLag });
+		try {
+			// A constant device latency cancels out of the measurement.
+			presentNextSourceFrame({ mediaTime: 5 }, 10_000);
+			presentNextSourceFrame({ mediaTime: 6 }, 11_000);
+			expect(onSourceLag).not.toHaveBeenCalled();
+
+			// Jitter below the tolerance must stay silent.
+			presentNextSourceFrame({ mediaTime: 6.1 }, 11_200);
+			expect(onSourceLag).not.toHaveBeenCalled();
+
+			// Half a second of content never reached the recorder from here on.
+			presentNextSourceFrame({ mediaTime: 6.5 }, 12_000);
+
+			expect(onSourceLag).toHaveBeenCalledOnce();
+			const [reportedLagMs] = onSourceLag.mock.calls[0] as [number];
+			expect(reportedLagMs).toBe(500);
+			expect(reportedLagMs).toBeGreaterThan(MAX_WEBCAM_SOURCE_LAG_MS);
+
+			// The recorder must not be flooded while the source keeps stalling.
+			presentNextSourceFrame({ mediaTime: 6.5 }, 14_000);
+			expect(onSourceLag).toHaveBeenCalledOnce();
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("tracks source lag from the start of each recording", async () => {
+		const onSourceLag = vi.fn();
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, { onSourceLag });
+		try {
+			bridge.prepareForRecording();
+			presentNextSourceFrame({ mediaTime: 0 }, 1_000);
+			presentNextSourceFrame({ mediaTime: 0.5 }, 2_000);
+			expect(onSourceLag).toHaveBeenCalledWith(500);
+
+			// A new take that starts from a stalled camera reports the lag again.
+			bridge.finishRecording();
+			bridge.prepareForRecording();
+			presentNextSourceFrame({ mediaTime: 0.5 }, 3_000);
+			presentNextSourceFrame({ mediaTime: 0.5 }, 4_000);
+			expect(onSourceLag).toHaveBeenCalledTimes(2);
+			expect(onSourceLag).toHaveBeenLastCalledWith(1000);
 		} finally {
 			bridge.destroy();
 		}

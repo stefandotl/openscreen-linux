@@ -98,6 +98,7 @@
 		"cameraDisconnected": "Webcam disconnected.",
 		"cameraNotFound": "Camera not found.",
 		"cameraFormatChanged": "Camera format changed from {{before}} to {{after}}. Recording stopped to prevent blurry video or black bars.",
+		"cameraLagging": "The webcam fell {{lag}} behind the recording timeline. Recording stopped because the webcam video would stay shifted for the rest of the take.",
 		"cameraResolutionTooLow": "The virtual camera is only providing {{resolution}}. Set Camera Lab to at least 1280x720, then start recording again.",
 		"permissionDenied": "Recording permission denied. Please allow screen recording.",
 		"accessibilityAllowAndRetry": "Allow Accessibility access for Videtio, then press record again to start the countdown."

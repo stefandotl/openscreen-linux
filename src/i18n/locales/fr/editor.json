@@ -96,6 +96,7 @@
 		"cameraDisconnected": "Webcam déconnectée.",
 		"cameraNotFound": "Caméra introuvable.",
 		"cameraFormatChanged": "Le format de la caméra est passé de {{before}} à {{after}}. L’enregistrement a été arrêté pour éviter une image floue ou des bandes noires.",
+		"cameraLagging": "La caméra a pris un retard de {{lag}} sur la timeline. L’enregistrement a été arrêté car la vidéo de la webcam resterait décalée pour le reste de la prise.",
 		"cameraResolutionTooLow": "La caméra virtuelle ne fournit que {{resolution}}. Réglez Camera Lab sur au moins 1280x720, puis relancez l’enregistrement.",
 		"permissionDenied": "Permission d'enregistrement refusée. Veuillez autoriser l'enregistrement d'écran.",
 		"accessibilityAllowAndRetry": "Autorisez l'accès Accessibilité pour Videtio, puis appuyez de nouveau sur enregistrer pour lancer le compte à rebours."

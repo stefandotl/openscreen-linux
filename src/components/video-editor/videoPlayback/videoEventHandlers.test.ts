@@ -265,6 +265,45 @@ describe("video seeking playback intent", () => {
 		requestFrame.mockRestore();
 	});
 
+	it("ignores a superseded AbortError while resuming after a user seek", async () => {
+		const onPlaybackError = vi.fn();
+		const { handlers, play, setPaused, isPlayingRef, onPlayStateChange } = createHandlers(true, {
+			currentTime: 4,
+			isPlaying: true,
+			onPlaybackError,
+		});
+
+		setPaused(true);
+		play.mockRejectedValueOnce(
+			new DOMException("The play() request was interrupted by a call to pause().", "AbortError"),
+		);
+		handlers.handleSeeked();
+		await Promise.resolve();
+
+		expect(play).toHaveBeenCalledOnce();
+		expect(onPlaybackError).not.toHaveBeenCalled();
+		expect(isPlayingRef.current).toBe(true);
+		expect(onPlayStateChange).not.toHaveBeenCalled();
+	});
+
+	it("still reports a real failure while resuming after a user seek", async () => {
+		const onPlaybackError = vi.fn();
+		const { handlers, play, setPaused, isPlayingRef } = createHandlers(true, {
+			currentTime: 4,
+			isPlaying: true,
+			onPlaybackError,
+		});
+
+		setPaused(true);
+		play.mockRejectedValueOnce(new DOMException("Decoder failed", "NotSupportedError"));
+		handlers.handleSeeked();
+		await Promise.resolve();
+
+		expect(onPlaybackError).toHaveBeenCalledOnce();
+		expect(onPlaybackError.mock.calls[0][0]).toContain("Video playback failed after seeking:");
+		expect(isPlayingRef.current).toBe(false);
+	});
+
 	it("still reports a real failure while resuming after a trim", async () => {
 		let frameCallback: FrameRequestCallback | null = null;
 		const requestFrame = vi
