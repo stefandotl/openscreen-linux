@@ -1968,7 +1968,9 @@ export default function VideoEditor() {
 				}
 			} catch (playbackError) {
 				if (pendingProjectPlaybackPositionRef.current !== pending) return;
-				if (!pending.shouldPlay && isAbortError(playbackError)) {
+				// Scene/trim handoffs can supersede an in-flight play() with pause() or
+				// load(). Chromium reports that expected transition as AbortError.
+				if (isAbortError(playbackError)) {
 					pendingProjectPlaybackPositionRef.current = null;
 					return;
 				}

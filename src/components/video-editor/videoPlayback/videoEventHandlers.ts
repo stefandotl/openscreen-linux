@@ -130,6 +130,17 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		}
 
 		void video.play().catch((error) => {
+			// A scene handoff or a newer trim seek may deliberately pause/load this
+			// element while Chromium is still resolving play(). That AbortError is a
+			// superseded request, not a playback failure for the project.
+			if (
+				typeof error === "object" &&
+				error !== null &&
+				"name" in error &&
+				error.name === "AbortError"
+			) {
+				return;
+			}
 			allowPlaybackRef.current = false;
 			isPlayingRef.current = false;
 			onPlayStateChange(false);

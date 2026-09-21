@@ -10,6 +10,7 @@ function createHandlers(
 		onTerminalTrim?: () => boolean | void;
 		trimRegions?: Array<{ id: string; startMs: number; endMs: number }>;
 		onScrubChange?: (scrubbing: boolean) => void;
+		onPlaybackError?: (message: string) => void;
 	} = {},
 ) {
 	const video = document.createElement("video");
@@ -42,6 +43,7 @@ function createHandlers(
 		onTimeUpdate,
 		onPlayStateChange,
 		onTerminalTrim: options.onTerminalTrim,
+		onPlaybackError: options.onPlaybackError,
 		trimRegionsRef: { current: options.trimRegions ?? [] },
 		speedRegionsRef: { current: [] },
 		isScrubbingRef,
@@ -229,6 +231,69 @@ describe("video seeking playback intent", () => {
 		handlers.handleSeeked();
 
 		expect(play).toHaveBeenCalledOnce();
+		requestFrame.mockRestore();
+	});
+
+	it("ignores a trim resume interrupted by a scene handoff", async () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const onPlaybackError = vi.fn();
+		const { handlers, play, setPaused } = createHandlers(true, {
+			currentTime: 2,
+			duration: 10,
+			trimRegions: [{ id: "middle", startMs: 2000, endMs: 4000 }],
+			onPlaybackError,
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+		setPaused(true);
+		handlers.handlePause();
+		play.mockRejectedValueOnce(
+			new DOMException("The play() request was interrupted by a call to pause().", "AbortError"),
+		);
+		handlers.handleSeeked();
+		await Promise.resolve();
+
+		expect(play).toHaveBeenCalledOnce();
+		expect(onPlaybackError).not.toHaveBeenCalled();
+		requestFrame.mockRestore();
+	});
+
+	it("still reports a real failure while resuming after a trim", async () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const onPlaybackError = vi.fn();
+		const { handlers, play, setPaused } = createHandlers(true, {
+			currentTime: 2,
+			duration: 10,
+			trimRegions: [{ id: "middle", startMs: 2000, endMs: 4000 }],
+			onPlaybackError,
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+		setPaused(true);
+		handlers.handlePause();
+		play.mockRejectedValueOnce(new DOMException("Decoder failed", "NotSupportedError"));
+		handlers.handleSeeked();
+		await Promise.resolve();
+
+		expect(onPlaybackError).toHaveBeenCalledOnce();
+		expect(onPlaybackError.mock.calls[0][0]).toContain(
+			"Video playback failed after skipping a trim:",
+		);
+		expect(onPlaybackError.mock.calls[0][0]).toContain("Decoder failed");
 		requestFrame.mockRestore();
 	});
 
