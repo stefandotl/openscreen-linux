@@ -8,7 +8,8 @@
 			"title": "Odak Modu",
 			"manual": "Manuel",
 			"auto": "Otomatik",
-			"autoDescription": "Kamera kaydedilen imleç konumunu takip eder"
+			"autoDescription": "Kamera kaydedilen imleç konumunu takip eder",
+			"lockedDisclaimer": "Zaman çizelgesindeki genel Otomatik Odak anahtarıyla denetlenir. Her yakınlaştırma için odak modu ayarlamak üzere kapatın."
 		},
 		"threeD": {
 			"title": "3D Döndürme",
@@ -241,7 +242,8 @@
 		"smoothing": "Yumuşatma",
 		"motionBlur": "Hareket Bulanıklığı",
 		"clickBounce": "Tıklama Sıçraması",
-		"clipToBounds": "Tuvale Kırp"
+		"clipToBounds": "Tuvale Kırp",
+		"clipToBoundsDescription": "İmleci video çerçevesi içinde tutar. Kapatırsanız imleç kenarların dışına taşabilir; yakınlaştırma veya kaydırmada kullanışlıdır."
 	},
 	"language": {
 		"title": "Dil"

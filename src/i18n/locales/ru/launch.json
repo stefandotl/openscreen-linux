@@ -9,7 +9,8 @@
 		"openVideoFile": "Открыть видеофайл",
 		"openProject": "Открыть проект",
 		"useVerticalTray": "Использовать вертикальную панель",
-		"useHorizontalTray": "Использовать горизонтальную панель"
+		"useHorizontalTray": "Использовать горизонтальную панель",
+		"openStudio": "Открыть студию"
 	},
 	"audio": {
 		"enableSystemAudio": "Включить системное аудио",
@@ -30,6 +31,9 @@
 		"loading": "Загрузка источников...",
 		"screens": "Экраны ({{count}})",
 		"windows": "Окна ({{count}})",
+		"emptyTitle": "Экраны и окна не найдены",
+		"emptyDescription": "Если вы только что разрешили запись экрана, перезагрузите этот список. В macOS может потребоваться заново открыть Videtio.",
+		"loadFailedDescription": "Videtio не удалось загрузить источники захвата. Перезагрузите этот список и попробуйте снова.",
 		"defaultSourceName": "Экран"
 	},
 	"recording": {

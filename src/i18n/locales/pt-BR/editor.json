@@ -57,17 +57,29 @@
 		"discarded": "Gravação descartada"
 	},
 	"emptyState": {
+		"title": "Nenhum projeto aberto",
+		"description": "Importe um vídeo para começar a editar ou carregue um projeto Videtio existente.",
 		"sceneTitle": "Esta cena está vazia",
 		"sceneDescription": "Grave um novo vídeo para esta cena ou importe um arquivo de vídeo existente.",
 		"recordSceneButton": "Gravar cena",
+		"importVideoButton": "Importar arquivo de vídeo…",
+		"loadProjectButton": "Carregar projeto…",
+		"supportedFormats": "Formatos suportados: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
+		"dragDropHint": "Arquivo de vídeo ou projeto .videtio",
+		"dropOverlay": "Solte o vídeo ou o projeto aqui",
 		"sceneDragDropHint": "Arquivo de vídeo compatível",
 		"sceneDropOverlay": "Solte o vídeo aqui",
 		"dropErrors": {
+			"unsupportedFormatTitle": "Formato não suportado",
+			"unsupportedFormatMessage": "Somente arquivos de projeto .videtio podem ser soltos aqui. Para importar um vídeo, use o botão \"Importar arquivo de vídeo…\" desta tela.",
 			"unsupportedVideoOrProjectMessage": "Solte aqui um arquivo de vídeo compatível ou um projeto .videtio.",
+			"couldNotOpenTitle": "Não foi possível abrir o arquivo",
+			"couldNotOpenMessage": "O arquivo de projeto não pôde ser aberto. O vídeo referenciado pode ter sido movido ou excluído.",
 			"couldNotOpenDroppedMessage": "Não foi possível abrir o arquivo solto. Ele pode ter sido movido, excluído ou estar ilegível."
 		}
 	},
 	"loadingVideo": "Carregando vídeo...",
+	"loadingEditor": "Carregando editor...",
 	"errors": {
 		"noVideoLoaded": "Nenhum vídeo carregado",
 		"videoNotReady": "Vídeo não está pronto",
@@ -110,7 +122,8 @@
 		"cameraFormatChanged": "O formato da câmera mudou de {{before}} para {{after}}. A gravação foi interrompida para evitar vídeo desfocado ou barras pretas.",
 		"cameraLagging": "A webcam ficou {{lag}} atrás da linha do tempo. A gravação foi interrompida porque o vídeo da webcam ficaria deslocado pelo resto da gravação.",
 		"cameraResolutionTooLow": "A câmera virtual está fornecendo apenas {{resolution}}. Defina o Camera Lab para pelo menos 1280x720 e inicie a gravação novamente.",
-		"permissionDenied": "Permissão de gravação negada. Por favor, permita a gravação de tela."
+		"permissionDenied": "Permissão de gravação negada. Por favor, permita a gravação de tela.",
+		"accessibilityAllowAndRetry": "Permita o acesso de Acessibilidade para o Videtio e pressione gravar novamente para iniciar a contagem."
 	},
 	"autoCaptions": {
 		"button": "Legendas automáticas",

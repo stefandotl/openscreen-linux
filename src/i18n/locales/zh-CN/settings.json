@@ -8,7 +8,8 @@
 			"title": "对焦模式",
 			"manual": "手动",
 			"auto": "自动",
-			"autoDescription": "摄像头跟随录制时的光标位置"
+			"autoDescription": "摄像头跟随录制时的光标位置",
+			"lockedDisclaimer": "由时间线上的全局自动对焦开关控制。关闭后可为每个缩放单独设置对焦模式。"
 		},
 		"threeD": {
 			"title": "3D 旋转",
@@ -241,7 +242,8 @@
 		"smoothing": "平滑",
 		"motionBlur": "运动模糊",
 		"clickBounce": "点击弹跳",
-		"clipToBounds": "裁剪到画布"
+		"clipToBounds": "裁剪到画布",
+		"clipToBoundsDescription": "让光标保持在视频画面内。关闭后光标可以超出边缘，在缩放或平移时很有用。"
 	},
 	"language": {
 		"title": "语言"

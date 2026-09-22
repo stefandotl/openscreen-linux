@@ -9,7 +9,8 @@
 		"openVideoFile": "فتح ملف فيديو",
 		"openProject": "فتح مشروع",
 		"useVerticalTray": "استخدام الشريط العمودي",
-		"useHorizontalTray": "استخدام الشريط الأفقي"
+		"useHorizontalTray": "استخدام الشريط الأفقي",
+		"openStudio": "فتح الاستوديو"
 	},
 	"audio": {
 		"enableSystemAudio": "تفعيل صوت النظام",
@@ -30,6 +31,9 @@
 		"loading": "جاري تحميل المصادر...",
 		"screens": "الشاشات ({{count}})",
 		"windows": "النوافذ ({{count}})",
+		"emptyTitle": "لم يتم العثور على شاشات أو نوافذ",
+		"emptyDescription": "إذا منحت إذن تسجيل الشاشة للتو، فأعد تحميل هذا المنتقي. في macOS قد تحتاج إلى إعادة فتح Videtio.",
+		"loadFailedDescription": "تعذّر على Videtio تحميل مصادر الالتقاط. أعد تحميل هذا المنتقي وحاول مرة أخرى.",
 		"defaultSourceName": "الشاشة"
 	},
 	"recording": {

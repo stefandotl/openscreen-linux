@@ -8,7 +8,8 @@
 			"title": "Chế độ lấy nét",
 			"manual": "Thủ công",
 			"auto": "Tự động",
-			"autoDescription": "Máy ảnh đi theo vị trí con trỏ đã ghi"
+			"autoDescription": "Máy ảnh đi theo vị trí con trỏ đã ghi",
+			"lockedDisclaimer": "Do nút bật/tắt Tự động lấy nét chung trên dòng thời gian điều khiển. Tắt để đặt chế độ lấy nét cho từng vùng thu phóng."
 		},
 		"customScale": "Thu phóng tùy chỉnh",
 		"position": {
@@ -241,7 +242,8 @@
 		"smoothing": "Làm mượt",
 		"motionBlur": "Làm mờ chuyển động",
 		"clickBounce": "Nảy khi nhấp",
-		"clipToBounds": "Cắt theo khung"
+		"clipToBounds": "Cắt theo khung",
+		"clipToBoundsDescription": "Giữ con trỏ bên trong khung video. Tắt để con trỏ vượt qua các cạnh — hữu ích khi thu phóng hoặc di chuyển."
 	},
 	"language": {
 		"title": "Ngôn ngữ"

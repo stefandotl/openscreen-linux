@@ -9,7 +9,8 @@
 		"openVideoFile": "Mở tệp video",
 		"openProject": "Mở dự án",
 		"useVerticalTray": "Dùng khay dọc",
-		"useHorizontalTray": "Dùng khay ngang"
+		"useHorizontalTray": "Dùng khay ngang",
+		"openStudio": "Mở Studio"
 	},
 	"audio": {
 		"enableSystemAudio": "Bật âm thanh hệ thống",
@@ -30,6 +31,9 @@
 		"loading": "Đang tải nguồn...",
 		"screens": "Màn hình ({{count}})",
 		"windows": "Cửa sổ ({{count}})",
+		"emptyTitle": "Không tìm thấy màn hình hoặc cửa sổ nào",
+		"emptyDescription": "Nếu bạn vừa cấp quyền ghi màn hình, hãy tải lại trình chọn này. Trên macOS, bạn có thể cần mở lại Videtio.",
+		"loadFailedDescription": "Videtio không thể tải nguồn ghi. Hãy tải lại trình chọn này và thử lại.",
 		"defaultSourceName": "Màn hình"
 	},
 	"recording": {

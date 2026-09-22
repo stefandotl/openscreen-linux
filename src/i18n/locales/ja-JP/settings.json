@@ -8,7 +8,8 @@
 			"title": "フォーカスモード",
 			"manual": "手動",
 			"auto": "自動",
-			"autoDescription": "表示範囲が録画中のカーソル位置に追従します"
+			"autoDescription": "表示範囲が録画中のカーソル位置に追従します",
+			"lockedDisclaimer": "タイムラインの全体オートフォーカス切り替えで制御されます。オフにするとズームごとにフォーカスモードを設定できます。"
 		},
 		"threeD": {
 			"title": "3D回転",
@@ -241,7 +242,8 @@
 		"smoothing": "スムージング",
 		"motionBlur": "モーションブラー",
 		"clickBounce": "クリックバウンス",
-		"clipToBounds": "キャンバスにクリップ"
+		"clipToBounds": "キャンバスにクリップ",
+		"clipToBoundsDescription": "カーソルを映像フレーム内に収めます。オフにするとカーソルが端を超えて表示されます（ズームやパン時に便利）。"
 	},
 	"language": {
 		"title": "言語"

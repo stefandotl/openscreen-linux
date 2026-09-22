@@ -57,17 +57,29 @@
 		"discarded": "Registrazione scartata"
 	},
 	"emptyState": {
+		"title": "Nessun progetto aperto",
+		"description": "Importa un video per iniziare a modificare oppure carica un progetto Videtio esistente.",
 		"sceneTitle": "Questa scena è vuota",
 		"sceneDescription": "Registra un nuovo video per questa scena o importa un file video esistente.",
 		"recordSceneButton": "Registra scena",
+		"importVideoButton": "Importa file video…",
+		"loadProjectButton": "Carica progetto…",
+		"supportedFormats": "Formati supportati: MP4, MOV, WebM, MKV, AVI, M4V, WMV",
+		"dragDropHint": "File video o progetto .videtio",
+		"dropOverlay": "Trascina qui il video o il progetto",
 		"sceneDragDropHint": "File video supportato",
 		"sceneDropOverlay": "Trascina qui il video",
 		"dropErrors": {
+			"unsupportedFormatTitle": "Formato non supportato",
+			"unsupportedFormatMessage": "Qui puoi trascinare solo file di progetto .videtio. Per importare un video usa il pulsante \"Importa file video…\" in questa schermata.",
 			"unsupportedVideoOrProjectMessage": "Trascina qui un file video supportato o un progetto .videtio.",
+			"couldNotOpenTitle": "Impossibile aprire il file",
+			"couldNotOpenMessage": "Non è stato possibile aprire il file di progetto. Il video a cui fa riferimento potrebbe essere stato spostato o eliminato.",
 			"couldNotOpenDroppedMessage": "Impossibile aprire il file trascinato. Potrebbe essere stato spostato, eliminato o non essere leggibile."
 		}
 	},
 	"loadingVideo": "Caricamento video...",
+	"loadingEditor": "Caricamento editor...",
 	"errors": {
 		"noVideoLoaded": "Nessun video caricato",
 		"videoNotReady": "Video non pronto",

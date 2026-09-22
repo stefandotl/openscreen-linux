@@ -1,5 +1,6 @@
 {
 	"zoom": {
+		"previewHold": "Segure para pré-visualizar o efeito de zoom",
 		"level": "Nível de Zoom",
 		"customScale": "Zoom Personalizado",
 		"selectRegion": "Selecione uma região de zoom para ajustar",
@@ -8,7 +9,8 @@
 			"title": "Modo de Foco",
 			"manual": "Manual",
 			"auto": "Automático",
-			"autoDescription": "A câmera segue a posição do cursor gravado"
+			"autoDescription": "A câmera segue a posição do cursor gravado",
+			"lockedDisclaimer": "Controlado pelo botão global de Auto-Focus na linha do tempo. Desative-o para definir o modo de foco por zoom."
 		},
 		"threeD": {
 			"title": "Rotação 3D",
@@ -46,6 +48,7 @@
 		"noWebcam": "Sem Webcam",
 		"webcamShape": "Formato da Câmera",
 		"webcamSize": "Tamanho da Webcam",
+		"mirrorWebcam": "Espelhar webcam",
 		"rotateWebcam": "Girar Webcam",
 		"webcamFraming": "Enquadramento da webcam",
 		"webcamZoom": "Zoom",
@@ -115,7 +118,8 @@
 	},
 	"project": {
 		"save": "Salvar Projeto",
-		"load": "Carregar Projeto"
+		"load": "Carregar Projeto",
+		"new": "Novo projeto"
 	},
 	"recordings": {
 		"openFolder": "Abrir pasta de gravações",
@@ -125,10 +129,6 @@
 		"videoButton": "Exportar Vídeo",
 		"gifButton": "Exportar GIF",
 		"chooseSaveLocation": "Escolher Local para Salvar"
-	},
-	"links": {
-		"reportBug": "Relatar Bug",
-		"starOnGithub": "Dar Estrela no GitHub"
 	},
 	"imageUpload": {
 		"invalidFileType": "Tipo de arquivo inválido",
@@ -242,5 +242,14 @@
 	},
 	"language": {
 		"title": "Idioma"
+	},
+	"support": {
+		"reportBug": "Reportar bug",
+		"saveDiagnostics": "Salvar diagnósticos",
+		"starOnGithub": "Favoritar no GitHub"
+	},
+	"timeline": {
+		"title": "Linha do tempo",
+		"waveform": "Mostrar forma de onda de áudio na faixa de corte"
 	}
 }
