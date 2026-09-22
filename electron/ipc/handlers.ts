@@ -3585,6 +3585,9 @@ export function registerIpcHandlers(
 			await Promise.all(deletableTargets.map((target) => fs.rm(target, { force: true })));
 			await removeEmptyRecordingFolder(path.dirname(session.screenVideoPath));
 
+			// The pending transition still points at the deleted recording's media.
+			// Keeping it would make the editor restore a dead scene on the next visit.
+			recordingProjectTransition.clear();
 			setCurrentRecordingSessionState(null);
 			clearCurrentProjectForNewMedia();
 
