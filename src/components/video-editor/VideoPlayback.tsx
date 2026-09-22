@@ -834,16 +834,28 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					}
 				} catch (error) {
 					allowPlaybackRef.current = false;
+					// A failed/aborted play must not leave the UI claiming "playing" while
+					// the element is paused: the next toggle would only issue pause() and
+					// never recover.
+					if (vid.paused) {
+						isPlayingRef.current = false;
+						onPlayStateChangeRef.current(false);
+					}
 					throw error;
 				}
 			},
 			pause: () => {
 				const video = videoRef.current;
 				allowPlaybackRef.current = false;
-				if (!video) {
-					return;
+				if (video) {
+					video.pause();
 				}
-				video.pause();
+				// pause() on an already-paused element fires no pause event, so sync
+				// the React/isPlaying state here or a desync deadlocks the toggle.
+				if (!video || video.paused) {
+					isPlayingRef.current = false;
+					onPlayStateChangeRef.current(false);
+				}
 				supplementalAudioRef.current?.pause();
 				webcamVideoRef.current?.pause();
 			},

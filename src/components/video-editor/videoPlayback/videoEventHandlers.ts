@@ -129,6 +129,23 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		emitTime(skipToTime);
 	};
 
+	/**
+	 * A superseded resume play() may leave the element paused with isPlaying still true.
+	 * When no newer trim seek or seek is lined up to resume, that is a real stop: drop
+	 * the play intent so the UI and toggle do not deadlock on a paused element.
+	 */
+	const reconcileAbortedResume = () => {
+		if (!video.paused || pendingTrimSkipEndSeconds !== null || isSeekingRef.current) {
+			return;
+		}
+		isPlayingRef.current = false;
+		onPlayStateChange(false);
+		if (timeUpdateAnimationRef.current) {
+			cancelAnimationFrame(timeUpdateAnimationRef.current);
+			timeUpdateAnimationRef.current = null;
+		}
+	};
+
 	const resumeAfterTrimSeek = () => {
 		if (pendingTrimSkipEndSeconds === null) {
 			return;
@@ -144,6 +161,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 			// element while Chromium is still resolving play(). That AbortError is a
 			// superseded request, not a playback failure for the project.
 			if (isAbortError(error)) {
+				reconcileAbortedResume();
 				return;
 			}
 			allowPlaybackRef.current = false;
@@ -294,6 +312,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 					// A scene handoff can pause or reload this element while a user seek is still
 					// resolving play(). That superseded request must not surface as a project error.
 					if (isAbortError(error)) {
+						reconcileAbortedResume();
 						return;
 					}
 					allowPlaybackRef.current = false;

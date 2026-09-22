@@ -2287,12 +2287,20 @@ export default function VideoEditor() {
 	const togglePlayPause = useCallback(() => {
 		const playback = videoPlaybackRef.current;
 		if (playbackScopeRef.current === "scene") {
-			if (!playback?.video) return;
-			if (isPlaying) {
+			const video = playback?.video;
+			if (!video) return;
+			// The media element is authoritative. React isPlaying can lag behind an
+			// aborted resume; pause() on an already-paused element never fires an event
+			// to correct that, which deadlocks every subsequent click.
+			const actuallyPlaying = !video.paused && !video.ended;
+			if (actuallyPlaying) {
 				playback.pause();
 			} else {
 				void playback.play().catch((playError) => {
 					console.error("Video play failed:", playError);
+					if (video.paused) {
+						setIsPlaying(false);
+					}
 				});
 			}
 			return;
@@ -2332,7 +2340,6 @@ export default function VideoEditor() {
 		if (position) moveProjectPlaybackTo(position, true);
 	}, [
 		failProjectPlayback,
-		isPlaying,
 		moveProjectPlaybackTo,
 		projectMetadataReady,
 		projectPlaybackTime,

@@ -43,9 +43,10 @@ function createHandlers(
 	const scrubEndTimerRef = { current: null as number | null };
 	const onPlayStateChange = vi.fn();
 	const isPlayingRef = { current: options.isPlaying ?? false };
+	const isSeekingRef = { current: false };
 	const handlers = createVideoEventHandlers({
 		video,
-		isSeekingRef: { current: false },
+		isSeekingRef,
 		isPlayingRef,
 		allowPlaybackRef: { current: allowPlayback },
 		currentTimeRef: { current: 0 },
@@ -73,6 +74,7 @@ function createHandlers(
 		setPaused: (value: boolean) => {
 			paused = value;
 		},
+		isSeekingRef,
 	};
 }
 
@@ -276,7 +278,7 @@ describe("video seeking playback intent", () => {
 		requestFrame.mockRestore();
 	});
 
-	it("ignores a superseded AbortError while resuming after a user seek", async () => {
+	it("clears playback state when a superseded AbortError leaves the element stopped", async () => {
 		const onPlaybackError = vi.fn();
 		const { handlers, play, setPaused, isPlayingRef, onPlayStateChange } = createHandlers(true, {
 			currentTime: 4,
@@ -288,6 +290,33 @@ describe("video seeking playback intent", () => {
 		play.mockRejectedValueOnce(
 			new DOMException("The play() request was interrupted by a call to pause().", "AbortError"),
 		);
+		handlers.handleSeeked();
+		await Promise.resolve();
+
+		expect(play).toHaveBeenCalledOnce();
+		expect(onPlaybackError).not.toHaveBeenCalled();
+		expect(isPlayingRef.current).toBe(false);
+		expect(onPlayStateChange).toHaveBeenCalledWith(false);
+	});
+
+	it("keeps play intent when a newer seek supersedes the aborted resume", async () => {
+		const onPlaybackError = vi.fn();
+		const { handlers, play, setPaused, isPlayingRef, onPlayStateChange, isSeekingRef } =
+			createHandlers(true, {
+				currentTime: 4,
+				isPlaying: true,
+				onPlaybackError,
+			});
+
+		setPaused(true);
+		play.mockImplementationOnce(() => {
+			// handleSeeked clears isSeekingRef synchronously; a newer seek that starts
+			// while play() is still resolving must keep the play intent alive.
+			isSeekingRef.current = true;
+			return Promise.reject(
+				new DOMException("The play() request was interrupted by a call to pause().", "AbortError"),
+			);
+		});
 		handlers.handleSeeked();
 		await Promise.resolve();
 
