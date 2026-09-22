@@ -35,6 +35,9 @@
 		"panTimeline": "Pan Timeline",
 		"zoomTimeline": "Zoom Timeline",
 		"frameBack": "Frame Back",
-		"frameForward": "Frame Forward"
+		"frameForward": "Frame Forward",
+		"slowDownPlayback": "Slow Down Playback",
+		"pausePlayback": "Pause Playback",
+		"speedUpPlayback": "Speed Up Playback"
 	}
 }

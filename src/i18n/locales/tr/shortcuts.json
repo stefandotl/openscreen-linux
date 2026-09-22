@@ -35,6 +35,9 @@
 		"panTimeline": "Zaman Çizelgesini Kaydır",
 		"zoomTimeline": "Zaman Çizelgesini Yakınlaştır",
 		"frameBack": "Önceki Kare",
-		"frameForward": "Sonraki Kare"
+		"frameForward": "Sonraki Kare",
+		"slowDownPlayback": "Oynatmayı Yavaşlat",
+		"pausePlayback": "Oynatmayı Duraklat",
+		"speedUpPlayback": "Oynatmayı Hızlandır"
 	}
 }

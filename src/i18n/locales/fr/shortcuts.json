@@ -35,6 +35,9 @@
 		"panTimeline": "Panoramique de la timeline",
 		"zoomTimeline": "Zoom de la timeline",
 		"frameBack": "Image précédente",
-		"frameForward": "Image suivante"
+		"frameForward": "Image suivante",
+		"slowDownPlayback": "Ralentir la lecture",
+		"pausePlayback": "Mettre en pause",
+		"speedUpPlayback": "Accélérer la lecture"
 	}
 }

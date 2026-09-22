@@ -51,7 +51,8 @@
 		"projectTimeline": "Línea de tiempo del proyecto",
 		"sceneTimeline": "Línea de tiempo de la escena",
 		"preparing": "Preparando la reproducción del proyecto…",
-		"noPlayableScenes": "El proyecto no tiene escenas reproducibles."
+		"noPlayableScenes": "El proyecto no tiene escenas reproducibles.",
+		"speed": "Velocidad de reproducción"
 	},
 	"locale": {
 		"name": "Español",

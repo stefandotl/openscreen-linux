@@ -35,6 +35,9 @@
 		"panTimeline": "Панорамирование таймлайна",
 		"zoomTimeline": "Масштабирование таймлайна",
 		"frameBack": "Кадр назад",
-		"frameForward": "Кадр вперёд"
+		"frameForward": "Кадр вперёд",
+		"slowDownPlayback": "Замедлить воспроизведение",
+		"pausePlayback": "Пауза воспроизведения",
+		"speedUpPlayback": "Ускорить воспроизведение"
 	}
 }

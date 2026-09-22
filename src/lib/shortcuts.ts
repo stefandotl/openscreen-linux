@@ -73,6 +73,24 @@ export const FIXED_SHORTCUTS: FixedShortcut[] = [
 		display: "→",
 		bindings: [{ key: "arrowright" }],
 	},
+	{
+		i18nKey: "slowDownPlayback",
+		label: "Slow Down Playback",
+		display: "J",
+		bindings: [{ key: "j" }],
+	},
+	{
+		i18nKey: "pausePlayback",
+		label: "Pause Playback",
+		display: "K",
+		bindings: [{ key: "k" }],
+	},
+	{
+		i18nKey: "speedUpPlayback",
+		label: "Speed Up Playback",
+		display: "L",
+		bindings: [{ key: "l" }],
+	},
 ];
 
 export type ShortcutConflict =

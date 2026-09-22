@@ -9,13 +9,23 @@ function createHandlers(
 		isPlaying?: boolean;
 		onTerminalTrim?: () => boolean | void;
 		trimRegions?: Array<{ id: string; startMs: number; endMs: number }>;
+		speedRegions?: Array<{ id: string; startMs: number; endMs: number; speed: number }>;
+		previewSpeed?: number;
 		onScrubChange?: (scrubbing: boolean) => void;
 		onPlaybackError?: (message: string) => void;
 	} = {},
 ) {
 	const video = document.createElement("video");
 	let paused = false;
+	let playbackRate = 1;
 	Object.defineProperty(video, "paused", { configurable: true, get: () => paused });
+	Object.defineProperty(video, "playbackRate", {
+		configurable: true,
+		get: () => playbackRate,
+		set: (value: number) => {
+			playbackRate = value;
+		},
+	});
 	Object.defineProperty(video, "duration", {
 		configurable: true,
 		value: options.duration ?? 10,
@@ -45,7 +55,8 @@ function createHandlers(
 		onTerminalTrim: options.onTerminalTrim,
 		onPlaybackError: options.onPlaybackError,
 		trimRegionsRef: { current: options.trimRegions ?? [] },
-		speedRegionsRef: { current: [] },
+		speedRegionsRef: { current: options.speedRegions ?? [] },
+		previewSpeedRef: { current: options.previewSpeed ?? 1 },
 		isScrubbingRef,
 		scrubEndTimerRef,
 		onScrubChange: options.onScrubChange,
@@ -386,6 +397,48 @@ describe("video seeking playback intent", () => {
 
 		expect(onTimeUpdate).toHaveBeenCalledTimes(2);
 		expect(onTimeUpdate).toHaveBeenLastCalledWith(0.034);
+		requestFrame.mockRestore();
+	});
+
+	it("scales an active speed region by the preview speed multiplier", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const { handlers, video } = createHandlers(true, {
+			currentTime: 2,
+			speedRegions: [{ id: "fast", startMs: 1000, endMs: 3000, speed: 2 }],
+			previewSpeed: 1.5,
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+
+		expect(video.playbackRate).toBe(3);
+		requestFrame.mockRestore();
+	});
+
+	it("applies the preview speed outside any speed region", () => {
+		let frameCallback: FrameRequestCallback | null = null;
+		const requestFrame = vi
+			.spyOn(window, "requestAnimationFrame")
+			.mockImplementation((callback) => {
+				frameCallback = callback;
+				return 1;
+			});
+		const { handlers, video } = createHandlers(true, {
+			currentTime: 5,
+			speedRegions: [{ id: "fast", startMs: 1000, endMs: 3000, speed: 2 }],
+			previewSpeed: 4,
+		});
+
+		handlers.handlePlay();
+		(frameCallback as FrameRequestCallback)(0);
+
+		expect(video.playbackRate).toBe(4);
 		requestFrame.mockRestore();
 	});
 

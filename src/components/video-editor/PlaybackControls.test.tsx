@@ -76,3 +76,66 @@ describe("PlaybackControls project scope", () => {
 		expect(onScopeChange).toHaveBeenCalledWith("project");
 	});
 });
+
+describe("PlaybackControls preview speed", () => {
+	it("shows the current preview speed and reports a picked speed", () => {
+		const onPreviewSpeedChange = vi.fn();
+		render(
+			<I18nProvider>
+				<PlaybackControls
+					isPlaying={false}
+					currentTime={0}
+					duration={5}
+					previewSpeed={1}
+					onPreviewSpeedChange={onPreviewSpeedChange}
+					onTogglePlayPause={vi.fn()}
+					onSeek={vi.fn()}
+				/>
+			</I18nProvider>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Playback Speed" }));
+
+		const option = screen.getByRole("button", { name: "2×" });
+		expect(option).toHaveAttribute("aria-pressed", "false");
+		fireEvent.click(option);
+
+		expect(onPreviewSpeedChange).toHaveBeenCalledWith(2);
+	});
+
+	it("marks the active preview speed as pressed", () => {
+		render(
+			<I18nProvider>
+				<PlaybackControls
+					isPlaying={false}
+					currentTime={0}
+					duration={5}
+					previewSpeed={3}
+					onPreviewSpeedChange={vi.fn()}
+					onTogglePlayPause={vi.fn()}
+					onSeek={vi.fn()}
+				/>
+			</I18nProvider>,
+		);
+
+		fireEvent.click(screen.getByRole("button", { name: "Playback Speed" }));
+
+		expect(screen.getByRole("button", { name: "3×" })).toHaveAttribute("aria-pressed", "true");
+	});
+
+	it("hides the speed control when the editor cannot change preview speed", () => {
+		render(
+			<I18nProvider>
+				<PlaybackControls
+					isPlaying={false}
+					currentTime={0}
+					duration={5}
+					onTogglePlayPause={vi.fn()}
+					onSeek={vi.fn()}
+				/>
+			</I18nProvider>,
+		);
+
+		expect(screen.queryByRole("button", { name: "Playback Speed" })).not.toBeInTheDocument();
+	});
+});

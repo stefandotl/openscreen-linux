@@ -51,7 +51,8 @@
 		"projectTimeline": "Project timeline",
 		"sceneTimeline": "Scene timeline",
 		"preparing": "Preparing project playback…",
-		"noPlayableScenes": "The project has no playable scenes."
+		"noPlayableScenes": "The project has no playable scenes.",
+		"speed": "Playback Speed"
 	},
 	"locale": {
 		"name": "English",

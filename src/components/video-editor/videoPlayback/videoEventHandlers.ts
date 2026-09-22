@@ -1,4 +1,5 @@
 import type React from "react";
+import { resolvePreviewPlaybackRate } from "../previewSpeed";
 import type { SpeedRegion, TrimRegion } from "../types";
 
 // Keep "scrub mode" on for a brief tail after `seeked`: rapid drag-scrubbing fires
@@ -26,6 +27,7 @@ interface VideoEventHandlersParams {
 	onPlaybackError?: (message: string) => void;
 	trimRegionsRef: React.MutableRefObject<TrimRegion[]>;
 	speedRegionsRef: React.MutableRefObject<SpeedRegion[]>;
+	previewSpeedRef: React.MutableRefObject<number>;
 	isScrubbingRef?: React.MutableRefObject<boolean>;
 	scrubEndTimerRef?: React.MutableRefObject<number | null>;
 	onScrubChange?: (scrubbing: boolean) => void;
@@ -45,6 +47,7 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		onPlaybackError,
 		trimRegionsRef,
 		speedRegionsRef,
+		previewSpeedRef,
 		isScrubbingRef,
 		scrubEndTimerRef,
 		onScrubChange,
@@ -173,7 +176,10 @@ export function createVideoEventHandlers(params: VideoEventHandlersParams) {
 		} else {
 			continuingPastTerminalTrim = false;
 			const activeSpeedRegion = findActiveSpeedRegion(currentTimeMs);
-			video.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+			video.playbackRate = resolvePreviewPlaybackRate(
+				activeSpeedRegion?.speed ?? null,
+				previewSpeedRef.current,
+			);
 			emitTime(video.currentTime, frameTimestampMs);
 		}
 

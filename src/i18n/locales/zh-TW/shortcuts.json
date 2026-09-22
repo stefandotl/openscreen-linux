@@ -35,6 +35,9 @@
 		"panTimeline": "平移時間軸",
 		"zoomTimeline": "縮放時間軸",
 		"frameBack": "上一影格",
-		"frameForward": "下一影格"
+		"frameForward": "下一影格",
+		"slowDownPlayback": "降低播放速度",
+		"pausePlayback": "暫停播放",
+		"speedUpPlayback": "提高播放速度"
 	}
 }

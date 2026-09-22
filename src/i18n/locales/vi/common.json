@@ -51,7 +51,8 @@
 		"projectTimeline": "Dòng thời gian dự án",
 		"sceneTimeline": "Dòng thời gian cảnh",
 		"preparing": "Đang chuẩn bị phát dự án…",
-		"noPlayableScenes": "Dự án không có cảnh nào có thể phát."
+		"noPlayableScenes": "Dự án không có cảnh nào có thể phát.",
+		"speed": "Tốc độ phát"
 	},
 	"locale": {
 		"name": "Tiếng Việt",

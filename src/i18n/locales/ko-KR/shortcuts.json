@@ -35,6 +35,9 @@
 		"panTimeline": "타임라인 이동",
 		"zoomTimeline": "타임라인 확대/축소",
 		"frameBack": "이전 프레임",
-		"frameForward": "다음 프레임"
+		"frameForward": "다음 프레임",
+		"slowDownPlayback": "재생 속도 낮추기",
+		"pausePlayback": "재생 일시정지",
+		"speedUpPlayback": "재생 속도 높이기"
 	}
 }

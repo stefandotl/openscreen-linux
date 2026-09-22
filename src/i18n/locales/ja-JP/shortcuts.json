@@ -35,6 +35,9 @@
 		"panTimeline": "タイムラインをパン",
 		"zoomTimeline": "タイムラインをズーム",
 		"frameBack": "フレームを戻す",
-		"frameForward": "フレームを進める"
+		"frameForward": "フレームを進める",
+		"slowDownPlayback": "再生を遅くする",
+		"pausePlayback": "再生を一時停止",
+		"speedUpPlayback": "再生を速くする"
 	}
 }

@@ -51,7 +51,8 @@
 		"projectTimeline": "프로젝트 타임라인",
 		"sceneTimeline": "장면 타임라인",
 		"preparing": "프로젝트 재생 준비 중…",
-		"noPlayableScenes": "재생할 수 있는 장면이 없습니다."
+		"noPlayableScenes": "재생할 수 있는 장면이 없습니다.",
+		"speed": "재생 속도"
 	},
 	"locale": {
 		"name": "한국어",

@@ -51,7 +51,8 @@
 		"projectTimeline": "Proje zaman çizelgesi",
 		"sceneTimeline": "Sahne zaman çizelgesi",
 		"preparing": "Proje oynatımı hazırlanıyor…",
-		"noPlayableScenes": "Projede oynatılabilir sahne yok."
+		"noPlayableScenes": "Projede oynatılabilir sahne yok.",
+		"speed": "Oynatma hızı"
 	},
 	"locale": {
 		"name": "Türkçe",

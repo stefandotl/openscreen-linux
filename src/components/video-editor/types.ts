@@ -436,6 +436,25 @@ export const SPEED_OPTIONS: Array<{ speed: PlaybackSpeed; label: string }> = [
 
 export const DEFAULT_PLAYBACK_SPEED: PlaybackSpeed = 1.5;
 
+export const MIN_PREVIEW_SPEED = 0.25;
+export const MAX_PREVIEW_SPEED = 4;
+/**
+ * Preview-only playback ladder. These values scale how fast the editor preview plays back and
+ * never change timeline timing or exported output. Derived from SPEED_OPTIONS so the ladder
+ * matches the speed-region steps users already know, with 1× added as the neutral step.
+ */
+export const PREVIEW_SPEED_OPTIONS: PlaybackSpeed[] = [
+	...SPEED_OPTIONS.filter(({ speed }) => speed >= MIN_PREVIEW_SPEED && speed < 1).map(
+		({ speed }) => speed,
+	),
+	1,
+	...SPEED_OPTIONS.filter(({ speed }) => speed > 1 && speed <= MAX_PREVIEW_SPEED).map(
+		({ speed }) => speed,
+	),
+];
+
+export const DEFAULT_PREVIEW_SPEED: PlaybackSpeed = 1;
+
 export const ZOOM_DEPTH_SCALES: Record<ZoomDepth, number> = {
 	1: 1.25,
 	2: 1.5,

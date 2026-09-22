@@ -13,7 +13,9 @@
 	"reservedShortcut": "Este atalho é reservado para \"{{label}}\" e não pode ser reatribuído.",
 	"savedToast": "Atalhos de teclado salvos",
 	"resetToast": "Atalhos redefinidos para o padrão — clique em Salvar para aplicar",
+	"registrationFailed": "Falha ao registrar o atalho. Ele pode estar em uso por outro aplicativo. Tente outra tecla.",
 	"actions": {
+		"openApp": "Abrir aplicativo",
 		"addZoom": "Adicionar Zoom",
 		"addTrim": "Adicionar Recorte",
 		"addSpeed": "Adicionar Velocidade",
@@ -33,6 +35,9 @@
 		"panTimeline": "Mover Linha do Tempo",
 		"zoomTimeline": "Zoom na Linha do Tempo",
 		"frameBack": "Quadro Anterior",
-		"frameForward": "Próximo Quadro"
+		"frameForward": "Próximo Quadro",
+		"slowDownPlayback": "Diminuir Velocidade",
+		"pausePlayback": "Pausar Reprodução",
+		"speedUpPlayback": "Aumentar Velocidade"
 	}
 }

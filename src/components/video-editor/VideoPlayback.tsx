@@ -57,15 +57,18 @@ import {
 	DEFAULT_EDITOR_LAYOUT_SETTINGS,
 	DEFAULT_SOURCE_DIMENSIONS,
 } from "./editorDefaults";
+import { resolvePreviewPlaybackRate } from "./previewSpeed";
 import {
 	type AnnotationRegion,
 	type BlurData,
 	type CursorTelemetryPoint,
 	computeRotation3DContainScale,
+	DEFAULT_PREVIEW_SPEED,
 	DEFAULT_ROTATION_3D,
 	getZoomScale,
 	isRotation3DIdentity,
 	lerpRotation3D,
+	type PlaybackSpeed,
 	rotation3DPerspective,
 	type SpeedRegion,
 	type TrimRegion,
@@ -142,6 +145,8 @@ interface VideoPlaybackProps {
 	cropRegion?: import("./types").CropRegion;
 	trimRegions?: TrimRegion[];
 	speedRegions?: SpeedRegion[];
+	// Scales preview playback only. Timeline timing and exported output stay untouched.
+	previewSpeed?: PlaybackSpeed;
 	aspectRatio: AspectRatio;
 	cursorRecordingData?: CursorRecordingData | null;
 	annotationRegions?: AnnotationRegion[];
@@ -276,6 +281,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			cropRegion,
 			trimRegions = [],
 			speedRegions = [],
+			previewSpeed = DEFAULT_PREVIEW_SPEED,
 			aspectRatio,
 			cursorRecordingData,
 			annotationRegions = [],
@@ -391,6 +397,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const layoutVideoContentRef = useRef<(() => void) | null>(null);
 		const trimRegionsRef = useRef<TrimRegion[]>([]);
 		const speedRegionsRef = useRef<SpeedRegion[]>([]);
+		const previewSpeedRef = useRef<PlaybackSpeed>(previewSpeed);
 		const motionBlurAmountRef = useRef(motionBlurAmount);
 		const cursorOverlayRef = useRef<PixiCursorOverlay | null>(null);
 		const showCursorRef = useRef(showCursor);
@@ -426,6 +433,41 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			() => hasNativeCursorRecordingData(cursorRecordingData),
 			[cursorRecordingData],
 		);
+
+		/**
+		 * The rate the media element must run at right now: the active timeline speed region, scaled
+		 * by the preview multiplier. VideoPlayback owns reapplying this because the element survives
+		 * both play-state changes and same-media project handoffs.
+		 */
+		const resolveActivePlaybackRate = useCallback((video: HTMLVideoElement) => {
+			const currentTimeMs = video.currentTime * 1000;
+			const activeSpeedRegion =
+				speedRegionsRef.current.find(
+					(region) => currentTimeMs >= region.startMs && currentTimeMs < region.endMs,
+				) ?? null;
+			return resolvePreviewPlaybackRate(activeSpeedRegion?.speed ?? null, previewSpeedRef.current);
+		}, []);
+
+		const applyActivePlaybackRate = useCallback(
+			(video: HTMLVideoElement) => {
+				const rate = resolveActivePlaybackRate(video);
+				if (video.playbackRate !== rate) {
+					video.playbackRate = rate;
+				}
+				const supplementalAudio = supplementalAudioRef.current;
+				if (supplementalAudio) {
+					supplementalAudio.playbackRate = rate;
+				}
+			},
+			[resolveActivePlaybackRate],
+		);
+
+		useEffect(() => {
+			previewSpeedRef.current = previewSpeed;
+			const video = videoRef.current;
+			if (!video) return;
+			applyActivePlaybackRate(video);
+		}, [previewSpeed, applyActivePlaybackRate]);
 
 		const syncResolvedDuration = useCallback(
 			(video: HTMLVideoElement) => {
@@ -713,7 +755,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					{
 						playing,
 						scrubbing,
-						heldPlaybackRate: activeSpeedRegion?.speed,
+						heldPlaybackRate: resolvePreviewPlaybackRate(
+							activeSpeedRegion?.speed ?? null,
+							previewSpeedRef.current,
+						),
 						syncState: webcamSyncStateRef.current,
 						nowMs: performance.now(),
 					},
@@ -1314,7 +1359,10 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				speedRegions.find(
 					(region) => currentTime * 1000 >= region.startMs && currentTime * 1000 < region.endMs,
 				) ?? null;
-			supplementalAudio.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
+			supplementalAudio.playbackRate = resolvePreviewPlaybackRate(
+				activeSpeedRegion?.speed ?? null,
+				previewSpeed,
+			);
 
 			if (!isPlaying) {
 				supplementalAudio.pause();
@@ -1331,7 +1379,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 			supplementalAudio.play().catch(() => {
 				// Keep video playback running even if supplemental preview audio is unavailable.
 			});
-		}, [currentTime, isPlaying, speedRegions, supplementalAudioPath]);
+		}, [currentTime, isPlaying, previewSpeed, speedRegions, supplementalAudioPath]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;
@@ -1408,10 +1456,13 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					onPlaybackError: (message) => onErrorRef.current(message),
 					trimRegionsRef,
 					speedRegionsRef,
+					previewSpeedRef,
 					isScrubbingRef,
 					scrubEndTimerRef,
 					onScrubChange: (scrubbing) => setIsScrubbing(scrubbing),
 				});
+
+			applyActivePlaybackRate(video);
 
 			video.addEventListener("play", handlePlay);
 			video.addEventListener("pause", handlePause);
@@ -1468,7 +1519,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				videoSpriteRef.current = null;
 				videoSourceRef.current = null;
 			};
-		}, [pixiReady, videoReady]);
+		}, [pixiReady, videoReady, applyActivePlaybackRate]);
 
 		useEffect(() => {
 			if (!pixiReady || !videoReady) return;

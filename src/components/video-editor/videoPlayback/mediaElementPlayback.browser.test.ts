@@ -139,6 +139,7 @@ describe("trimmed playback", () => {
 				],
 			},
 			speedRegionsRef: { current: [] },
+			previewSpeedRef: { current: 1 },
 		});
 
 		video.addEventListener("play", handlers.handlePlay);

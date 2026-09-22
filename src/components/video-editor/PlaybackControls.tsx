@@ -1,7 +1,11 @@
-import { Maximize, Minimize, Pause, Play } from "lucide-react";
+import { Gauge, Maximize, Minimize, Pause, Play } from "lucide-react";
+import { useState } from "react";
 import { useScopedT } from "@/contexts/I18nContext";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
+import { formatPreviewSpeedLabel } from "./previewSpeed";
+import { DEFAULT_PREVIEW_SPEED, type PlaybackSpeed, PREVIEW_SPEED_OPTIONS } from "./types";
 
 interface PlaybackControlsProps {
 	isPlaying: boolean;
@@ -12,6 +16,8 @@ interface PlaybackControlsProps {
 	projectSegments?: ProjectPlaybackRailSegment[];
 	projectSceneMarkers?: ProjectPlaybackRailMarker[];
 	onScopeChange?: (scope: "scene" | "project") => void;
+	previewSpeed?: PlaybackSpeed;
+	onPreviewSpeedChange?: (speed: PlaybackSpeed) => void;
 	isFullscreen?: boolean;
 	onToggleFullscreen?: () => void;
 	onTogglePlayPause: () => void;
@@ -41,12 +47,15 @@ export default function PlaybackControls({
 	projectSegments = [],
 	projectSceneMarkers = [],
 	onScopeChange,
+	previewSpeed = DEFAULT_PREVIEW_SPEED,
+	onPreviewSpeedChange,
 	isFullscreen = false,
 	onToggleFullscreen,
 	onTogglePlayPause,
 	onSeek,
 }: PlaybackControlsProps) {
 	const t = useScopedT("common");
+	const [isSpeedMenuOpen, setIsSpeedMenuOpen] = useState(false);
 
 	function formatTime(seconds: number) {
 		if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return "0:00";
@@ -197,6 +206,51 @@ export default function PlaybackControls({
 						<Maximize className="w-3.5 h-3.5" />
 					)}
 				</Button>
+			)}
+
+			{onPreviewSpeedChange && (
+				<Popover open={isSpeedMenuOpen} onOpenChange={setIsSpeedMenuOpen}>
+					<PopoverTrigger asChild>
+						<Button
+							size="icon"
+							variant="ghost"
+							className="h-7 w-auto min-w-7 px-1.5 gap-1 rounded-full transition-all duration-200 border border-transparent bg-transparent hover:bg-white/10 text-white hover:text-white hover:border-white/10 shrink-0 shadow-none ml-0.5"
+							aria-label={t("playback.speed")}
+							title={t("playback.speed")}
+						>
+							<Gauge className="w-3.5 h-3.5" />
+							<span className="text-[9px] font-semibold tabular-nums">
+								{formatPreviewSpeedLabel(previewSpeed)}
+							</span>
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent
+						side="top"
+						align="end"
+						sideOffset={8}
+						className="w-auto min-w-[60px] rounded-xl border border-white/10 bg-[#1a1a1c] p-1 shadow-xl"
+					>
+						{PREVIEW_SPEED_OPTIONS.map((option) => (
+							<button
+								key={option}
+								type="button"
+								onClick={() => {
+									onPreviewSpeedChange(option);
+									setIsSpeedMenuOpen(false);
+								}}
+								aria-pressed={option === previewSpeed}
+								className={cn(
+									"block w-full rounded-md px-3 py-1 text-left text-[11px] font-semibold tabular-nums transition-colors",
+									option === previewSpeed
+										? "bg-white text-black"
+										: "text-white/70 hover:bg-white/10 hover:text-white",
+								)}
+							>
+								{formatPreviewSpeedLabel(option)}
+							</button>
+						))}
+					</PopoverContent>
+				</Popover>
 			)}
 		</div>
 	);

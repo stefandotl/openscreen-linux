@@ -51,7 +51,8 @@
 		"projectTimeline": "项目时间线",
 		"sceneTimeline": "场景时间线",
 		"preparing": "正在准备项目播放…",
-		"noPlayableScenes": "项目中没有可播放的场景。"
+		"noPlayableScenes": "项目中没有可播放的场景。",
+		"speed": "播放速度"
 	},
 	"locale": {
 		"name": "简体中文",

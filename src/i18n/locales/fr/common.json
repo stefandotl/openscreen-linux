@@ -51,7 +51,8 @@
 		"projectTimeline": "Chronologie du projet",
 		"sceneTimeline": "Chronologie de la scène",
 		"preparing": "Préparation de la lecture du projet…",
-		"noPlayableScenes": "Le projet ne contient aucune scène lisible."
+		"noPlayableScenes": "Le projet ne contient aucune scène lisible.",
+		"speed": "Vitesse de lecture"
 	},
 	"locale": {
 		"name": "Français",

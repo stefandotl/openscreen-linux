@@ -51,7 +51,8 @@
 		"projectTimeline": "Timeline del progetto",
 		"sceneTimeline": "Timeline della scena",
 		"preparing": "Preparazione della riproduzione del progetto…",
-		"noPlayableScenes": "Il progetto non contiene scene riproducibili."
+		"noPlayableScenes": "Il progetto non contiene scene riproducibili.",
+		"speed": "Velocità di riproduzione"
 	},
 	"locale": {
 		"name": "Italiano",

@@ -51,7 +51,8 @@
 		"projectTimeline": "プロジェクトタイムライン",
 		"sceneTimeline": "シーンタイムライン",
 		"preparing": "プロジェクト再生を準備中…",
-		"noPlayableScenes": "再生可能なシーンがありません。"
+		"noPlayableScenes": "再生可能なシーンがありません。",
+		"speed": "再生速度"
 	},
 	"locale": {
 		"name": "日本語",

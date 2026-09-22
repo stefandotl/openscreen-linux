@@ -116,6 +116,7 @@ import {
 } from "./editorDefaults";
 import PlaybackControls from "./PlaybackControls";
 import ProjectPlaybackPreloader from "./ProjectPlaybackPreloader";
+import { resolvePreviewPlaybackRate, stepPreviewSpeed } from "./previewSpeed";
 import {
 	createProjectData,
 	createProjectSnapshot,
@@ -173,6 +174,7 @@ import {
 	DEFAULT_BLUR_DATA,
 	DEFAULT_FIGURE_DATA,
 	DEFAULT_PLAYBACK_SPEED,
+	DEFAULT_PREVIEW_SPEED,
 	DEFAULT_WEBCAM_FRAMING,
 	DEFAULT_ZOOM_DEPTH,
 	type FigureData,
@@ -345,6 +347,10 @@ export default function VideoEditor() {
 	durationRef.current = duration;
 	const [playbackScope, setPlaybackScope] = useState<"scene" | "project">("scene");
 	const playbackScopeRef = useRef<"scene" | "project">("scene");
+	// Preview-only playback multiplier. It survives scene switches and project playback because
+	// the editor owns it; it never reaches timeline timing or the export plan.
+	const [previewSpeed, setPreviewSpeed] = useState<PlaybackSpeed>(DEFAULT_PREVIEW_SPEED);
+	const previewSpeedRef = useRef<PlaybackSpeed>(DEFAULT_PREVIEW_SPEED);
 	const [projectPlaybackState, setProjectPlaybackState] =
 		useState<ProjectPlaybackControllerState>("scene");
 	const projectPlaybackStateRef = useRef<ProjectPlaybackControllerState>("scene");
@@ -442,7 +448,7 @@ export default function VideoEditor() {
 	const nextTrimIdRef = useRef(1);
 	const nextSpeedIdRef = useRef(1);
 
-	const { shortcuts, isMac } = useShortcuts();
+	const { shortcuts, isMac, isConfigOpen: isShortcutsConfigOpen } = useShortcuts();
 	// Windows recordings include captured cursor assets. macOS hides the system
 	// cursor in ScreenCaptureKit and can render telemetry-only samples with
 	// Videtio's default arrow asset. Linux telemetry stays available for
@@ -2145,7 +2151,10 @@ export default function VideoEditor() {
 				setSelectedAnnotationId(null);
 				setSelectedAudioId(null);
 				setSelectedBlurId(null);
-				playback.video.playbackRate = nextSegment.sourceSegments[0]?.speed ?? 1;
+				playback.video.playbackRate = resolvePreviewPlaybackRate(
+					nextSegment.sourceSegments[0]?.speed ?? null,
+					previewSpeedRef.current,
+				);
 				readyProjectPlaybackKeyRef.current = createScenePlaybackKey(
 					nextScene.id,
 					toFileUrl(nextScene.media.screenVideoPath),
@@ -2331,6 +2340,32 @@ export default function VideoEditor() {
 		rawT,
 		setProjectControllerState,
 	]);
+
+	const pausePlayback = useCallback(() => {
+		const playback = videoPlaybackRef.current;
+		if (playbackScopeRef.current === "scene") {
+			playback?.pause();
+			return;
+		}
+
+		const pending = pendingProjectPlaybackPositionRef.current;
+		if (!hasProjectPlaybackIntent(projectPlaybackStateRef.current, pending?.shouldPlay)) return;
+		playback?.pause();
+		if (pending) pending.shouldPlay = false;
+		setProjectControllerState("paused");
+	}, [setProjectControllerState]);
+
+	const applyPreviewSpeed = useCallback((nextSpeed: PlaybackSpeed) => {
+		previewSpeedRef.current = nextSpeed;
+		setPreviewSpeed(nextSpeed);
+	}, []);
+
+	const stepPreviewPlaybackSpeed = useCallback(
+		(direction: "faster" | "slower") => {
+			applyPreviewSpeed(stepPreviewSpeed(previewSpeedRef.current, direction));
+		},
+		[applyPreviewSpeed],
+	);
 
 	const toggleFullscreen = useCallback(() => {
 		setIsFullscreen((prev) => !prev);
@@ -3214,6 +3249,27 @@ export default function VideoEditor() {
 				return;
 			}
 
+			// Kdenlive-style playback keys: J slows the preview down, K pauses, L speeds it up.
+			// Skip while the shortcuts dialog is capturing a key, or the capture would also
+			// shuttle the preview behind the dialog.
+			if (
+				!mod &&
+				!e.shiftKey &&
+				!e.altKey &&
+				(key === "j" || key === "k" || key === "l") &&
+				!isShortcutsConfigOpen &&
+				!isTextEditingTarget(e.target)
+			) {
+				e.preventDefault();
+				e.stopPropagation();
+				if (key === "k") {
+					pausePlayback();
+				} else {
+					stepPreviewPlaybackSpeed(key === "l" ? "faster" : "slower");
+				}
+				return;
+			}
+
 			// Frame-step navigation (arrow keys, no modifiers)
 			if (
 				(e.key === "ArrowLeft" || e.key === "ArrowRight") &&
@@ -3277,10 +3333,13 @@ export default function VideoEditor() {
 	}, [
 		handlePlaybackSeek,
 		isMac,
+		isShortcutsConfigOpen,
+		pausePlayback,
 		projectPlaybackDuration,
 		projectPlaybackTime,
 		redo,
 		shortcuts,
+		stepPreviewPlaybackSpeed,
 		togglePlayPause,
 		undo,
 	]);
@@ -4841,6 +4900,7 @@ export default function VideoEditor() {
 													cursorRecordingData={cursorRecordingData}
 													trimRegions={trimRegions}
 													speedRegions={speedRegions}
+													previewSpeed={previewSpeed}
 													annotationRegions={annotationOnlyRegions}
 													selectedAnnotationId={selectedAnnotationId}
 													onSelectAnnotation={handleSelectAnnotation}
@@ -4889,6 +4949,8 @@ export default function VideoEditor() {
 													projectSegments={projectPlaybackPlan}
 													projectSceneMarkers={projectPlaybackMarkers}
 													onScopeChange={handlePlaybackScopeChange}
+													previewSpeed={previewSpeed}
+													onPreviewSpeedChange={applyPreviewSpeed}
 													isFullscreen={isFullscreen}
 													onToggleFullscreen={toggleFullscreen}
 													onTogglePlayPause={togglePlayPause}

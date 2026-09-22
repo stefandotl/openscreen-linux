@@ -35,6 +35,9 @@
 		"panTimeline": "平移时间轴",
 		"zoomTimeline": "缩放时间轴",
 		"frameBack": "上一帧",
-		"frameForward": "下一帧"
+		"frameForward": "下一帧",
+		"slowDownPlayback": "降低播放速度",
+		"pausePlayback": "暂停播放",
+		"speedUpPlayback": "提高播放速度"
 	}
 }

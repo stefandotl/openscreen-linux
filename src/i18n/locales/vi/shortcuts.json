@@ -35,6 +35,9 @@
 		"panTimeline": "Xoay Trục thời gian",
 		"zoomTimeline": "Thu phóng Trục thời gian",
 		"frameBack": "Lùi một khung hình",
-		"frameForward": "Tiến một khung hình"
+		"frameForward": "Tiến một khung hình",
+		"slowDownPlayback": "Giảm tốc độ phát",
+		"pausePlayback": "Tạm dừng phát",
+		"speedUpPlayback": "Tăng tốc độ phát"
 	}
 }

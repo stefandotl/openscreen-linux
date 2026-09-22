@@ -51,7 +51,8 @@
 		"projectTimeline": "專案時間軸",
 		"sceneTimeline": "場景時間軸",
 		"preparing": "正在準備專案播放…",
-		"noPlayableScenes": "專案中沒有可播放的場景。"
+		"noPlayableScenes": "專案中沒有可播放的場景。",
+		"speed": "播放速度"
 	},
 	"locale": {
 		"name": "繁體中文",
