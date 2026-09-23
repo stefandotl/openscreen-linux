@@ -1,7 +1,8 @@
 import { createWriteStream, type WriteStream } from "node:fs";
 import { unlink } from "node:fs/promises";
+import path from "node:path";
 import type { IpcMain } from "electron";
-import { prepareRecordingFolder } from "../projectStorage";
+import { prepareRecordingFolder, removeEmptyRecordingFolder } from "../projectStorage";
 
 /**
  * Owns write streams for in-progress recordings, keyed by output file name.
@@ -75,7 +76,9 @@ export class RecordingStreamRegistry {
 	 */
 	async discard(fileName: string, filePath: string): Promise<void> {
 		await this.endStream(fileName);
-		await unlink(filePath).catch(() => undefined);
+		await unlink(filePath).catch((error: NodeJS.ErrnoException) => {
+			if (error.code !== "ENOENT") throw error;
+		});
 	}
 
 	private async endStream(fileName: string): Promise<void> {
@@ -132,7 +135,9 @@ export function registerRecordingStreamHandlers(
 		"close-recording-stream",
 		async (_, fileName: string): Promise<{ success: boolean; error?: string }> => {
 			try {
-				await registry.discard(fileName, resolveRecordingOutputPath(fileName));
+				const filePath = resolveRecordingOutputPath(fileName);
+				await registry.discard(fileName, filePath);
+				await removeEmptyRecordingFolder(path.dirname(filePath));
 				return { success: true };
 			} catch (error) {
 				return { success: false, error: String(error) };

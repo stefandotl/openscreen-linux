@@ -1040,9 +1040,6 @@ export default function VideoEditor() {
 				project.activeSceneId,
 				fallbackProjectMedia,
 			);
-			if (!fallbackProjectMedia) {
-				return false;
-			}
 			const sourcePath = projectMedia?.screenVideoPath ?? null;
 			const webcamSourcePath = projectMedia?.webcamVideoPath ?? null;
 			const projectCursorCaptureMode = projectMedia?.cursorCaptureMode ?? null;
@@ -1256,7 +1253,7 @@ export default function VideoEditor() {
 
 	const currentProjectSnapshot = useMemo(() => {
 		const snapshotMedia = currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
-		if (!snapshotMedia) {
+		if (!snapshotMedia && scenes.length === 0) {
 			return null;
 		}
 		const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
@@ -1468,7 +1465,7 @@ export default function VideoEditor() {
 			try {
 				const mediaForProject =
 					currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
-				if (!mediaForProject) {
+				if (!mediaForProject && scenes.length === 0) {
 					toast.error(t("errors.noVideoLoaded"));
 					return false;
 				}
@@ -1517,7 +1514,7 @@ export default function VideoEditor() {
 				const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
 
 				const fileNameBase =
-					mediaForProject.screenVideoPath
+					mediaForProject?.screenVideoPath
 						.split(/[\\/]/)
 						.pop()
 						?.replace(/\.[^.]+$/, "") || `project-${Date.now()}`;
@@ -1666,9 +1663,9 @@ export default function VideoEditor() {
 		}
 
 		pendingRecordingSceneIdRef.current = sceneId;
-		// Existing project files can be updated without prompting. New projects
-		// travel through the recorder as an in-memory snapshot and remain unsaved.
-		if (currentProjectPath && hasUnsavedChanges) {
+		// A scene recording belongs in its project folder. Create the project
+		// before opening the recorder when this is the first save.
+		if (!currentProjectPath || hasUnsavedChanges) {
 			const saved = await saveProject(false);
 			if (!saved) {
 				pendingRecordingSceneIdRef.current = null;
@@ -1682,16 +1679,15 @@ export default function VideoEditor() {
 		const sceneId = pendingRecordingSceneIdRef.current ?? undefined;
 		const mediaForProject =
 			currentProjectMedia ?? scenes.find((scene) => scene.media)?.media ?? null;
-		const projectData =
-			sceneId && mediaForProject
-				? createProjectData(
-						mediaForProject,
-						projectEditorForScene(editorState),
-						projectScenes,
-						activeSceneId,
-						getCustomFonts(),
-					)
-				: undefined;
+		const projectData = sceneId
+			? createProjectData(
+					mediaForProject,
+					projectEditorForScene(editorState),
+					projectScenes,
+					activeSceneId,
+					getCustomFonts(),
+				)
+			: undefined;
 		const result = await window.electronAPI.startNewRecording(sceneId, projectData);
 		if (result.success) {
 			setShowNewRecordingDialog(false);

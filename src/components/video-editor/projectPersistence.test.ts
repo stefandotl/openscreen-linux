@@ -69,6 +69,20 @@ describe("projectPersistence media compatibility", () => {
 		expect(validateProjectData(project)).toBe(true);
 	});
 
+	it("accepts a saved empty scene before its first recording", () => {
+		const editor = normalizeProjectEditor({});
+		const project = createProjectData(
+			null,
+			editor,
+			[{ id: "scene-1", name: "Scene 1", media: null, editor }],
+			"scene-1",
+		);
+		expect(project.media).toBeUndefined();
+		expect(validateProjectData(project)).toBe(true);
+		expect(validateProjectData({ version: PROJECT_VERSION, editor })).toBe(false);
+		expect(validateProjectData({ version: PROJECT_VERSION, editor, scenes: [{}] })).toBe(false);
+	});
+
 	it("defaults legacy and invalid compression settings to balanced", () => {
 		expect(normalizeProjectEditor({}).exportCompression).toBe("balanced");
 		expect(normalizeProjectEditor({ exportCompression: "tiny" as never }).exportCompression).toBe(

@@ -244,6 +244,21 @@ describe("createRecorderHandle", () => {
 		expect(closeRecordingStream).toHaveBeenCalledWith("rec.webm");
 	});
 
+	it("reports a failed disk discard so restart cannot silently continue", async () => {
+		stubElectronAPI({
+			openRecordingStream: vi.fn(async () => ({ success: true })),
+			appendRecordingChunk: vi.fn(async () => ({ success: true })),
+			closeRecordingStream: vi.fn(async () => ({ success: false, error: "Cannot remove file" })),
+		});
+		const handle = createRecorderHandle({} as MediaStream, { mimeType: "video/webm" }, "rec.webm");
+		const fake = driver(handle);
+		await tick();
+		fake.stop();
+		await handle.recordedBlobPromise;
+
+		await expect(handle.discard()).rejects.toThrow("Cannot remove file");
+	});
+
 	it("discard is a no-op when the stream never opened", async () => {
 		const closeRecordingStream = vi.fn(async () => ({ success: true }));
 		stubElectronAPI({

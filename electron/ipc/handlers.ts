@@ -2475,7 +2475,9 @@ export function registerIpcHandlers(
 					fs.rm(screenVideoPath, { force: true }),
 					preferredWebcamPath ? fs.rm(preferredWebcamPath, { force: true }) : Promise.resolve(),
 					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
+					fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
 				]);
+				await removeEmptyRecordingFolder(path.dirname(screenVideoPath));
 				return { success: true, discarded: true };
 			}
 
@@ -2570,7 +2572,9 @@ export function registerIpcHandlers(
 				await Promise.all([
 					fs.rm(screenVideoPath, { force: true }),
 					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
+					fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
 				]);
+				await removeEmptyRecordingFolder(path.dirname(screenVideoPath));
 				return { success: true, discarded: true };
 			}
 

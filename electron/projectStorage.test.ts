@@ -143,6 +143,56 @@ describe("standalone project storage", () => {
 		const data = second.project as { media: { screenVideoPath: string } };
 		expect(await fs.readFile(data.media.screenVideoPath, "utf8")).toBe("original.webm");
 	});
+	it("keeps a newly recorded scene inside its saved project when updating the project", async () => {
+		const original = await asset("source/first.webm");
+		const saved = await saveStandaloneProject(
+			{ media: { screenVideoPath: original } },
+			path.join(root, "Scenes.videtio"),
+			options,
+		);
+		const fileName = "recording-456.webm";
+		const sceneRecording = recordingOutputPath(path.dirname(saved.path), fileName);
+		await prepareRecordingFolder(sceneRecording);
+		await fs.writeFile(sceneRecording, "second scene");
+		const updated = await saveStandaloneProject(
+			{
+				media: { screenVideoPath: original },
+				scenes: [{ id: "second", media: { screenVideoPath: sceneRecording } }],
+			},
+			saved.path,
+			options,
+		);
+		const stored = await read(updated.path);
+		expect(stored.scenes[0].media.screenVideoPath).toBe(
+			`./${fileName.replace(/\.webm$/, "")}/${fileName}`,
+		);
+		expect(await fs.readFile(sceneRecording, "utf8")).toBe("second scene");
+	});
+	it("stores the first recording of an empty project in its project folder", async () => {
+		const saved = await saveStandaloneProject(
+			{ version: 2, editor: {}, scenes: [{ id: "first", media: null, editor: {} }] },
+			path.join(root, "New Project.videtio"),
+			options,
+		);
+		const fileName = "recording-789.webm";
+		const recording = recordingOutputPath(path.dirname(saved.path), fileName);
+		await prepareRecordingFolder(recording);
+		await fs.writeFile(recording, "first recording");
+		const updated = await saveStandaloneProject(
+			{
+				version: 2,
+				media: { screenVideoPath: recording },
+				editor: {},
+				scenes: [{ id: "first", media: { screenVideoPath: recording }, editor: {} }],
+			},
+			saved.path,
+			options,
+		);
+		expect(await read(updated.path)).toMatchObject({
+			scenes: [{ media: { screenVideoPath: `./recording-789/${fileName}` } }],
+		});
+		expect(await fs.readFile(recording, "utf8")).toBe("first recording");
+	});
 	it("does not adopt an existing ordinary directory or remove it after a failed save", async () => {
 		await asset("Keep/important.txt");
 		await expect(

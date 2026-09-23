@@ -1,8 +1,10 @@
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { IpcMain } from "electron";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { RecordingStreamRegistry } from "./recordingStream";
+import { prepareRecordingFolder, recordingOutputPath } from "../projectStorage";
+import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 describe("RecordingStreamRegistry", () => {
 	let dir: string;
@@ -69,6 +71,27 @@ describe("RecordingStreamRegistry", () => {
 	it("discard tolerates a missing file", async () => {
 		const registry = new RecordingStreamRegistry();
 		await expect(registry.discard("never.webm", pathFor("never.webm"))).resolves.toBeUndefined();
+	});
+
+	it("close-recording-stream removes the discarded recording folder", async () => {
+		const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>();
+		const ipcMain = {
+			handle: (channel: string, handler: (...args: unknown[]) => Promise<unknown>) => {
+				handlers.set(channel, handler);
+			},
+		} as unknown as IpcMain;
+		const fileName = "recording-123.webm";
+		const filePath = recordingOutputPath(dir, fileName);
+		await prepareRecordingFolder(filePath);
+		const registry = new RecordingStreamRegistry();
+		registerRecordingStreamHandlers(ipcMain, registry, (name) => recordingOutputPath(dir, name));
+		await registry.open(fileName, filePath);
+		await registry.append(fileName, Buffer.from("partial"));
+
+		expect(await handlers.get("close-recording-stream")?.({}, fileName)).toEqual({
+			success: true,
+		});
+		await expect(stat(path.dirname(filePath))).rejects.toThrow();
 	});
 
 	it("opening the same file twice replaces the prior stream", async () => {

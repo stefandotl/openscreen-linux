@@ -231,7 +231,12 @@ export function validateProjectData(candidate: unknown): candidate is EditorProj
 	const hasSceneMedia = Array.isArray(project.scenes)
 		? project.scenes.some((scene) => Boolean(scene && normalizeProjectMedia(scene.media)))
 		: false;
-	if (!hasTopLevelMedia && !hasSceneMedia) return false;
+	const hasEmptyScene = Array.isArray(project.scenes)
+		? project.scenes.some(
+				(scene) => scene && typeof scene.id === "string" && scene.id.trim() && scene.media === null,
+			)
+		: false;
+	if (!hasTopLevelMedia && !hasSceneMedia && !hasEmptyScene) return false;
 	if (!project.editor || typeof project.editor !== "object") return false;
 	return true;
 }
@@ -660,7 +665,7 @@ function createSceneFallbackName(index: number) {
 }
 
 export function createProjectData(
-	media: ProjectMedia,
+	media: ProjectMedia | null,
 	editor: ProjectEditorState,
 	scenes?: ProjectSceneData[],
 	activeSceneId?: string | null,
@@ -683,7 +688,7 @@ export function createProjectData(
 					),
 				),
 		),
-		media,
+		...(media ? { media } : {}),
 		editor,
 		...(scenes ? { scenes } : {}),
 		...(activeSceneId ? { activeSceneId } : {}),
@@ -691,7 +696,7 @@ export function createProjectData(
 }
 
 export function createProjectSnapshot(
-	media: ProjectMedia,
+	media: ProjectMedia | null,
 	editor: Partial<ProjectEditorState>,
 	scenes?: ProjectSceneData[],
 	activeSceneId?: string | null,

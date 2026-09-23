@@ -134,7 +134,10 @@ export function createRecorderHandle(
 
 	async function discard(): Promise<void> {
 		if (streamOpened && fileName && api?.closeRecordingStream) {
-			await api.closeRecordingStream(fileName);
+			const result = await api.closeRecordingStream(fileName);
+			if (!result.success) {
+				throw new Error(result.error ?? "Failed to discard recording stream");
+			}
 		}
 	}
 
