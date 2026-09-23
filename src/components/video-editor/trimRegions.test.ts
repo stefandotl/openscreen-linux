@@ -24,6 +24,38 @@ describe("mergeConnectedTrimRegions", () => {
 		]);
 	});
 
+	it("joins every trim reached by an edited edge while leaving distant touching trims separate", () => {
+		expect(
+			mergeConnectedTrimRegions(
+				[
+					{ id: "unrelated-a", startMs: 0, endMs: 1000 },
+					{ id: "unrelated-b", startMs: 1000, endMs: 2000 },
+					{ id: "first", startMs: 3000, endMs: 7000 },
+					{ id: "middle", startMs: 4000, endMs: 4500 },
+					{ id: "last", startMs: 7000, endMs: 8000 },
+				],
+				{ preferredId: "first", mergeTouching: true },
+			),
+		).toEqual([
+			{ id: "unrelated-a", startMs: 0, endMs: 1000 },
+			{ id: "unrelated-b", startMs: 1000, endMs: 2000 },
+			{ id: "first", startMs: 3000, endMs: 8000 },
+		]);
+	});
+
+	it("joins a chain of earlier touching trims when dragging into it from the right", () => {
+		expect(
+			mergeConnectedTrimRegions(
+				[
+					{ id: "a", startMs: 1000, endMs: 2000 },
+					{ id: "b", startMs: 2000, endMs: 3000 },
+					{ id: "dragged", startMs: 3000, endMs: 5000 },
+				],
+				{ preferredId: "dragged", mergeTouching: true },
+			),
+		).toEqual([{ id: "dragged", startMs: 1000, endMs: 5000 }]);
+	});
+
 	it("keeps real gaps and locked scene-split ranges independent", () => {
 		expect(
 			mergeConnectedTrimRegions([

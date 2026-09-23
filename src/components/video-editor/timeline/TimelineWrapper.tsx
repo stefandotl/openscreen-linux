@@ -9,7 +9,7 @@ import type {
 } from "dnd-timeline";
 import { TimelineContext, useTimelineContext } from "dnd-timeline";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from "react";
 
 interface TimelineWrapperProps {
 	children: ReactNode;
@@ -23,6 +23,7 @@ interface TimelineWrapperProps {
 	onItemSpanChange: (id: string, span: Span) => void;
 	// Hard overlap constraints (zoom/trim/speed), used by clampToNeighbours and as snap targets.
 	allRegionSpans?: { id: string; start: number; end: number; rowId?: string }[];
+	mergeableTrimIds?: string[];
 	// Snap targets only (annotation/blur); never push other items during overlap resolution.
 	softSnapSpans?: { id: string; start: number; end: number }[];
 	currentTimeMs?: number;
@@ -98,11 +99,28 @@ export default function TimelineWrapper({
 	gridSizeMs: _gridSizeMs,
 	onItemSpanChange,
 	allRegionSpans = [],
+	mergeableTrimIds = [],
 	softSnapSpans = [],
 	currentTimeMs,
 	keyframeTimesMs = [],
 }: TimelineWrapperProps) {
 	const totalMs = Math.max(0, Math.round(videoDuration * 1000));
+	const mergeableTrimIdsSet = useMemo(() => new Set(mergeableTrimIds), [mergeableTrimIds]);
+	const hasBlockingOverlap = useCallback(
+		(span: Span, activeItemId: string): boolean => {
+			if (!mergeableTrimIdsSet.has(activeItemId)) return hasOverlap(span, activeItemId);
+			const active = allRegionSpans.find((region) => region.id === activeItemId);
+			return allRegionSpans.some(
+				(region) =>
+					region.id !== activeItemId &&
+					region.rowId === active?.rowId &&
+					!mergeableTrimIdsSet.has(region.id) &&
+					span.end > region.start &&
+					span.start < region.end,
+			);
+		},
+		[allRegionSpans, hasOverlap, mergeableTrimIdsSet],
+	);
 
 	const clampSpanToBounds = useCallback(
 		(span: Span): Span => {
@@ -165,7 +183,10 @@ export default function TimelineWrapper({
 		(span: Span, activeItemId: string): Span => {
 			const active = allRegionSpans.find((r) => r.id === activeItemId);
 			const siblings = allRegionSpans.filter(
-				(r) => r.id !== activeItemId && r.rowId === active?.rowId,
+				(r) =>
+					r.id !== activeItemId &&
+					r.rowId === active?.rowId &&
+					!(mergeableTrimIdsSet.has(activeItemId) && mergeableTrimIdsSet.has(r.id)),
 			);
 			let { start, end } = span;
 
@@ -193,7 +214,7 @@ export default function TimelineWrapper({
 
 			return { start: Math.max(0, start), end: Math.min(end, totalMs || end) };
 		},
-		[allRegionSpans, minItemDurationMs, totalMs],
+		[allRegionSpans, mergeableTrimIdsSet, minItemDurationMs, totalMs],
 	);
 
 	const snapGuideRef = useRef<SnapGuideHandle>(null);
@@ -313,6 +334,8 @@ export default function TimelineWrapper({
 			if (active) {
 				for (const sibling of allRegionSpans) {
 					if (sibling.id === activeItemId || sibling.rowId !== active.rowId) continue;
+					if (mergeableTrimIdsSet.has(activeItemId) && mergeableTrimIdsSet.has(sibling.id))
+						continue;
 					if (sibling.end <= original.start) lowerBound = Math.max(lowerBound, sibling.end);
 					if (sibling.start >= original.end) upperBound = Math.min(upperBound, sibling.start);
 				}
@@ -338,7 +361,7 @@ export default function TimelineWrapper({
 				snapPoint: span[event.direction] === snapped.snapPoint ? snapped.snapPoint : null,
 			};
 		},
-		[allRegionSpans, minItemDurationMs, snapSpanToTargets, totalMs],
+		[allRegionSpans, mergeableTrimIdsSet, minItemDurationMs, snapSpanToTargets, totalMs],
 	);
 
 	const updateSnapGuide = useCallback(
@@ -361,10 +384,10 @@ export default function TimelineWrapper({
 		(event: ResizeEndEvent) => {
 			const result = resolveResize(event);
 			const activeItemId = String(event.active.id);
-			if (!result || hasOverlap(result.span, activeItemId)) return;
+			if (!result || hasBlockingOverlap(result.span, activeItemId)) return;
 			onItemSpanChange(activeItemId, result.span);
 		},
-		[hasOverlap, onItemSpanChange, resolveResize],
+		[hasBlockingOverlap, onItemSpanChange, resolveResize],
 	);
 
 	const onDragEnd = useCallback(
@@ -378,17 +401,49 @@ export default function TimelineWrapper({
 
 			clampedSpan = snapSpanToTargets(clampedSpan, activeItemId, "drag").span;
 
-			// Clamp to neighbour boundaries instead of rejecting
-			if (hasOverlap(clampedSpan, activeItemId)) {
+			// Moving a trim across other editable trims removes the full swept interval.
+			const original = allRegionSpans.find((region) => region.id === activeItemId);
+			if (original && mergeableTrimIdsSet.has(activeItemId)) {
+				const crossesTrim = allRegionSpans.some(
+					(region) =>
+						region.id !== activeItemId &&
+						region.rowId === original.rowId &&
+						mergeableTrimIdsSet.has(region.id) &&
+						((clampedSpan.start > original.start &&
+							region.start >= original.end &&
+							region.start <= clampedSpan.end) ||
+							(clampedSpan.start < original.start &&
+								region.end <= original.start &&
+								region.end >= clampedSpan.start)),
+				);
+				if (crossesTrim) {
+					clampedSpan = {
+						start: Math.min(original.start, clampedSpan.start),
+						end: Math.max(original.end, clampedSpan.end),
+					};
+				}
+			}
+
+			// Clamp non-mergeable items to neighbour boundaries instead of rejecting.
+			if (hasBlockingOverlap(clampedSpan, activeItemId)) {
+				if (mergeableTrimIdsSet.has(activeItemId)) return;
 				clampedSpan = clampToNeighbours(clampedSpan, activeItemId);
-				if (hasOverlap(clampedSpan, activeItemId)) {
+				if (hasBlockingOverlap(clampedSpan, activeItemId)) {
 					return;
 				}
 			}
 
 			onItemSpanChange(activeItemId, clampedSpan);
 		},
-		[clampSpanToBounds, clampToNeighbours, hasOverlap, onItemSpanChange, snapSpanToTargets],
+		[
+			allRegionSpans,
+			clampSpanToBounds,
+			clampToNeighbours,
+			hasBlockingOverlap,
+			mergeableTrimIdsSet,
+			onItemSpanChange,
+			snapSpanToTargets,
+		],
 	);
 
 	// Drag/resize tooltip (direct DOM updates, no re-renders)

@@ -2661,7 +2661,7 @@ export default function VideoEditor() {
 								}
 							: region,
 					),
-					{ preferredId: id },
+					{ preferredId: id, mergeTouching: true },
 				),
 			}));
 		},

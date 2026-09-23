@@ -1528,6 +1528,11 @@ export default function TimelineEditor({
 		}));
 		return [...zooms, ...trims, ...speeds];
 	}, [zoomRegions, trimRegions, speedRegions]);
+	const mergeableTrimIds = useMemo(
+		() =>
+			trimRegions.filter((region) => region.source !== "scene-split").map((region) => region.id),
+		[trimRegions],
+	);
 
 	// Snap targets whose edges pull during a snap but don't push anyone away.
 	const softSnapSpans = useMemo(() => {
@@ -1815,6 +1820,7 @@ export default function TimelineEditor({
 					minVisibleRangeMs={timelineScale.minVisibleRangeMs}
 					onItemSpanChange={handleItemSpanChange}
 					allRegionSpans={allRegionSpans}
+					mergeableTrimIds={mergeableTrimIds}
 					softSnapSpans={softSnapSpans}
 					currentTimeMs={currentTimeMs}
 					keyframeTimesMs={keyframeTimesMs}

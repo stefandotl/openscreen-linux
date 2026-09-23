@@ -1,5 +1,5 @@
 import { act, cleanup, render } from "@testing-library/react";
-import type { ResizeMoveEvent, Span, TimelineContextProps } from "dnd-timeline";
+import type { DragEndEvent, ResizeMoveEvent, Span, TimelineContextProps } from "dnd-timeline";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import TimelineWrapper from "./TimelineWrapper";
 
@@ -22,8 +22,10 @@ function setup(
 	original: Span,
 	siblings: { id: string; start: number; end: number; rowId?: string }[] = [],
 	range = { start: 0, end: 10000 },
+	mergeableTrimIds: string[] = [],
 ) {
 	const onItemSpanChange = vi.fn();
+	const allRegionSpans = [{ id: "trim", ...original, rowId: "trim" }, ...siblings];
 	render(
 		<TimelineWrapper
 			range={range}
@@ -32,8 +34,17 @@ function setup(
 			minVisibleRangeMs={1000}
 			onRangeChange={vi.fn()}
 			onItemSpanChange={onItemSpanChange}
-			hasOverlap={() => false}
-			allRegionSpans={[{ id: "trim", ...original, rowId: "trim" }, ...siblings]}
+			hasOverlap={(span, excludeId) =>
+				allRegionSpans.some(
+					(region) =>
+						region.id !== excludeId &&
+						region.rowId === "trim" &&
+						span.end > region.start &&
+						span.start < region.end,
+				)
+			}
+			allRegionSpans={allRegionSpans}
+			mergeableTrimIds={mergeableTrimIds}
 		>
 			<div />
 		</TimelineWrapper>,
@@ -54,7 +65,20 @@ function setup(
 			props.onResizeEnd?.(event);
 		});
 	};
-	return { resize, onItemSpanChange };
+	const drag = (span: Span) => {
+		const event: DragEndEvent = {
+			active: {
+				id: "trim",
+				data: { current: { span: original, getSpanFromDragEvent: () => span } },
+			},
+			over: { id: "trim" },
+			delta: { x: 0 },
+			activatorEvent: new Event("pointermove"),
+		};
+		const props = mocks.context.mock.calls.at(-1)?.[0] as TimelineContextProps;
+		act(() => props.onDragEnd?.(event));
+	};
+	return { resize, drag, onItemSpanChange };
 }
 
 describe("timeline resize boundaries", () => {
@@ -103,5 +127,80 @@ describe("timeline resize boundaries", () => {
 		]);
 		resize("end", { start: 3000, end: 8000 });
 		expect(onItemSpanChange).toHaveBeenLastCalledWith("trim", { start: 3000, end: 6000 });
+	});
+	it("extends across several editable trims in one resize", () => {
+		const { resize, onItemSpanChange } = setup(
+			{ start: 1000, end: 2000 },
+			[
+				{ id: "second", start: 3000, end: 4000, rowId: "trim" },
+				{ id: "third", start: 5000, end: 6000, rowId: "trim" },
+			],
+			undefined,
+			["trim", "second", "third"],
+		);
+		resize("end", { start: 1000, end: 5500 });
+		expect(onItemSpanChange).toHaveBeenLastCalledWith("trim", { start: 1000, end: 5500 });
+	});
+	it("merges the whole path when dragged past several editable trims", () => {
+		const { drag, onItemSpanChange } = setup(
+			{ start: 1000, end: 2000 },
+			[
+				{ id: "second", start: 3000, end: 4000, rowId: "trim" },
+				{ id: "third", start: 5000, end: 6000, rowId: "trim" },
+			],
+			undefined,
+			["trim", "second", "third"],
+		);
+		drag({ start: 6500, end: 7500 });
+		expect(onItemSpanChange).toHaveBeenLastCalledWith("trim", { start: 1000, end: 7500 });
+	});
+	it("merges the whole path when dragged left across several trims", () => {
+		const { drag, onItemSpanChange } = setup(
+			{ start: 7000, end: 8000 },
+			[
+				{ id: "first", start: 2000, end: 3000, rowId: "trim" },
+				{ id: "second", start: 4500, end: 5500, rowId: "trim" },
+			],
+			undefined,
+			["trim", "first", "second"],
+		);
+		drag({ start: 1000, end: 2000 });
+		expect(onItemSpanChange).toHaveBeenLastCalledWith("trim", { start: 1000, end: 8000 });
+	});
+	it("still moves a trim normally when no other trim is crossed", () => {
+		const { drag, onItemSpanChange } = setup(
+			{ start: 1000, end: 2000 },
+			[{ id: "later", start: 6000, end: 7000, rowId: "trim" }],
+			undefined,
+			["trim", "later"],
+		);
+		drag({ start: 3000, end: 4000 });
+		expect(onItemSpanChange).toHaveBeenLastCalledWith("trim", { start: 3000, end: 4000 });
+	});
+	it("keeps locked scene boundaries when a trim is resized", () => {
+		const { resize, onItemSpanChange } = setup(
+			{ start: 1000, end: 2000 },
+			[
+				{ id: "second", start: 3000, end: 4000, rowId: "trim" },
+				{ id: "locked", start: 5000, end: 6000, rowId: "trim" },
+			],
+			undefined,
+			["trim", "second"],
+		);
+		resize("end", { start: 1000, end: 7000 });
+		expect(onItemSpanChange).toHaveBeenLastCalledWith("trim", { start: 1000, end: 5000 });
+	});
+	it("does not join trims across a locked scene boundary", () => {
+		const { drag, onItemSpanChange } = setup(
+			{ start: 1000, end: 2000 },
+			[
+				{ id: "locked", start: 5000, end: 6000, rowId: "trim" },
+				{ id: "other-scene", start: 7000, end: 8000, rowId: "trim" },
+			],
+			undefined,
+			["trim", "other-scene"],
+		);
+		drag({ start: 7000, end: 8000 });
+		expect(onItemSpanChange).not.toHaveBeenCalled();
 	});
 });
