@@ -1,4 +1,5 @@
 import type { TrimRegion } from "@/components/video-editor/types";
+import { filterCaptionSegmentsByTrims } from "./filterCaptionSegmentsByTrims";
 import type { CaptionSegment, TranscribeMono16kResult } from "./transcribe";
 
 /**
@@ -12,23 +13,6 @@ export type TranscriberFn = (
 	audio: Float32Array,
 	opts: Record<string, unknown>,
 ) => Promise<unknown>;
-
-function segmentOverlapsTrim(startMs: number, endMs: number, trims: TrimRegion[]): boolean {
-	return trims.some((t) => startMs < t.endMs && endMs > t.startMs);
-}
-
-/** Same trim-out rule as {@link segmentsFromTranscriberChunks}; for retry passes that used empty trims. */
-function dropSegmentsOverlappingTrimRegions(
-	segments: CaptionSegment[],
-	trimRegions: TrimRegion[],
-): CaptionSegment[] {
-	if (trimRegions.length === 0) return segments;
-	return segments.filter((s) => {
-		const startMs = Math.round(s.startSec * 1000);
-		const endMs = Math.round(s.endSec * 1000);
-		return !segmentOverlapsTrim(startMs, endMs, trimRegions);
-	});
-}
 
 /** Whisper runs with internal 30s chunks; keep each forward pass bounded for WASM memory. */
 const TRANSCRIBE_SLICE_SAMPLES = 12 * 60 * 16_000;
@@ -53,11 +37,10 @@ function padTailSliceForTranscribe(samples: Float32Array): {
 	return { slice: padded, realDurationSec };
 }
 
-/** Converts raw Whisper chunk output into sorted, deduped, trim-filtered caption segments. */
+/** Converts raw Whisper chunk output into sorted, deduped caption segments. */
 function segmentsFromTranscriberChunks(
 	chunks: Array<{ timestamp?: [number | null, number | null]; text?: unknown }>,
 	timeOffsetSec: number,
-	trims: TrimRegion[],
 	audioDurationSec: number,
 ): CaptionSegment[] {
 	const sorted = [...chunks].sort((x, y) => {
@@ -102,10 +85,6 @@ function segmentsFromTranscriberChunks(
 		const startSec = a + timeOffsetSec;
 		const sliceEnd = timeOffsetSec + audioDurationSec;
 		const endSec = Math.min(Math.max(startSec + 0.08, b + timeOffsetSec), sliceEnd);
-		const startMs = Math.round(startSec * 1000);
-		const endMs = Math.round(endSec * 1000);
-		if (segmentOverlapsTrim(startMs, endMs, trims)) continue;
-
 		segments.push({ startSec, endSec, text });
 	}
 
@@ -178,8 +157,7 @@ function extractChunksFromAsrResult(result: unknown): Array<{
 /**
  * Drives Whisper over (possibly sliced) mono 16 kHz audio and returns timed segments.
  * Long audio is split so one pass doesn't exhaust WASM memory; timestamps are shifted
- * back onto the full timeline. Tries word- then phrase-level timestamps, with a
- * trim-ignoring retry, before giving up.
+ * back onto the full timeline. Tries word- then phrase-level timestamps.
  */
 export async function runTranscription(
 	transcriber: TranscriberFn,
@@ -187,12 +165,10 @@ export async function runTranscription(
 	trims: TrimRegion[],
 ): Promise<TranscribeMono16kResult> {
 	const transcribeOne = async (
-		ignoreTrims: boolean,
 		forceFullSequences: boolean,
 		timestampMode: "word" | "phrase",
 	): Promise<CaptionSegment[]> => {
 		try {
-			const activeTrims = ignoreTrims ? [] : trims;
 			if (samples.length <= TRANSCRIBE_SLICE_SAMPLES) {
 				const { slice, realDurationSec } = padTailSliceForTranscribe(samples);
 				const result = await runTranscriberOnSlice(transcriber, slice, {
@@ -202,7 +178,6 @@ export async function runTranscription(
 				return segmentsFromTranscriberChunks(
 					extractChunksFromAsrResult(result),
 					0,
-					activeTrims,
 					realDurationSec,
 				);
 			}
@@ -229,7 +204,6 @@ export async function runTranscription(
 					...segmentsFromTranscriberChunks(
 						extractChunksFromAsrResult(result),
 						tOff,
-						activeTrims,
 						realDurationSec,
 					),
 				);
@@ -243,24 +217,15 @@ export async function runTranscription(
 
 	const attemptModes: Array<"word" | "phrase"> = ["word", "phrase"];
 	for (const timestampMode of attemptModes) {
-		let segments = await transcribeOne(false, true, timestampMode);
+		let segments = await transcribeOne(true, timestampMode);
 		if (segments.length === 0) {
-			segments = await transcribeOne(false, false, timestampMode);
-		}
-		if (segments.length === 0 && trims.length > 0) {
-			segments = dropSegmentsOverlappingTrimRegions(
-				await transcribeOne(true, true, timestampMode),
-				trims,
-			);
-			if (segments.length === 0) {
-				segments = dropSegmentsOverlappingTrimRegions(
-					await transcribeOne(true, false, timestampMode),
-					trims,
-				);
-			}
+			segments = await transcribeOne(false, timestampMode);
 		}
 		if (segments.length > 0) {
-			return { segments, granularity: timestampMode };
+			return {
+				segments: filterCaptionSegmentsByTrims(segments, trims),
+				granularity: timestampMode,
+			};
 		}
 	}
 

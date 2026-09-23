@@ -22,6 +22,20 @@ describe("export timeline", () => {
 		]);
 	});
 
+	it("exports adjacent editable cuts as one removed source interval", () => {
+		const trims = [
+			{ id: "first", startMs: 2000, endMs: 3000 },
+			{ id: "second", startMs: 3000, endMs: 4000 },
+		];
+		expect(buildExportTimelineSegments(5, trims)).toEqual([
+			{ startSec: 0, endSec: 2, speed: 1 },
+			{ startSec: 4, endSec: 5, speed: 1 },
+		]);
+		const timestamps = getContinuousExportSourceTimestampsMs(5, 30, trims);
+		expect(timestamps).toHaveLength(90);
+		expect(timestamps[60]).toBe(4000);
+	});
+
 	it("produces one source timestamp per reported output frame", () => {
 		const metrics = getExportTimelineMetrics(
 			10,

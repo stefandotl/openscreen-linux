@@ -1215,7 +1215,7 @@ export default function TimelineEditor({
 			return;
 		}
 
-		const defaultDuration = Math.min(defaultRegionDurationMs, totalMs);
+		const defaultDuration = Math.min(1000, totalMs);
 		if (defaultDuration <= 0) {
 			return;
 		}
@@ -1228,16 +1228,24 @@ export default function TimelineEditor({
 		const isOverlapping = sorted.some(
 			(region) => startPos >= region.startMs && startPos < region.endMs,
 		);
-		if (isOverlapping || gapToNext <= 0) {
+		if (isOverlapping || gapToNext < timelineScale.minItemDurationMs) {
 			toast.error(t("errors.cannotPlaceTrim"), {
 				description: t("errors.trimExistsAtLocation"),
 			});
 			return;
 		}
 
-		const actualDuration = Math.min(defaultRegionDurationMs, gapToNext);
+		const actualDuration = Math.min(1000, gapToNext);
 		onTrimAdded({ start: startPos, end: startPos + actualDuration });
-	}, [videoDuration, totalMs, currentTimeMs, trimRegions, onTrimAdded, defaultRegionDurationMs, t]);
+	}, [
+		videoDuration,
+		totalMs,
+		currentTimeMs,
+		trimRegions,
+		onTrimAdded,
+		timelineScale.minItemDurationMs,
+		t,
+	]);
 
 	const handleAddSpeed = useCallback(() => {
 		if (!videoDuration || videoDuration === 0 || totalMs === 0 || !onSpeedAdded) {

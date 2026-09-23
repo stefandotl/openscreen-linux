@@ -6,6 +6,7 @@ import path from "node:path";
 import type { TrimRegion } from "../../src/components/video-editor/types";
 import { MAX_CAPTION_AUDIO_SEC } from "../../src/lib/captioning/captionConstants";
 import type { CaptionTranscriptionResult } from "../../src/lib/captioning/captionTranscriptionProtocol";
+import { filterCaptionSegmentsByTrims } from "../../src/lib/captioning/filterCaptionSegmentsByTrims";
 import type { CaptionSegment } from "../../src/lib/captioning/transcribe";
 import type { ParakeetModelFiles } from "./parakeetModelManager";
 
@@ -236,12 +237,6 @@ export function parakeetChunkResultsToWordSegments(
 	);
 }
 
-function overlapsTrimRegion(segment: CaptionSegment, trimRegions: TrimRegion[]): boolean {
-	const startMs = Math.round(segment.startSec * 1000);
-	const endMs = Math.round(segment.endSec * 1000);
-	return trimRegions.some((trim) => startMs < trim.endMs && endMs > trim.startMs);
-}
-
 function extractCaptionAudio(
 	ffmpegBinary: string,
 	videoPath: string,
@@ -310,8 +305,9 @@ export class ParakeetTranscriptionService {
 				pcmPath,
 				modelFiles: options.modelFiles,
 			});
-			const segments = parakeetChunkResultsToWordSegments(chunks).filter(
-				(segment) => !overlapsTrimRegion(segment, options.trimRegions),
+			const segments = filterCaptionSegmentsByTrims(
+				parakeetChunkResultsToWordSegments(chunks),
+				options.trimRegions,
 			);
 			return {
 				segments,

@@ -6,7 +6,8 @@ interface MergeTrimRegionOptions {
 }
 
 /**
- * Merges user-created trims that overlap or touch exactly. Scene-split trims stay
+ * Merges user-created trims that overlap. Touching trims stay independently editable.
+ * Scene-split trims stay
  * independent because their IDs and locked ranges encode scene ownership.
  */
 export function mergeConnectedTrimRegions(
@@ -24,7 +25,7 @@ export function mergeConnectedTrimRegions(
 
 	for (const region of editableRegions) {
 		const previous = merged.at(-1);
-		if (!previous || region.startMs > previous.endMs) {
+		if (!previous || region.startMs >= previous.endMs) {
 			merged.push(region);
 			continue;
 		}
