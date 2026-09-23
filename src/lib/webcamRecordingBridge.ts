@@ -9,6 +9,7 @@ const DEFAULT_WEBCAM_HEIGHT = 480;
  * out of the measurement; only a growing lag is reported.
  */
 export const MAX_WEBCAM_SOURCE_LAG_MS = 250;
+export const MAX_WEBCAM_SOURCE_STALL_MS = 1000;
 
 export type WebcamDimensions = {
 	width: number;
@@ -55,6 +56,7 @@ export class WebcamRecordingBridge {
 	private lockedFormatChangeNotified = false;
 	private sourceLagBaseline: { realMs: number; mediaMs: number } | null = null;
 	private sourceLagNotified = false;
+	private lastSourceFrameAtMs = 0;
 	private destroyed = false;
 
 	private constructor(
@@ -128,6 +130,7 @@ export class WebcamRecordingBridge {
 		const dimensions = this.getPlayableDimensions();
 		this.setOutputDimensions(dimensions);
 		this.lockedDimensions = dimensions;
+		this.lastSourceFrameAtMs = performance.now();
 		this.lockedFormatChangeNotified = false;
 		this.resetSourceLagTracking();
 		return dimensions;
@@ -219,6 +222,7 @@ export class WebcamRecordingBridge {
 				return;
 			}
 
+			this.lastSourceFrameAtMs = performance.now();
 			this.trackSourceFrameLag(now, metadata);
 			this.renderSourceFrame();
 			this.scheduleSourceFrameCallback(sourceStream);
@@ -237,6 +241,9 @@ export class WebcamRecordingBridge {
 	 * constant offset can compensate afterwards.
 	 */
 	private trackSourceFrameLag(nowMs: number, metadata: VideoFrameCallbackMetadata) {
+		if (!this.lockedDimensions) {
+			return;
+		}
 		const mediaTimeSeconds = metadata?.mediaTime;
 		if (typeof mediaTimeSeconds !== "number" || !Number.isFinite(mediaTimeSeconds)) {
 			return;
@@ -323,6 +330,16 @@ export class WebcamRecordingBridge {
 	private runFrameWatchdog() {
 		if (this.destroyed) {
 			return;
+		}
+
+		// A stalled source supplies no callback, so mediaTime comparisons alone
+		// cannot report it. Repeating the canvas must not hide a frozen camera.
+		if (this.lockedDimensions && this.supportsVideoFrameCallbacks && !this.sourceLagNotified) {
+			const stalledMs = performance.now() - this.lastSourceFrameAtMs;
+			if (stalledMs > MAX_WEBCAM_SOURCE_STALL_MS) {
+				this.sourceLagNotified = true;
+				this.options.onSourceLag?.(stalledMs);
+			}
 		}
 
 		if (!this.supportsVideoFrameCallbacks) {

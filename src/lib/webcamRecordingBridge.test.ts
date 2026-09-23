@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MAX_WEBCAM_SOURCE_LAG_MS, WebcamRecordingBridge } from "./webcamRecordingBridge";
+import {
+	MAX_WEBCAM_SOURCE_LAG_MS,
+	MAX_WEBCAM_SOURCE_STALL_MS,
+	WebcamRecordingBridge,
+} from "./webcamRecordingBridge";
 
 describe("WebcamRecordingBridge", () => {
 	type SourceFrameCallback = Parameters<HTMLVideoElement["requestVideoFrameCallback"]>[0];
@@ -236,6 +240,7 @@ describe("WebcamRecordingBridge", () => {
 		const onSourceLag = vi.fn();
 		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, { onSourceLag });
 		try {
+			bridge.prepareForRecording();
 			// A constant device latency cancels out of the measurement.
 			presentNextSourceFrame({ mediaTime: 5 }, 10_000);
 			presentNextSourceFrame({ mediaTime: 6 }, 11_000);
@@ -256,6 +261,40 @@ describe("WebcamRecordingBridge", () => {
 			// The recorder must not be flooded while the source keeps stalling.
 			presentNextSourceFrame({ mediaTime: 6.5 }, 14_000);
 			expect(onSourceLag).toHaveBeenCalledOnce();
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("reports a frozen source even when no further frame callback arrives", async () => {
+		const onSourceLag = vi.fn();
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, { onSourceLag });
+		try {
+			bridge.prepareForRecording();
+			presentNextSourceFrame({ mediaTime: 0 });
+			await vi.advanceTimersByTimeAsync(500);
+			expect(onSourceLag).not.toHaveBeenCalled();
+			await vi.advanceTimersByTimeAsync(MAX_WEBCAM_SOURCE_STALL_MS);
+			expect(onSourceLag).toHaveBeenCalledOnce();
+			await vi.advanceTimersByTimeAsync(MAX_WEBCAM_SOURCE_STALL_MS);
+			expect(onSourceLag).toHaveBeenCalledOnce();
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("does not report recording lag while the camera is idle or after finishing", async () => {
+		const onSourceLag = vi.fn();
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, { onSourceLag });
+		try {
+			presentNextSourceFrame({ mediaTime: 0 }, 0);
+			presentNextSourceFrame({ mediaTime: 0 }, 5000);
+			await vi.advanceTimersByTimeAsync(2000);
+			bridge.prepareForRecording();
+			bridge.finishRecording();
+			presentNextSourceFrame({ mediaTime: 0 }, 10000);
+			await vi.advanceTimersByTimeAsync(2000);
+			expect(onSourceLag).not.toHaveBeenCalled();
 		} finally {
 			bridge.destroy();
 		}

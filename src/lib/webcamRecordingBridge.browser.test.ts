@@ -94,6 +94,35 @@ describe("WebcamRecordingBridge (real browser)", () => {
 		}
 	});
 
+	it("reports a source freeze while the stable output track remains alive", async () => {
+		const canvas = document.createElement("canvas");
+		canvas.width = 160;
+		canvas.height = 90;
+		const context = canvas.getContext("2d")!;
+		const source = canvas.captureStream(30);
+		const timer = window.setInterval(() => {
+			context.fillStyle = `hsl(${Date.now() % 360} 80% 50%)`;
+			context.fillRect(0, 0, canvas.width, canvas.height);
+		}, 33);
+		let lagMs = 0;
+		const bridge = await WebcamRecordingBridge.create(source, 30, {
+			onSourceLag: (lag) => {
+				lagMs = lag;
+			},
+		});
+		try {
+			bridge.prepareForRecording();
+			await wait(150);
+			window.clearInterval(timer);
+			await expect.poll(() => lagMs, { timeout: 4000 }).toBeGreaterThan(1000);
+			expect(bridge.stream.getVideoTracks()[0].readyState).toBe("live");
+		} finally {
+			window.clearInterval(timer);
+			source.getTracks().forEach((track) => track.stop());
+			bridge.destroy();
+		}
+	});
+
 	it("keeps MediaRecorder alive while the physical source is replaced", async () => {
 		const sourceCanvas = document.createElement("canvas");
 		sourceCanvas.width = 320;
