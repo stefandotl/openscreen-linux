@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	MAX_WEBCAM_SOURCE_LAG_MS,
 	MAX_WEBCAM_SOURCE_STALL_MS,
+	WEBCAM_LAG_CONFIRMATION_MS,
 	WebcamRecordingBridge,
 } from "./webcamRecordingBridge";
 
@@ -252,6 +253,8 @@ describe("WebcamRecordingBridge", () => {
 
 			// Half a second of content never reached the recorder from here on.
 			presentNextSourceFrame({ mediaTime: 6.5 }, 12_000);
+			expect(onSourceLag).not.toHaveBeenCalled();
+			presentNextSourceFrame({ mediaTime: 9.5 }, 12_000 + WEBCAM_LAG_CONFIRMATION_MS);
 
 			expect(onSourceLag).toHaveBeenCalledOnce();
 			const [reportedLagMs] = onSourceLag.mock.calls[0] as [number];
@@ -261,6 +264,23 @@ describe("WebcamRecordingBridge", () => {
 			// The recorder must not be flooded while the source keeps stalling.
 			presentNextSourceFrame({ mediaTime: 6.5 }, 14_000);
 			expect(onSourceLag).toHaveBeenCalledOnce();
+		} finally {
+			bridge.destroy();
+		}
+	});
+
+	it("allows delayed callbacks and a short source freeze to recover", async () => {
+		const onSourceLag = vi.fn();
+		const bridge = await WebcamRecordingBridge.create(sourceStream, 30, { onSourceLag });
+		try {
+			bridge.prepareForRecording();
+			presentNextSourceFrame({ mediaTime: 0 }, 0);
+			await vi.advanceTimersByTimeAsync(1500);
+			expect(onSourceLag).not.toHaveBeenCalled();
+			presentNextSourceFrame({ mediaTime: 0.5 }, 1500);
+			presentNextSourceFrame({ mediaTime: 1.55 }, 1600);
+			presentNextSourceFrame({ mediaTime: 4.55 }, 4600);
+			expect(onSourceLag).not.toHaveBeenCalled();
 		} finally {
 			bridge.destroy();
 		}
@@ -307,13 +327,15 @@ describe("WebcamRecordingBridge", () => {
 			bridge.prepareForRecording();
 			presentNextSourceFrame({ mediaTime: 0 }, 1_000);
 			presentNextSourceFrame({ mediaTime: 0.5 }, 2_000);
+			presentNextSourceFrame({ mediaTime: 3.5 }, 5_000);
 			expect(onSourceLag).toHaveBeenCalledWith(500);
 
 			// A new take that starts from a stalled camera reports the lag again.
 			bridge.finishRecording();
 			bridge.prepareForRecording();
-			presentNextSourceFrame({ mediaTime: 0.5 }, 3_000);
-			presentNextSourceFrame({ mediaTime: 0.5 }, 4_000);
+			presentNextSourceFrame({ mediaTime: 0.5 }, 6_000);
+			presentNextSourceFrame({ mediaTime: 0.5 }, 7_000);
+			presentNextSourceFrame({ mediaTime: 3.5 }, 10_000);
 			expect(onSourceLag).toHaveBeenCalledTimes(2);
 			expect(onSourceLag).toHaveBeenLastCalledWith(1000);
 		} finally {

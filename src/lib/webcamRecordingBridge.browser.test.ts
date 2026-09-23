@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WebcamRecordingBridge } from "./webcamRecordingBridge";
+import { MAX_WEBCAM_SOURCE_STALL_MS, WebcamRecordingBridge } from "./webcamRecordingBridge";
 
 function wait(milliseconds: number) {
 	return new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
@@ -114,7 +114,11 @@ describe("WebcamRecordingBridge (real browser)", () => {
 			bridge.prepareForRecording();
 			await wait(150);
 			window.clearInterval(timer);
-			await expect.poll(() => lagMs, { timeout: 4000 }).toBeGreaterThan(1000);
+			await wait(1500);
+			expect(lagMs).toBe(0);
+			await expect
+				.poll(() => lagMs, { timeout: MAX_WEBCAM_SOURCE_STALL_MS + 2000 })
+				.toBeGreaterThan(MAX_WEBCAM_SOURCE_STALL_MS);
 			expect(bridge.stream.getVideoTracks()[0].readyState).toBe("live");
 		} finally {
 			window.clearInterval(timer);
@@ -163,12 +167,13 @@ describe("WebcamRecordingBridge (real browser)", () => {
 		});
 
 		try {
+			bridge.prepareForRecording();
 			recorder.start(50);
 			await wait(200);
 
 			sourceStream.getTracks().forEach((track) => track.stop());
 			bridge.detachSource(sourceStream);
-			await wait(125);
+			await wait(1300);
 			await bridge.attachSource(recoveredStream);
 			await wait(125);
 

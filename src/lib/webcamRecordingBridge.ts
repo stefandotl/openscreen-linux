@@ -9,7 +9,8 @@ const DEFAULT_WEBCAM_HEIGHT = 480;
  * out of the measurement; only a growing lag is reported.
  */
 export const MAX_WEBCAM_SOURCE_LAG_MS = 250;
-export const MAX_WEBCAM_SOURCE_STALL_MS = 1000;
+export const MAX_WEBCAM_SOURCE_STALL_MS = 10_000;
+export const WEBCAM_LAG_CONFIRMATION_MS = 3_000;
 
 export type WebcamDimensions = {
 	width: number;
@@ -56,6 +57,7 @@ export class WebcamRecordingBridge {
 	private lockedFormatChangeNotified = false;
 	private sourceLagBaseline: { realMs: number; mediaMs: number } | null = null;
 	private sourceLagNotified = false;
+	private sourceLagSinceMs: number | null = null;
 	private lastSourceFrameAtMs = 0;
 	private destroyed = false;
 
@@ -232,6 +234,7 @@ export class WebcamRecordingBridge {
 
 	private resetSourceLagTracking() {
 		this.sourceLagBaseline = null;
+		this.sourceLagSinceMs = null;
 		this.sourceLagNotified = false;
 	}
 
@@ -255,7 +258,17 @@ export class WebcamRecordingBridge {
 			return;
 		}
 		const lagMs = nowMs - baseline.realMs - (mediaMs - baseline.mediaMs);
-		if (lagMs < MAX_WEBCAM_SOURCE_LAG_MS || this.sourceLagNotified) {
+		if (lagMs < MAX_WEBCAM_SOURCE_LAG_MS) {
+			this.sourceLagSinceMs = null;
+			return;
+		}
+		if (this.sourceLagNotified) {
+			return;
+		}
+		// A delayed callback after a busy renderer is not evidence of permanent
+		// drift. Let the live video catch up and confirm persistent lag first.
+		this.sourceLagSinceMs ??= nowMs;
+		if (nowMs - this.sourceLagSinceMs < WEBCAM_LAG_CONFIRMATION_MS) {
 			return;
 		}
 		this.sourceLagNotified = true;
