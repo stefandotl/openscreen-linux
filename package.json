@@ -1,7 +1,7 @@
 {
 	"name": "videtio",
 	"private": true,
-	"version": "3.8.1",
+	"version": "3.8.2",
 	"description": "Videtio — desktop screen recorder with a built-in editor",
 	"type": "module",
 	"packageManager": "npm@10.9.4",
