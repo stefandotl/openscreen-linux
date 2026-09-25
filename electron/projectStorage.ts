@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const MARKER = ".videtio-folder.json";
+const PROJECT_EXTENSIONS = new Set([".videtio", ".videtly", ".openscreen", ".json"]);
 interface FolderMarker {
 	kind: "videtio-recording" | "videtio-project";
 	version: 1;
@@ -193,6 +194,11 @@ export async function saveStandaloneProject(
 		throw new Error("Invalid project data");
 	requestedPath = path.resolve(requestedPath);
 	const updating = await isManagedProject(requestedPath);
+	// Linux save dialogs can return the typed name without adding the selected extension.
+	// Keep already managed legacy files writable, but give every new project a visible extension.
+	if (!updating && !PROJECT_EXTENSIONS.has(path.extname(requestedPath).toLowerCase())) {
+		requestedPath += ".videtio";
+	}
 	const reuse =
 		options.reuseRecordingFolder && (await isRecordingFolder(path.dirname(requestedPath)));
 	const directory =

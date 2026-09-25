@@ -364,6 +364,7 @@ function forceCloseEditorWindow(windowToClose: BrowserWindow | null) {
 			}
 		} finally {
 			isForceClosing = false;
+			isCloseConfirmInFlight = false;
 		}
 	});
 }
@@ -379,9 +380,10 @@ function createEditorWindowWrapper() {
 	editorHasUnsavedChanges = false;
 
 	mainWindow.on("close", (event) => {
-		if (isForceClosing || !editorHasUnsavedChanges || isCloseConfirmInFlight) return;
+		if (isForceClosing || !editorHasUnsavedChanges) return;
 
 		event.preventDefault();
+		if (isCloseConfirmInFlight) return;
 		isCloseConfirmInFlight = true;
 
 		const windowToClose = mainWindow;
@@ -390,24 +392,34 @@ function createEditorWindowWrapper() {
 		// Ask renderer to show the in-app close dialog.
 		windowToClose.webContents.send("request-close-confirm");
 
-		ipcMain.once("close-confirm-response", (event, choice: "save" | "discard" | "cancel") => {
+		const onCloseConfirmResponse = (
+			event: Electron.IpcMainEvent,
+			choice: "save" | "saved" | "discard" | "cancel",
+		) => {
 			if (event.sender.id !== windowToClose?.webContents.id) return;
-			isCloseConfirmInFlight = false;
+			ipcMain.removeListener("close-confirm-response", onCloseConfirmResponse);
 			if (!windowToClose || windowToClose.isDestroyed()) return;
 
 			if (choice === "save") {
 				// Save first, then close when the renderer reports done.
 				windowToClose.webContents.send("request-save-before-close");
-				ipcMain.once("save-before-close-done", (event, shouldClose: boolean) => {
+				const onSaveBeforeCloseDone = (event: Electron.IpcMainEvent, shouldClose: boolean) => {
 					if (event.sender.id !== windowToClose?.webContents.id) return;
-					if (!shouldClose) return;
+					ipcMain.removeListener("save-before-close-done", onSaveBeforeCloseDone);
+					if (!shouldClose) {
+						isCloseConfirmInFlight = false;
+						return;
+					}
 					forceCloseEditorWindow(windowToClose);
-				});
-			} else if (choice === "discard") {
+				};
+				ipcMain.on("save-before-close-done", onSaveBeforeCloseDone);
+			} else if (choice === "saved" || choice === "discard") {
 				forceCloseEditorWindow(windowToClose);
+			} else {
+				isCloseConfirmInFlight = false;
 			}
-			// "cancel": flag reset, window stays open
-		});
+		};
+		ipcMain.on("close-confirm-response", onCloseConfirmResponse);
 	});
 }
 

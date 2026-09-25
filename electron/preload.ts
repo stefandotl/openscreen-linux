@@ -375,7 +375,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 		ipcRenderer.on("request-close-confirm", listener);
 		return () => ipcRenderer.removeListener("request-close-confirm", listener);
 	},
-	sendCloseConfirmResponse: (choice: "save" | "discard" | "cancel") => {
+	sendCloseConfirmResponse: (choice: "save" | "saved" | "discard" | "cancel") => {
 		ipcRenderer.send("close-confirm-response", choice);
 	},
 });

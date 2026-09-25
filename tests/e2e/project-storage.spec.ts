@@ -429,11 +429,14 @@ test("keeps screen and webcam preview usable when saving and reopening a renamed
 					),
 			)
 			.toBeGreaterThanOrEqual(2);
-		expect(
-			await editor
-				.locator("video")
-				.evaluateAll((elements) => elements.map((e) => (e as HTMLVideoElement).currentSrc)),
-		).toEqual(expect.arrayContaining([expect.stringContaining("Renamed%20folder")]));
+		const reopened = await editor.evaluate(() => window.electronAPI.loadCurrentProjectFile());
+		expect(reopened.path).toBe(movedProject);
+		expect(reopened.project).toMatchObject({
+			media: {
+				screenVideoPath: expect.stringContaining(movedFolder),
+				webcamVideoPath: expect.stringContaining(movedFolder),
+			},
+		});
 		await expect(editor.getByText("Failed to load video", { exact: true })).toHaveCount(0);
 		await editor.keyboard.press("z");
 		await expect(editor.getByRole("button", { name: "Save Project", exact: true })).toBeEnabled();

@@ -1609,8 +1609,10 @@ export default function VideoEditor() {
 	);
 
 	useEffect(() => {
-		window.electronAPI.setHasUnsavedChanges(hasUnsavedChanges);
-	}, [hasUnsavedChanges]);
+		window.electronAPI.setHasUnsavedChanges(
+			hasUnsavedChanges || (currentProjectSnapshot !== null && !currentProjectPath),
+		);
+	}, [hasUnsavedChanges, currentProjectSnapshot, currentProjectPath]);
 
 	useEffect(() => {
 		if (!shouldPersistAttachedRecording) return;
@@ -1627,10 +1629,16 @@ export default function VideoEditor() {
 
 	useEffect(() => {
 		const cleanup = window.electronAPI.onRequestCloseConfirm(() => {
+			if (currentProjectPath) {
+				void saveProject(false).then((saved) => {
+					window.electronAPI.sendCloseConfirmResponse(saved ? "saved" : "cancel");
+				});
+				return;
+			}
 			setShowCloseConfirmDialog(true);
 		});
 		return () => cleanup();
-	}, []);
+	}, [currentProjectPath, saveProject]);
 
 	const handleCloseConfirmSave = useCallback(() => {
 		setShowCloseConfirmDialog(false);

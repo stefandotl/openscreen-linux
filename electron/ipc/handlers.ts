@@ -3476,7 +3476,10 @@ export function registerIpcHandlers(
 				return { success: false, message: "Invalid file path" };
 			}
 			// Validate extension and readability
-			if (!PROJECT_FILE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+			if (
+				!PROJECT_FILE_EXTENSIONS.has(path.extname(filePath).toLowerCase()) &&
+				!(path.extname(filePath) === "" && (await isManagedProject(filePath)))
+			) {
 				return { success: false, message: "Not a Videtio project file" };
 			}
 			const stats = await fs.stat(filePath).catch(() => null);

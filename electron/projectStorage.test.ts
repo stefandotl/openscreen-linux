@@ -34,6 +34,43 @@ async function read(file: string) {
 }
 
 describe("standalone project storage", () => {
+	it("adds a project extension when the save dialog returns only the typed name", async () => {
+		const saved = await saveStandaloneProject(
+			{ version: 2, editor: {} },
+			path.join(root, "Kompletter Produktivitätskurs"),
+			options,
+		);
+		expect(saved.path).toBe(
+			path.join(root, "Kompletter Produktivitätskurs", "Kompletter Produktivitätskurs.videtio"),
+		);
+		expect(await isManagedProject(saved.path)).toBe(true);
+		const updated = await saveStandaloneProject(
+			{ version: 2, editor: { padding: 4 } },
+			saved.path,
+			options,
+		);
+		expect(updated.path).toBe(saved.path);
+		expect((await read(saved.path)).editor.padding).toBe(4);
+	});
+
+	it("continues to update an existing managed project without an extension", async () => {
+		const directory = path.join(root, "Legacy");
+		await fs.mkdir(directory);
+		const projectPath = path.join(directory, "Legacy");
+		await fs.writeFile(projectPath, JSON.stringify({ version: 2, editor: {} }));
+		await fs.writeFile(
+			path.join(directory, ".videtio-folder.json"),
+			JSON.stringify({ kind: "videtio-project", version: 1, projectFile: "Legacy" }),
+		);
+		const saved = await saveStandaloneProject(
+			{ version: 2, editor: { padding: 8 } },
+			projectPath,
+			options,
+		);
+		expect(saved.path).toBe(projectPath);
+		expect((await read(projectPath)).editor.padding).toBe(8);
+	});
+
 	it("collects every scene, audio and cursor data, deduplicates shared media, and survives a folder move", async () => {
 		const screen = await asset("source/screen.webm");
 		const second = await asset("other/screen.webm");
