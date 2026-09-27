@@ -71,6 +71,45 @@ describe("standalone project storage", () => {
 		expect((await read(projectPath)).editor.padding).toBe(8);
 	});
 
+	it("updates a project whose older marker omitted the file extension", async () => {
+		const directory = path.join(root, "Legacy");
+		await fs.mkdir(directory);
+		const projectPath = path.join(directory, "Legacy.videtio");
+		await fs.writeFile(projectPath, JSON.stringify({ version: 2, editor: {} }));
+		await fs.writeFile(
+			path.join(directory, ".videtio-folder.json"),
+			JSON.stringify({ kind: "videtio-project", version: 1, projectFile: "Legacy" }),
+		);
+		const nested = path.join(directory, "Legacy");
+		await fs.mkdir(nested);
+		await fs.writeFile(path.join(nested, "keep.txt"), "untouched");
+		expect(await isManagedProject(projectPath)).toBe(true);
+		const saved = await saveStandaloneProject(
+			{ version: 2, editor: { padding: 8 } },
+			projectPath,
+			options,
+		);
+		expect(saved.path).toBe(projectPath);
+		expect((await read(projectPath)).editor.padding).toBe(8);
+		expect((await read(path.join(directory, ".videtio-folder.json"))).projectFile).toBe(
+			"Legacy.videtio",
+		);
+		expect(await fs.readFile(path.join(nested, "keep.txt"), "utf8")).toBe("untouched");
+	});
+
+	it("does not mistake a second file for an extensionless marked project", async () => {
+		const directory = path.join(root, "TwoFiles");
+		await fs.mkdir(directory);
+		await fs.writeFile(path.join(directory, "TwoFiles"), "original");
+		const otherPath = path.join(directory, "TwoFiles.videtio");
+		await fs.writeFile(otherPath, "other");
+		await fs.writeFile(
+			path.join(directory, ".videtio-folder.json"),
+			JSON.stringify({ kind: "videtio-project", version: 1, projectFile: "TwoFiles" }),
+		);
+		expect(await isManagedProject(otherPath)).toBe(false);
+	});
+
 	it("collects every scene, audio and cursor data, deduplicates shared media, and survives a folder move", async () => {
 		const screen = await asset("source/screen.webm");
 		const second = await asset("other/screen.webm");

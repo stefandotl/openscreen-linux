@@ -48,6 +48,14 @@ test("offers to save a named project before closing and updates its existing fil
 		);
 		expect(saved.success, JSON.stringify(saved)).toBe(true);
 		expect(saved.path).toBe(path.join(recordings, "Course", "Course.videtio"));
+		const projectDirectory = path.dirname(saved.path!);
+		fs.writeFileSync(
+			path.join(projectDirectory, ".videtio-folder.json"),
+			JSON.stringify({ kind: "videtio-project", version: 1, projectFile: "Course" }),
+		);
+		const nestedDirectory = path.join(projectDirectory, "Course");
+		fs.mkdirSync(nestedDirectory);
+		fs.writeFileSync(path.join(nestedDirectory, "keep.txt"), "untouched");
 		await app.evaluate(({ dialog }) => {
 			dialog.showSaveDialog = async () => {
 				throw new Error("Saving an existing project must not open Save As");
@@ -91,6 +99,11 @@ test("offers to save a named project before closing and updates its existing fil
 		expect(stored.scenes).toEqual(
 			expect.arrayContaining([expect.objectContaining({ name: "Saved on close" })]),
 		);
+		expect(
+			JSON.parse(fs.readFileSync(path.join(projectDirectory, ".videtio-folder.json"), "utf8"))
+				.projectFile,
+		).toBe("Course.videtio");
+		expect(fs.readFileSync(path.join(nestedDirectory, "keep.txt"), "utf8")).toBe("untouched");
 	} finally {
 		const closed =
 			child.exitCode === null && child.signalCode === null

@@ -39,8 +39,31 @@ async function markerAt(directory: string): Promise<FolderMarker | null> {
 }
 
 export async function isManagedProject(projectPath: string): Promise<boolean> {
-	const marker = await markerAt(path.dirname(projectPath));
-	return marker?.kind === "videtio-project" && marker.projectFile === path.basename(projectPath);
+	projectPath = path.resolve(projectPath);
+	const directory = path.dirname(projectPath);
+	const marker = await markerAt(directory);
+	if (marker?.kind !== "videtio-project") return false;
+	const fileName = path.basename(projectPath);
+	if (marker.projectFile === fileName) return true;
+	// Older saves wrote a .videtio file but left its marker pointing to the
+	// extensionless dialog name. Accept only that exact existing file, provided
+	// the marker's original name does not identify another project file.
+	if (
+		path.extname(fileName).toLowerCase() !== ".videtio" ||
+		marker.projectFile !== path.parse(fileName).name
+	)
+		return false;
+	const existingFile = await fs.lstat(projectPath).catch((error: NodeJS.ErrnoException) => {
+		if (error.code === "ENOENT") return null;
+		throw error;
+	});
+	if (!existingFile?.isFile() || existingFile.isSymbolicLink()) return false;
+	const markedPath = path.join(directory, marker.projectFile);
+	const markedEntry = await fs.lstat(markedPath).catch((error: NodeJS.ErrnoException) => {
+		if (error.code === "ENOENT") return null;
+		throw error;
+	});
+	return markedEntry === null || markedEntry.isDirectory();
 }
 
 export async function isRecordingFolder(directory: string): Promise<boolean> {
