@@ -1514,10 +1514,15 @@ export default function VideoEditor() {
 				const persistedScenes = shouldPersistScenes(scenes) ? projectScenes : undefined;
 
 				const fileNameBase =
+					currentProjectPath
+						?.split(/[\\/]/)
+						.pop()
+						?.replace(/\.[^.]+$/, "") ||
 					mediaForProject?.screenVideoPath
 						.split(/[\\/]/)
 						.pop()
-						?.replace(/\.[^.]+$/, "") || `project-${Date.now()}`;
+						?.replace(/\.[^.]+$/, "") ||
+					`project-${Date.now()}`;
 				// Normalize the same way as currentProjectSnapshot so the post-save
 				// baseline compares equal and hasUnsavedChanges clears.
 				const projectSnapshot = createProjectSnapshot(
@@ -1629,16 +1634,10 @@ export default function VideoEditor() {
 
 	useEffect(() => {
 		const cleanup = window.electronAPI.onRequestCloseConfirm(() => {
-			if (currentProjectPath) {
-				void saveProject(false).then((saved) => {
-					window.electronAPI.sendCloseConfirmResponse(saved ? "saved" : "cancel");
-				});
-				return;
-			}
 			setShowCloseConfirmDialog(true);
 		});
 		return () => cleanup();
-	}, [currentProjectPath, saveProject]);
+	}, []);
 
 	const handleCloseConfirmSave = useCallback(() => {
 		setShowCloseConfirmDialog(false);

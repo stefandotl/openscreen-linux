@@ -3270,6 +3270,12 @@ export function registerIpcHandlers(
 			return { success: false, message: "A project file operation is already in progress" };
 		projectFileOperationPending = true;
 		try {
+			if (existingProjectPath && !isTrustedProjectPath(existingProjectPath)) {
+				return {
+					success: false,
+					message: "The active project changed. Reload it before saving.",
+				};
+			}
 			const trustedExistingProjectPath = isTrustedProjectPath(existingProjectPath)
 				? existingProjectPath
 				: null;
@@ -3295,8 +3301,11 @@ export function registerIpcHandlers(
 			const reuseRecordingFolder = Boolean(
 				recordingDirectory && (await isRecordingFolder(recordingDirectory)),
 			);
-			const defaultDirectory =
-				reuseRecordingFolder && recordingDirectory ? recordingDirectory : RECORDINGS_DIR;
+			const defaultDirectory = trustedExistingProjectPath
+				? path.dirname(trustedExistingProjectPath)
+				: reuseRecordingFolder && recordingDirectory
+					? recordingDirectory
+					: RECORDINGS_DIR;
 			const dialogOptions = buildDialogOptions(
 				{
 					title: mainT("dialogs", "fileDialogs.saveProject"),

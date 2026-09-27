@@ -394,7 +394,7 @@ function createEditorWindowWrapper() {
 
 		const onCloseConfirmResponse = (
 			event: Electron.IpcMainEvent,
-			choice: "save" | "saved" | "discard" | "cancel",
+			choice: "save" | "discard" | "cancel",
 		) => {
 			if (event.sender.id !== windowToClose?.webContents.id) return;
 			ipcMain.removeListener("close-confirm-response", onCloseConfirmResponse);
@@ -413,7 +413,7 @@ function createEditorWindowWrapper() {
 					forceCloseEditorWindow(windowToClose);
 				};
 				ipcMain.on("save-before-close-done", onSaveBeforeCloseDone);
-			} else if (choice === "saved" || choice === "discard") {
+			} else if (choice === "discard") {
 				forceCloseEditorWindow(windowToClose);
 			} else {
 				isCloseConfirmInFlight = false;
