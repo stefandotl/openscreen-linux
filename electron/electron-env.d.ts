@@ -287,6 +287,8 @@ interface Window {
 			error?: string;
 		}>;
 		aiCut: import("../src/lib/aiCut").AiCutAPI;
+		openRouter: import("../src/lib/openRouter").OpenRouterAPI;
+		cancelCaptionTranscription(requestId: string): Promise<void>;
 		detectSilence: (
 			filePath: string,
 			settings: import("../src/lib/silenceDetection").SilenceDetectionSettings,

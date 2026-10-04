@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut gửi bản chép lời, mốc thời gian và hướng dẫn của bạn đến OpenRouter. Tạo bản chép lời bằng mô hình đám mây cũng tải lên âm thanh gốc. Yêu cầu sử dụng tín dụng OpenRouter của bạn.",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "Bản chép lời chưa đầy đủ. Hãy chọn mô hình hỗ trợ toàn bộ bản ghi.",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "Bản chép lời",
+		"reuseTranscript": "Dùng bản chép lời hiện có · {{model}}",
+		"newTranscript": "Tạo bản chép lời mới",
+		"missingTranscript": "Video này chưa có bản chép lời đầy đủ. Hãy chọn mô hình chép lời."
 	},
 	"newRecording": {
 		"title": "Quay lại Trình ghi",
@@ -122,7 +126,11 @@
 		"noneHeard": "Không phát hiện thấy lời nói.",
 		"noAudio": "Video này không có âm thanh dùng được để chuyển thành văn bản.",
 		"failed": "Không thể tạo phụ đề.",
-		"truncated": "Chỉ {{minutes}} phút đầu tiên được chuyển thành văn bản."
+		"truncated": "Chỉ {{minutes}} phút đầu tiên được chuyển thành văn bản.",
+		"cloudModel": "Mô hình giọng nói OpenRouter",
+		"noWordTimestamps": "Chưa xác nhận thời gian từng từ",
+		"cloudPrivacy": "Âm thanh từ video gốc được gửi đến OpenRouter và nhà cung cấp đã chọn. Yêu cầu được tính phí vào tài khoản OpenRouter của bạn.",
+		"configureCloud": "Trước tiên hãy thêm khóa API trong cài đặt OpenRouter."
 	},
 	"silenceDetection": {
 		"button": "Phát hiện khoảng lặng",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "Không thể mở tệp dự án. Video mà nó tham chiếu có thể đã bị di chuyển hoặc xóa.",
 			"couldNotOpenDroppedMessage": "Không thể mở tệp đã thả. Tệp có thể đã bị di chuyển, xóa hoặc không thể đọc."
 		}
+	},
+	"openRouter": {
+		"title": "Cài đặt OpenRouter",
+		"description": "Một khóa API cho AI Cut và phụ đề tự động. Mỗi tính năng chọn mô hình riêng.",
+		"save": "Lưu khóa",
+		"close": "Đóng"
 	}
 }

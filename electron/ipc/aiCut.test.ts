@@ -14,14 +14,9 @@ vi.mock("electron", () => ({
 	app: { getPath: () => "/tmp" },
 	safeStorage: {},
 }));
-vi.mock("../aiCut/settings", () => ({
-	AiCutSettingsStore: class {
-		getSettings = getSettings;
-		credentials = credentials;
-	},
-}));
 vi.mock("../aiCut/openRouter", () => ({ requestAiCut, listAiCutModels: vi.fn() }));
 
+import type { OpenRouterSettingsStore } from "../openRouter/settings";
 import { registerAiCutHandlers } from "./aiCut";
 
 beforeEach(() => {
@@ -31,21 +26,20 @@ beforeEach(() => {
 function setup() {
 	const sender = Object.assign(new EventEmitter(), { id: 1, mainFrame: {} });
 	const window = { webContents: sender, isDestroyed: () => false } as unknown as BrowserWindow;
-	registerAiCutHandlers(() => window);
+	registerAiCutHandlers(() => window, { credentials } as unknown as OpenRouterSettingsStore);
 	const handler = (name: string) => handle.mock.calls.find((call) => call[0] === name)?.[1];
 	return { sender, handler, event: { sender, senderFrame: sender.mainFrame } };
 }
 describe("AI Cut IPC", () => {
-	it("restricts settings, requests and cancellation to the editor's main frame", () => {
+	it("restricts requests and cancellation to the editor's main frame", async () => {
 		const { handler, event } = setup();
-		for (const channel of [
-			"ai-cut-settings",
-			"ai-cut-update-settings",
-			"ai-cut-models",
-			"ai-cut-cancel",
-		]) {
-			expect(() => handler(channel)({ ...event, senderFrame: {} })).toThrow("active editor");
-			expect(() => handler(channel)({ ...event, sender: {} })).toThrow("active editor");
+		for (const channel of ["ai-cut-analyze", "ai-cut-cancel"]) {
+			await expect(async () => handler(channel)({ ...event, senderFrame: {} })).rejects.toThrow(
+				"active editor",
+			);
+			await expect(async () => handler(channel)({ ...event, sender: {} })).rejects.toThrow(
+				"active editor",
+			);
 		}
 		expect(getSettings).not.toHaveBeenCalled();
 	});

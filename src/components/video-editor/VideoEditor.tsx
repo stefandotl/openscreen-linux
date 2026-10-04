@@ -44,17 +44,14 @@ import { type EditorState, INITIAL_EDITOR_STATE, useEditorHistory } from "@/hook
 import { aiCutSuggestionsToTrims } from "@/lib/aiCut";
 import {
 	type CaptionEngine,
-	type CaptionTranscriptionResult,
 	type CaptionTranscriptionStatus,
 	captionSegmentsToAnnotationRegions,
-	extractMono16kFromVideoUrl,
 	MAX_CAPTION_AUDIO_SEC,
 	reconcileAutoCaptionTimelineGaps,
-	shiftTrimRegionsMsForCaptionBuffer,
-	transcribeVideoToSegments,
-	transcribeWhisperMono16kToSegments,
-	trimLeadingSilenceMono16k,
 } from "@/lib/captioning";
+import { filterCaptionSegmentsByTrims } from "@/lib/captioning/filterCaptionSegmentsByTrims";
+import { reusableSourceTranscript } from "@/lib/captioning/sourceTranscript";
+import { transcribeSourceVideo } from "@/lib/captioning/transcribeSourceVideo";
 import {
 	hasNativeCursorRecordingData,
 	hasRenderableNativeCursorRecordingData,
@@ -100,6 +97,7 @@ import {
 } from "@/utils/aspectRatioUtils";
 import { AiCutDialog } from "./AiCutDialog";
 import { AudioClipSettings } from "./AudioClipSettings";
+import { AutoCaptionsDialog } from "./AutoCaptionsDialog";
 import { resizeAudioRegion } from "./audioRegions";
 import {
 	EditorEditViewMenus,
@@ -114,6 +112,7 @@ import {
 	DEFAULT_GIF_SETTINGS,
 	DEFAULT_SOURCE_DIMENSIONS,
 } from "./editorDefaults";
+import { OpenRouterSettingsDialog } from "./OpenRouterSettingsDialog";
 import PlaybackControls from "./PlaybackControls";
 import ProjectPlaybackPreloader from "./ProjectPlaybackPreloader";
 import { resolvePreviewPlaybackRate, stepPreviewSpeed } from "./previewSpeed";
@@ -277,8 +276,6 @@ function buildSaveDiagnosticMessage(formatLabel: "GIF" | "Video", reason?: strin
 	return `${formatLabel} export save failed${reason ? `\nReason: ${reason}` : ""}`;
 }
 
-const CAPTION_WORD_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
-
 export default function VideoEditor() {
 	const {
 		state: editorState,
@@ -303,6 +300,7 @@ export default function VideoEditor() {
 		trimRegions,
 		speedRegions,
 		annotationRegions,
+		sourceTranscript,
 		audioRegions,
 		cropRegion,
 		wallpaper,
@@ -472,8 +470,13 @@ export default function VideoEditor() {
 	const [isAutoCaptioning, setIsAutoCaptioning] = useState(false);
 	const [showAutoCaptionsDialog, setShowAutoCaptionsDialog] = useState(false);
 	const [showAiCutDialog, setShowAiCutDialog] = useState(false);
-	const [captionEngine, setCaptionEngine] = useState<CaptionEngine>("parakeet");
+	const [showOpenRouterSettings, setShowOpenRouterSettings] = useState(false);
 	const [captionWordsMin, setCaptionWordsMin] = useState(2);
+	const [captionWordsMax, setCaptionWordsMax] = useState(7);
+	const captionAbort = useRef<AbortController | null>(null);
+	useEffect(() => {
+		if (videoPath || activeSceneId) return () => captionAbort.current?.abort();
+	}, [videoPath, activeSceneId]);
 	const [showSilenceDetectionDialog, setShowSilenceDetectionDialog] = useState(false);
 	const isDetectingSilenceRef = useRef(false);
 	const [isDetectingSilence, setIsDetectingSilence] = useState(false);
@@ -486,7 +489,6 @@ export default function VideoEditor() {
 	const [silencePaddingMs, setSilencePaddingMs] = useState(
 		DEFAULT_SILENCE_DETECTION_SETTINGS.paddingMs,
 	);
-	const [captionWordsMax, setCaptionWordsMax] = useState(7);
 	const [activeAnnotationStyle, setActiveAnnotationStyle] = useState<AnnotationTextStyle | null>(
 		() => loadUserPreferences().lastAnnotationStyle,
 	);
@@ -846,16 +848,19 @@ export default function VideoEditor() {
 			}
 
 			const nextScenes = scenesRef.current.map((scene) =>
-				scene.id === activeSceneIdRef.current ? { ...scene, media } : scene,
+				scene.id === activeSceneIdRef.current
+					? { ...scene, media, editor: { ...scene.editor, sourceTranscript: null } }
+					: scene,
 			);
 			scenesRef.current = nextScenes;
 			setScenes(nextScenes);
 			applySceneMedia(media);
+			pushState({ sourceTranscript: null });
 			setCurrentTime(0);
 			setDuration(0);
 			setIsPlaying(false);
 		},
-		[applySceneMedia, exitProjectPlayback, installInitialScene],
+		[applySceneMedia, exitProjectPlayback, installInitialScene, pushState],
 	);
 
 	const attachRecordingToScene = useCallback(
@@ -866,6 +871,7 @@ export default function VideoEditor() {
 
 			const nextEditor = {
 				...scene.editor,
+				sourceTranscript: null,
 				webcamVideoOffsetMs: media.webcamVideoOffsetMs ?? scene.editor.webcamVideoOffsetMs,
 			};
 			const nextScenes = scenesRef.current.map((candidate) =>
@@ -1059,6 +1065,7 @@ export default function VideoEditor() {
 				trimRegions: normalizedEditor.trimRegions,
 				speedRegions: normalizedEditor.speedRegions,
 				annotationRegions: normalizedEditor.annotationRegions,
+				sourceTranscript: normalizedEditor.sourceTranscript,
 				audioRegions: normalizedEditor.audioRegions,
 				aspectRatio: normalizedEditor.aspectRatio,
 				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
@@ -1081,6 +1088,13 @@ export default function VideoEditor() {
 				})[0]?.style;
 			const inferredDurationMs = Math.max(
 				0,
+				sourcePath && normalizedEditor.sourceTranscript
+					? (reusableSourceTranscript(
+							normalizedEditor.sourceTranscript,
+							toFileUrl(sourcePath),
+							normalizedEditor.sourceTranscript.sourceDurationSec,
+						)?.sourceDurationSec ?? 0) * 1000
+					: 0,
 				...normalizedEditor.zoomRegions.map((region) => region.endMs),
 				...normalizedEditor.trimRegions.map((region) => region.endMs),
 				...normalizedEditor.speedRegions.map((region) => region.endMs),
@@ -1124,6 +1138,7 @@ export default function VideoEditor() {
 							trimRegions: scene.editor.trimRegions,
 							speedRegions: scene.editor.speedRegions,
 							annotationRegions: scene.editor.annotationRegions,
+							sourceTranscript: scene.editor.sourceTranscript,
 							audioRegions: scene.editor.audioRegions,
 							aspectRatio: scene.editor.aspectRatio,
 							webcamLayoutPreset: scene.editor.webcamLayoutPreset,
@@ -1164,6 +1179,7 @@ export default function VideoEditor() {
 				trimRegions: normalizedEditor.trimRegions,
 				speedRegions: normalizedEditor.speedRegions,
 				annotationRegions: normalizedEditor.annotationRegions,
+				sourceTranscript: normalizedEditor.sourceTranscript,
 				audioRegions: normalizedEditor.audioRegions,
 				aspectRatio: normalizedEditor.aspectRatio,
 				webcamLayoutPreset: normalizedEditor.webcamLayoutPreset,
@@ -1274,6 +1290,7 @@ export default function VideoEditor() {
 				trimRegions,
 				speedRegions,
 				annotationRegions,
+				sourceTranscript,
 				audioRegions,
 				aspectRatio,
 				webcamLayoutPreset,
@@ -1316,6 +1333,7 @@ export default function VideoEditor() {
 		trimRegions,
 		speedRegions,
 		annotationRegions,
+		sourceTranscript,
 		audioRegions,
 		aspectRatio,
 		webcamLayoutPreset,
@@ -1485,6 +1503,7 @@ export default function VideoEditor() {
 					trimRegions,
 					speedRegions,
 					annotationRegions,
+					sourceTranscript,
 					audioRegions,
 					aspectRatio,
 					webcamLayoutPreset,
@@ -1591,6 +1610,7 @@ export default function VideoEditor() {
 			trimRegions,
 			speedRegions,
 			annotationRegions,
+			sourceTranscript,
 			audioRegions,
 			aspectRatio,
 			webcamLayoutPreset,
@@ -4104,7 +4124,7 @@ export default function VideoEditor() {
 	]);
 
 	const generateAutoCaptions = useCallback(
-		async (minWords: number, maxWords: number, engine: CaptionEngine) => {
+		async (minWords: number, maxWords: number, engine: CaptionEngine, model?: string) => {
 			if (!videoPath) {
 				toast.error(t("errors.noVideoLoaded"));
 				return;
@@ -4117,6 +4137,8 @@ export default function VideoEditor() {
 			const maxW = Math.max(minW, maxWords);
 
 			isAutoCaptioningRef.current = true;
+			const controller = new AbortController();
+			captionAbort.current = controller;
 			setIsAutoCaptioning(true);
 			toast.loading(t("autoCaptions.generating"), { id: AUTO_CAPTION_PROGRESS_TOAST_ID });
 			try {
@@ -4135,67 +4157,22 @@ export default function VideoEditor() {
 						);
 					} else {
 						toast.loading(t("autoCaptions.transcribing"), {
+							...(typeof percent === "number" ? { description: `${percent}%` } : {}),
 							id: AUTO_CAPTION_PROGRESS_TOAST_ID,
 						});
 					}
 				};
 
-				let transcription: CaptionTranscriptionResult;
-				if (engine === "parakeet") {
-					transcription = await transcribeVideoToSegments(videoPath, {
-						trimRegions,
-						sourceDurationSec: duration,
-						onStatus: onTranscriptionStatus,
-					});
-				} else {
-					const extracted = await extractMono16kFromVideoUrl(videoPath);
-					if (
-						!Number.isFinite(extracted.durationSec) ||
-						extracted.durationSec <= 0 ||
-						extracted.samples.length < 800
-					) {
-						toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
-						toast.error(t("autoCaptions.noAudio"));
-						return;
-					}
-
-					const { samples: speechSamples, trimSec } = trimLeadingSilenceMono16k(extracted.samples);
-					if (speechSamples.length < 800) {
-						toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
-						toast.error(t("autoCaptions.noAudio"));
-						return;
-					}
-
-					const trimMs = Math.round(trimSec * 1000);
-					const shiftedTrims = shiftTrimRegionsMsForCaptionBuffer(trimRegions, trimMs);
-					let whisperResult = await transcribeWhisperMono16kToSegments(speechSamples, {
-						trimRegions: shiftedTrims,
-						onStatus: onTranscriptionStatus,
-					});
-					let usedTrimmedBuffer = true;
-					if (whisperResult.segments.length === 0 && trimSec > 0) {
-						whisperResult = await transcribeWhisperMono16kToSegments(extracted.samples, {
-							trimRegions,
-							onStatus: onTranscriptionStatus,
-						});
-						usedTrimmedBuffer = false;
-					}
-
-					transcription = {
-						...whisperResult,
-						segments:
-							usedTrimmedBuffer && trimSec > 0
-								? whisperResult.segments.map((segment) => ({
-										...segment,
-										startSec: segment.startSec + trimSec,
-										endSec: segment.endSec + trimSec,
-									}))
-								: whisperResult.segments,
-						truncated: extracted.truncated,
-					};
-				}
-
-				const { segments, granularity, truncated } = transcription;
+				const transcription = await transcribeSourceVideo(videoPath, {
+					engine,
+					model,
+					signal: controller.signal,
+					sourceDurationSec: duration,
+					onStatus: onTranscriptionStatus,
+				});
+				controller.signal.throwIfAborted();
+				const { granularity, truncated } = transcription;
+				const segments = filterCaptionSegmentsByTrims(transcription.segments, trimRegions);
 
 				let { regions, nextNumericId, nextZIndex } = captionSegmentsToAnnotationRegions(
 					segments,
@@ -4229,7 +4206,10 @@ export default function VideoEditor() {
 					return;
 				}
 
-				pushState((prev) => ({ annotationRegions: [...prev.annotationRegions, ...regions] }));
+				pushState((prev) => ({
+					annotationRegions: [...prev.annotationRegions, ...regions],
+					sourceTranscript: transcription,
+				}));
 				nextAnnotationIdRef.current = nextNumericId;
 				nextAnnotationZIndexRef.current = nextZIndex;
 
@@ -4243,8 +4223,8 @@ export default function VideoEditor() {
 					toast.success(t("autoCaptions.done", { count: String(regions.length) }));
 				}
 			} catch (e) {
-				console.error(e);
 				toast.dismiss(AUTO_CAPTION_PROGRESS_TOAST_ID);
+				if (controller.signal.aborted) return;
 				const detail = e instanceof Error ? e.message : String(e);
 				if (/no usable audio|matches no streams|audio.*not found/i.test(detail)) {
 					toast.error(t("autoCaptions.noAudio"));
@@ -4252,6 +4232,7 @@ export default function VideoEditor() {
 					toast.error(t("autoCaptions.failed"), { description: detail });
 				}
 			} finally {
+				captionAbort.current = null;
 				isAutoCaptioningRef.current = false;
 				setIsAutoCaptioning(false);
 			}
@@ -4558,6 +4539,8 @@ export default function VideoEditor() {
 					videoPath={videoPath}
 					durationMs={Math.round(duration * 1000)}
 					trimRegions={trimRegions}
+					sourceTranscript={sourceTranscript}
+					onTranscriptReady={(transcript) => pushState({ sourceTranscript: transcript })}
 					onClose={() => setShowAiCutDialog(false)}
 					onApply={(suggestions) => {
 						const newTrims = aiCutSuggestionsToTrims(suggestions, trimRegions);
@@ -4571,99 +4554,24 @@ export default function VideoEditor() {
 					}}
 				/>
 			)}
-			<Dialog open={showAutoCaptionsDialog} onOpenChange={setShowAutoCaptionsDialog}>
-				<DialogContent
-					className="sm:max-w-md"
-					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
-				>
-					<DialogHeader>
-						<DialogTitle>{t("autoCaptions.dialogTitle")}</DialogTitle>
-						<DialogDescription>{t("autoCaptions.dialogDescription")}</DialogDescription>
-					</DialogHeader>
-					<div className="grid gap-4 py-2">
-						<div className="grid gap-2">
-							<Label htmlFor="caption-engine">{t("autoCaptions.model")}</Label>
-							<Select
-								value={captionEngine}
-								onValueChange={(value) => setCaptionEngine(value as CaptionEngine)}
-							>
-								<SelectTrigger id="caption-engine" className="h-9">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="parakeet">Parakeet TDT 0.6B · ~660 MB</SelectItem>
-									<SelectItem value="whisper-tiny">Whisper Tiny · ~75 MB</SelectItem>
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="grid gap-2">
-							<Label htmlFor="caption-min-words">{t("autoCaptions.minWords")}</Label>
-							<Select
-								value={String(captionWordsMin)}
-								onValueChange={(v) => {
-									const n = Number.parseInt(v, 10);
-									setCaptionWordsMin(n);
-									if (n > captionWordsMax) setCaptionWordsMax(n);
-								}}
-							>
-								<SelectTrigger id="caption-min-words" className="h-9">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{CAPTION_WORD_CHOICES.map((n) => (
-										<SelectItem key={`min-${n}`} value={String(n)}>
-											{t("autoCaptions.wordsCount", { count: String(n) })}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-						<div className="grid gap-2">
-							<Label htmlFor="caption-max-words">{t("autoCaptions.maxWords")}</Label>
-							<Select
-								value={String(captionWordsMax)}
-								onValueChange={(v) => {
-									const n = Number.parseInt(v, 10);
-									setCaptionWordsMax(n);
-									if (n < captionWordsMin) setCaptionWordsMin(n);
-								}}
-							>
-								<SelectTrigger id="caption-max-words" className="h-9">
-									<SelectValue />
-								</SelectTrigger>
-								<SelectContent>
-									{CAPTION_WORD_CHOICES.map((n) => (
-										<SelectItem key={`max-${n}`} value={String(n)}>
-											{t("autoCaptions.wordsCount", { count: String(n) })}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-						</div>
-					</div>
-					<DialogFooter className="gap-2 sm:gap-0">
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => setShowAutoCaptionsDialog(false)}
-							className="border-white/20 bg-transparent text-white hover:bg-white/10"
-						>
-							{t("autoCaptions.dialogCancel")}
-						</Button>
-						<Button
-							type="button"
-							disabled={isAutoCaptioning}
-							onClick={() => {
-								setShowAutoCaptionsDialog(false);
-								void generateAutoCaptions(captionWordsMin, captionWordsMax, captionEngine);
-							}}
-							className="bg-[#34B27B] text-white hover:bg-[#34B27B]/90"
-						>
-							{t("autoCaptions.generate")}
-						</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
+			{showAutoCaptionsDialog && (
+				<AutoCaptionsDialog
+					initialMinWords={captionWordsMin}
+					initialMaxWords={captionWordsMax}
+					onWordLimitsChange={(min, max) => {
+						setCaptionWordsMin(min);
+						setCaptionWordsMax(max);
+					}}
+					onClose={() => setShowAutoCaptionsDialog(false)}
+					onGenerate={(min, max, engine, model) => {
+						setShowAutoCaptionsDialog(false);
+						void generateAutoCaptions(min, max, engine, model);
+					}}
+				/>
+			)}
+			{showOpenRouterSettings && (
+				<OpenRouterSettingsDialog onClose={() => setShowOpenRouterSettings(false)} />
+			)}
 
 			<div
 				data-testid="editor-titlebar"
@@ -4774,7 +4682,10 @@ export default function VideoEditor() {
 					)}
 				</div>
 				<div className="flex items-center gap-1 justify-self-end">
-					<EditorPreferencesMenu disabled={projectActionsDisabled} />
+					<EditorPreferencesMenu
+						disabled={projectActionsDisabled}
+						onOpenRouterSettings={() => setShowOpenRouterSettings(true)}
+					/>
 					{hasProjectMedia && (
 						<button
 							type="button"

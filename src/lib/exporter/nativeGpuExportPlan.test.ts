@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AnnotationRegion } from "@/components/video-editor/types";
+import { openRouterWords } from "../../../electron/captioning/openRouterTranscription";
 import { aiCutSuggestionsToTrims } from "../aiCut";
+import { captionSegmentsToAnnotationRegions } from "../captioning/annotationsFromCaptions";
 import { createNativeGpuExportPlan, getNativeGpuExportBlockers } from "./nativeGpuExportPlan";
 import type { VideoExporterConfig } from "./videoExporter";
 
@@ -208,6 +210,42 @@ describe("native GPU export plan", () => {
 		expect(plan.overlays).toHaveLength(5);
 		expect(plan.overlays.map((overlay) => overlay.zIndex)).toEqual([2, 5, 5, 5, 20]);
 		expect(plan.overlays.every((overlay) => overlay.width > 0 && overlay.height > 0)).toBe(true);
+	});
+	it("preserves OpenRouter word times and z-order for three captions and two overlapping annotations", () => {
+		const words = openRouterWords(
+			{
+				words: [
+					{ word: "First", start: 0.05, end: 0.25 },
+					{ word: "Second", start: 0.35, end: 0.55 },
+					{ word: "Third", start: 0.65, end: 0.85 },
+				],
+			},
+			1,
+		);
+		const captions = captionSegmentsToAnnotationRegions(words, 1, 5, {
+			timestampGranularity: "word",
+			minWordsPerCaption: 1,
+			maxWordsPerCaption: 1,
+		}).regions;
+		expect(captions).toHaveLength(3);
+		const config = createConfig({
+			annotationRegions: [
+				...captions,
+				staticTextAnnotation({ id: "top", startMs: 200, endMs: 800, zIndex: 20 }),
+				staticTextAnnotation({ id: "bottom", startMs: 150, endMs: 750, zIndex: 2 }),
+			],
+		});
+		expect(getNativeGpuExportBlockers(config, videoInfo)).toEqual([]);
+		const plan = createNativeGpuExportPlan(config, videoInfo);
+		for (const caption of captions) {
+			const overlay = plan.overlays.find((overlay) => overlay.zIndex === caption.zIndex);
+			expect(overlay).toMatchObject({
+				startMs: caption.startMs,
+				endMs: caption.endMs,
+				zIndex: caption.zIndex,
+			});
+		}
+		expect(plan.overlays.map((overlay) => overlay.zIndex)).toEqual([2, 5, 6, 7, 20]);
 	});
 
 	it("plans timed soft-blur and mosaic regions for native GPU export", () => {

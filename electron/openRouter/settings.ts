@@ -1,6 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AiCutSettings, AiCutSettingsUpdate } from "../../src/lib/aiCut";
+import type { CaptionEngine } from "../../src/lib/captioning/transcribe";
+import {
+	isOpenRouterCaptionModel,
+	OPENROUTER_CAPTION_MODELS,
+	type OpenRouterSettings,
+	type OpenRouterSettingsUpdate,
+} from "../../src/lib/openRouter";
 
 export interface SecretStorage {
 	isEncryptionAvailable(): boolean;
@@ -9,7 +15,7 @@ export interface SecretStorage {
 	decryptString(value: Buffer): string;
 }
 
-export class AiCutSettingsStore {
+export class OpenRouterSettingsStore {
 	private sessionKey = "";
 	private queue: Promise<unknown> = Promise.resolve();
 	constructor(
@@ -22,38 +28,63 @@ export class AiCutSettingsStore {
 			this.secrets.getSelectedStorageBackend?.() !== "basic_text"
 		);
 	}
-	private async read(): Promise<{ model: string; encryptedKey?: string }> {
+	private async read(): Promise<{
+		model: string;
+		encryptedKey?: string;
+		captionEngine: CaptionEngine;
+		transcriptionModel: string;
+	}> {
 		try {
 			const value = JSON.parse(await fs.readFile(this.file, "utf8"));
 			if (
 				!value ||
 				typeof value.model !== "string" ||
-				(value.encryptedKey !== undefined && typeof value.encryptedKey !== "string")
+				(value.encryptedKey !== undefined && typeof value.encryptedKey !== "string") ||
+				(value.captionEngine !== undefined &&
+					!["parakeet", "whisper-tiny", "openrouter"].includes(value.captionEngine)) ||
+				(value.transcriptionModel !== undefined &&
+					!isOpenRouterCaptionModel(value.transcriptionModel))
 			)
 				throw new Error("Invalid OpenRouter settings file.");
-			return value;
+			return {
+				...value,
+				captionEngine: value.captionEngine ?? "parakeet",
+				transcriptionModel: value.transcriptionModel ?? OPENROUTER_CAPTION_MODELS[0].id,
+			};
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") return { model: "" };
+			if ((error as NodeJS.ErrnoException).code === "ENOENT")
+				return {
+					model: "",
+					captionEngine: "parakeet",
+					transcriptionModel: OPENROUTER_CAPTION_MODELS[0].id,
+				};
 			throw error;
 		}
 	}
-	async getSettings(): Promise<AiCutSettings> {
+	async getSettings(): Promise<OpenRouterSettings> {
 		await this.queue;
 		const value = await this.read();
 		return {
 			model: value.model,
+			captionEngine: value.captionEngine,
+			transcriptionModel: value.transcriptionModel,
 			hasApiKey: Boolean(this.sessionKey || value.encryptedKey),
 			keyStorage: this.sessionKey ? "session" : value.encryptedKey ? "encrypted" : "none",
 			canStoreKey: this.canStoreKey(),
 		};
 	}
-	update(update: AiCutSettingsUpdate): Promise<AiCutSettings> {
+	update(update: OpenRouterSettingsUpdate): Promise<OpenRouterSettings> {
 		const operation = this.queue.then(async () => {
 			if (
 				!update ||
-				typeof update.model !== "string" ||
-				update.model.length > 200 ||
-				(update.model && !/^[\w./:@+-]+$/.test(update.model)) ||
+				(update.model !== undefined &&
+					(typeof update.model !== "string" ||
+						update.model.length > 200 ||
+						(update.model && !/^[\w./:@+-]+$/.test(update.model)))) ||
+				(update.captionEngine !== undefined &&
+					!["parakeet", "whisper-tiny", "openrouter"].includes(update.captionEngine)) ||
+				(update.transcriptionModel !== undefined &&
+					!isOpenRouterCaptionModel(update.transcriptionModel)) ||
 				(update.apiKey !== undefined &&
 					(typeof update.apiKey !== "string" ||
 						update.apiKey.length > 512 ||
@@ -61,7 +92,10 @@ export class AiCutSettingsStore {
 			)
 				throw new Error("Invalid OpenRouter settings.");
 			const value = await this.read();
-			value.model = update.model;
+			if (update.model !== undefined) value.model = update.model;
+			if (update.captionEngine !== undefined) value.captionEngine = update.captionEngine;
+			if (update.transcriptionModel !== undefined)
+				value.transcriptionModel = update.transcriptionModel;
 			let sessionKey = this.sessionKey;
 			if (update.apiKey !== undefined) {
 				delete value.encryptedKey;
@@ -82,7 +116,7 @@ export class AiCutSettingsStore {
 		this.queue = operation.catch(() => undefined);
 		return operation.then(() => this.getSettings());
 	}
-	async credentials() {
+	async apiKey(): Promise<string> {
 		await this.queue;
 		const value = await this.read();
 		let apiKey = this.sessionKey;
@@ -94,11 +128,18 @@ export class AiCutSettingsStore {
 			try {
 				apiKey = this.secrets.decryptString(Buffer.from(value.encryptedKey, "base64"));
 			} catch {
-				throw new Error("Cannot decrypt the OpenRouter key. Enter it again in AI Cut settings.");
+				throw new Error(
+					"Cannot decrypt the OpenRouter key. Enter it again in OpenRouter settings.",
+				);
 			}
 		}
-		if (!apiKey || !value.model)
-			throw new Error("Set your OpenRouter API key and model in AI Cut first.");
+		if (!apiKey) throw new Error("Set your API key in OpenRouter settings first.");
+		return apiKey;
+	}
+	async credentials() {
+		const apiKey = await this.apiKey();
+		const value = await this.getSettings();
+		if (!value.model) throw new Error("Select an OpenRouter model in AI Cut first.");
 		return { apiKey, model: value.model };
 	}
 }

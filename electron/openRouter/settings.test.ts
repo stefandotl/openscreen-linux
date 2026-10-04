@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { AiCutSettingsStore, type SecretStorage } from "./settings";
+import { OpenRouterSettingsStore, type SecretStorage } from "./settings";
 
 let directory: string;
 const secrets: SecretStorage = {
@@ -19,15 +19,50 @@ afterEach(async () => {
 	await fs.rm(directory, { recursive: true, force: true });
 });
 describe("OpenRouter settings", () => {
+	it("reads the existing AI Cut key and model and preserves independent caption selections on partial saves", async () => {
+		const file = path.join(directory, "settings.json");
+		await fs.writeFile(
+			file,
+			JSON.stringify({
+				model: "old/cut-model",
+				encryptedKey: secrets.encryptString("existing-key").toString("base64"),
+			}),
+		);
+		const store = new OpenRouterSettingsStore(file, secrets);
+		expect(await store.getSettings()).toMatchObject({
+			model: "old/cut-model",
+			captionEngine: "parakeet",
+			hasApiKey: true,
+		});
+		await Promise.all([
+			store.update({
+				captionEngine: "openrouter",
+				transcriptionModel: "fish-audio/transcribe-1-pro",
+			}),
+			store.update({ model: "new/cut-model" }),
+		]);
+		await store.update({ apiKey: "new-key" });
+		const reopened = new OpenRouterSettingsStore(file, secrets);
+		expect(await reopened.getSettings()).toMatchObject({
+			model: "new/cut-model",
+			captionEngine: "openrouter",
+			transcriptionModel: "fish-audio/transcribe-1-pro",
+		});
+		expect(await reopened.apiKey()).toBe("new-key");
+		await expect(store.update({ transcriptionModel: "openai/gpt-transcribe" })).rejects.toThrow(
+			"Invalid",
+		);
+		expect((await store.getSettings()).transcriptionModel).toBe("fish-audio/transcribe-1-pro");
+	});
 	it("stores an encrypted key with restricted permissions and never returns it to the renderer", async () => {
 		const file = path.join(directory, "settings.json");
-		const store = new AiCutSettingsStore(file, secrets);
+		const store = new OpenRouterSettingsStore(file, secrets);
 		const settings = await store.update({ model: "provider/model", apiKey: "secret-value" });
 		expect(settings).toMatchObject({ hasApiKey: true, keyStorage: "encrypted" });
 		expect(JSON.stringify(settings)).not.toContain("secret-value");
 		expect(await fs.readFile(file, "utf8")).not.toContain("secret-value");
 		expect((await fs.stat(file)).mode & 0o777).toBe(0o600);
-		expect(await new AiCutSettingsStore(file, secrets).credentials()).toEqual({
+		expect(await new OpenRouterSettingsStore(file, secrets).credentials()).toEqual({
 			model: "provider/model",
 			apiKey: "secret-value",
 		});
@@ -39,7 +74,7 @@ describe("OpenRouter settings", () => {
 	it("keeps Linux basic_text keys only in memory and survives concurrent settings updates", async () => {
 		const file = path.join(directory, "settings.json");
 		const storage = { ...secrets, getSelectedStorageBackend: () => "basic_text" };
-		const store = new AiCutSettingsStore(file, storage);
+		const store = new OpenRouterSettingsStore(file, storage);
 		await Promise.all([
 			store.update({ model: "a/one", apiKey: "session-secret" }),
 			store.update({ model: "a/two" }),
@@ -50,17 +85,17 @@ describe("OpenRouter settings", () => {
 			canStoreKey: false,
 		});
 		expect(await fs.readFile(file, "utf8")).not.toContain("session-secret");
-		expect((await new AiCutSettingsStore(file, storage).getSettings()).hasApiKey).toBe(false);
+		expect((await new OpenRouterSettingsStore(file, storage).getSettings()).hasApiKey).toBe(false);
 	});
 	it("reports corruption and encryption failures, but accepts correcting rejected input", async () => {
 		const file = path.join(directory, "settings.json");
-		const store = new AiCutSettingsStore(file, secrets);
+		const store = new OpenRouterSettingsStore(file, secrets);
 		await expect(store.update({ model: "https://bad url", apiKey: "x" })).rejects.toThrow(
 			"Invalid",
 		);
 		await store.update({ model: "a/model", apiKey: "key" });
 		await expect(
-			new AiCutSettingsStore(file, {
+			new OpenRouterSettingsStore(file, {
 				...secrets,
 				decryptString: () => {
 					throw new Error("secret-key");

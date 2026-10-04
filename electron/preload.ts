@@ -228,11 +228,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	preparePreviewVideo: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-video", filePath);
 	},
+	openRouter: {
+		getSettings: () => ipcRenderer.invoke("openrouter-settings"),
+		updateSettings: (update: import("../src/lib/openRouter").OpenRouterSettingsUpdate) =>
+			ipcRenderer.invoke("openrouter-update-settings", update),
+		listAiCutModels: () => ipcRenderer.invoke("openrouter-ai-cut-models"),
+	},
 	aiCut: {
-		getSettings: () => ipcRenderer.invoke("ai-cut-settings"),
-		updateSettings: (update: import("../src/lib/aiCut").AiCutSettingsUpdate) =>
-			ipcRenderer.invoke("ai-cut-update-settings", update),
-		listModels: () => ipcRenderer.invoke("ai-cut-models"),
 		analyze: (request: import("../src/lib/aiCut").AiCutRequest) =>
 			ipcRenderer.invoke("ai-cut-analyze", request),
 		cancel: (requestId: string) => ipcRenderer.invoke("ai-cut-cancel", requestId),
@@ -249,6 +251,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	): Promise<CaptionTranscriptionResult> => {
 		return ipcRenderer.invoke(CAPTION_TRANSCRIPTION_CHANNELS.transcribe, request);
 	},
+	cancelCaptionTranscription: (requestId: string): Promise<void> =>
+		ipcRenderer.invoke(CAPTION_TRANSCRIPTION_CHANNELS.cancel, requestId),
 	onCaptionTranscriptionStatus: (callback: (status: CaptionTranscriptionStatus) => void) => {
 		const listener = (_event: Electron.IpcRendererEvent, status: CaptionTranscriptionStatus) => {
 			callback(status);

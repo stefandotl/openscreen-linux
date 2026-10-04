@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "يرسل AI Cut النص والتوقيتات وتعليماتك إلى OpenRouter. إنشاء تفريغ بنموذج سحابي يرفع الصوت الأصلي أيضًا. تستهلك الطلبات رصيد OpenRouter الخاص بك.",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "التفريغ غير مكتمل. اختر نموذجًا يدعم التسجيل الكامل.",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "النص المفرّغ",
+		"reuseTranscript": "استخدام النص الموجود · {{model}}",
+		"newTranscript": "إنشاء تفريغ جديد",
+		"missingTranscript": "لا يوجد تفريغ كامل لهذا الفيديو. اختر نموذج تفريغ صوتي."
 	},
 	"newRecording": {
 		"title": "العودة إلى المسجل",
@@ -122,7 +126,11 @@
 		"noneHeard": "لم يتم الكشف عن أي كلام.",
 		"noAudio": "لا يحتوي هذا الفيديو على صوت صالح للنسخ.",
 		"failed": "تعذّر توليد التسميات.",
-		"truncated": "تم نسخ الدقائق الأولى فقط: {{minutes}} دقيقة."
+		"truncated": "تم نسخ الدقائق الأولى فقط: {{minutes}} دقيقة.",
+		"cloudModel": "نموذج الكلام في OpenRouter",
+		"noWordTimestamps": "توقيت الكلمات غير مؤكد",
+		"cloudPrivacy": "يتم إرسال صوت الفيديو الأصلي إلى OpenRouter والمزود المحدد. تُخصم تكلفة الطلبات من حساب OpenRouter الخاص بك.",
+		"configureCloud": "أضف مفتاح API في إعدادات OpenRouter أولاً."
 	},
 	"silenceDetection": {
 		"button": "اكتشاف الصمت",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "تعذّر فتح ملف المشروع. ربما تم نقل الفيديو المرجعي أو حذفه.",
 			"couldNotOpenDroppedMessage": "تعذّر فتح الملف المُسقط. ربما تم نقله أو حذفه أو تعذّرت قراءته."
 		}
+	},
+	"openRouter": {
+		"title": "إعدادات OpenRouter",
+		"description": "مفتاح API واحد لـ AI Cut والترجمة التلقائية. يتم اختيار نموذج مستقل لكل ميزة.",
+		"save": "حفظ المفتاح",
+		"close": "إغلاق"
 	}
 }

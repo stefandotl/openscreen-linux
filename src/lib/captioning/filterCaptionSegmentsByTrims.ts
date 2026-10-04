@@ -9,6 +9,20 @@ export function filterCaptionSegmentsByTrims(
 	if (trimRegions.length === 0) return segments;
 	const trims = [...trimRegions].sort((a, b) => a.startMs - b.startMs);
 	return segments.flatMap((segment) => {
+		if (segment.words?.length) {
+			const words = filterCaptionSegmentsByTrims(segment.words, trims);
+			return words.length
+				? [
+						{
+							...segment,
+							startSec: words[0].startSec,
+							endSec: words.at(-1)!.endSec,
+							text: words.map((word) => word.text).join(" "),
+							words,
+						},
+					]
+				: [];
+		}
 		const midpointMs = ((segment.startSec + segment.endSec) * 1000) / 2;
 		if (trims.some((trim) => midpointMs >= trim.startMs && midpointMs < trim.endMs)) {
 			return [];

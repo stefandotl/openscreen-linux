@@ -11,19 +11,24 @@ import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import {
 	type AiCutMode,
 	type AiCutModel,
-	type AiCutSettings,
 	type AiCutSuggestion,
 	type AiCutUnit,
 	buildAiCutUnits,
 } from "@/lib/aiCut";
-import { transcribeVideoToSegments } from "@/lib/captioning/transcribe";
+import { reusableSourceTranscript, type SourceTranscript } from "@/lib/captioning/sourceTranscript";
+import { transcribeSourceVideo } from "@/lib/captioning/transcribeSourceVideo";
+import type { OpenRouterSettings, OpenRouterSettingsUpdate } from "@/lib/openRouter";
 import { DEFAULT_SILENCE_DETECTION_SETTINGS } from "@/lib/silenceDetection";
+import { OpenRouterSettingsDialog } from "./OpenRouterSettingsDialog";
+import { TranscriptionModelSelection } from "./TranscriptionModelSelection";
 import type { TrimRegion } from "./types";
 
 interface Props {
 	videoPath: string;
 	durationMs: number;
 	trimRegions: TrimRegion[];
+	sourceTranscript?: SourceTranscript | null;
+	onTranscriptReady?(transcript: SourceTranscript): void;
 	onClose(): void;
 	onApply(suggestions: AiCutSuggestion[]): void;
 }
@@ -31,16 +36,33 @@ const inputClass = "w-full rounded-md border border-white/15 bg-black/20 px-3 py
 const time = (ms: number) =>
 	`${Math.floor(ms / 60000)}:${((ms % 60000) / 1000).toFixed(2).padStart(5, "0")}`;
 
-export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApply }: Props) {
+export function AiCutDialog({
+	videoPath,
+	durationMs,
+	trimRegions,
+	sourceTranscript,
+	onTranscriptReady,
+	onClose,
+	onApply,
+}: Props) {
+	const existingTranscript = reusableSourceTranscript(
+		sourceTranscript,
+		videoPath,
+		durationMs / 1000,
+	);
+	const [useExisting, setUseExisting] = useState(Boolean(existingTranscript));
+	const transcriptionAbort = useRef<AbortController | null>(null);
 	const t = useScopedT("editor");
 	const { locale } = useI18n();
-	const [settings, setSettings] = useState<AiCutSettings | null>(null);
+	const [settings, setSettings] = useState<OpenRouterSettings | null>(null);
 	const [model, setModel] = useState("");
-	const [apiKey, setApiKey] = useState("");
+	const [showSettings, setShowSettings] = useState(false);
 	const [models, setModels] = useState<AiCutModel[]>([]);
 	const [loadingModels, setLoadingModels] = useState(false);
 	const [saved, setSaved] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [speechSaving, setSpeechSaving] = useState(false);
+	const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
 	const [mode, setMode] = useState<AiCutMode>("cleanup");
 	const [instructions, setInstructions] = useState("");
 	const [phase, setPhase] = useState("");
@@ -53,6 +75,7 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 	const mounted = useRef(true);
 	const requestId = useRef<string | null>(null);
 	const units = useRef<AiCutUnit[] | null>(null);
+	const preparedTranscript = useRef<SourceTranscript | null>(null);
 	const busy = Boolean(phase);
 
 	useEffect(() => {
@@ -77,18 +100,20 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 
 	useEffect(() => {
 		mounted.current = true;
-		window.electronAPI.aiCut
+		window.electronAPI.openRouter
 			.getSettings()
 			.then((value) => {
 				if (!mounted.current) return;
 				setSettings(value);
 				setModel(value.model);
+				setModelSettingsOpen(!value.hasApiKey || !value.model);
 			})
 			.catch((error) => {
 				if (mounted.current) setError(String(error));
 			});
 		return () => {
 			mounted.current = false;
+			transcriptionAbort.current?.abort();
 			if (requestId.current)
 				void window.electronAPI.aiCut.cancel(requestId.current).catch(() => {
 					// The editor may already have been destroyed during application shutdown.
@@ -96,18 +121,15 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 		};
 	}, []);
 
-	async function persist(clearKey = false) {
-		const submittedKey = apiKey;
+	async function persist() {
 		setSaving(true);
 		setSaved(false);
 		try {
-			const value = await window.electronAPI.aiCut.updateSettings({
+			const value = await window.electronAPI.openRouter.updateSettings({
 				model: model.trim(),
-				...(clearKey ? { apiKey: "" } : apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
 			});
 			if (mounted.current) {
 				setSettings(value);
-				setApiKey((current) => (current === submittedKey ? "" : current));
 				setSaved(true);
 			}
 			return value;
@@ -116,13 +138,32 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 		}
 	}
 	function saveOnBlur() {
-		if (settings && (apiKey.trim() || model.trim() !== settings.model))
+		if (settings && model.trim() !== settings.model)
 			void persist().catch((error) => setError(String(error)));
+	}
+	async function selectTranscription(update: OpenRouterSettingsUpdate) {
+		setSpeechSaving(true);
+		setError("");
+		try {
+			const value = await window.electronAPI.openRouter.updateSettings(update);
+			if (mounted.current) {
+				setSettings(value);
+				units.current = null;
+				preparedTranscript.current = null;
+				setSuggestions(null);
+			}
+		} catch (error) {
+			if (mounted.current) setError(String(error));
+		} finally {
+			if (mounted.current) setSpeechSaving(false);
+		}
 	}
 	async function analyze() {
 		if (requestId.current) return;
 		const id = crypto.randomUUID();
 		requestId.current = id;
+		const controller = new AbortController();
+		transcriptionAbort.current = controller;
 		setError("");
 		setSuggestions(null);
 		setPreview(null);
@@ -132,19 +173,32 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 			if (!configured.hasApiKey || !configured.model) throw new Error(t("aiCut.configure"));
 			if (!mounted.current || requestId.current !== id) return;
 			if (!units.current) {
-				const transcript = await transcribeVideoToSegments(videoPath, {
-					trimRegions,
-					sourceDurationSec: durationMs / 1000,
-					onStatus: (status) => {
-						if (mounted.current && requestId.current === id)
-							setPhase(
-								status.phase === "transcribe" ? t("aiCut.transcribing") : t("aiCut.loadingSpeech"),
-							);
-					},
-				});
+				const reused = useExisting ? existingTranscript : preparedTranscript.current;
+				const transcript =
+					reused ??
+					(await transcribeSourceVideo(videoPath, {
+						engine: configured.captionEngine,
+						model: configured.transcriptionModel,
+						signal: controller.signal,
+						sourceDurationSec: durationMs / 1000,
+						onStatus: (status) => {
+							if (mounted.current && requestId.current === id)
+								setPhase(
+									status.phase === "transcribe"
+										? t("autoCaptions.transcribing")
+										: t(
+												configured.captionEngine === "whisper-tiny"
+													? "autoCaptions.loadingWhisperModel"
+													: "autoCaptions.loadingModel",
+											),
+								);
+						},
+					}));
 				if (!mounted.current || requestId.current !== id) return;
 				if (transcript.truncated) throw new Error(t("aiCut.truncated"));
 				if (!transcript.segments.length) throw new Error(t("aiCut.noSpeech"));
+				preparedTranscript.current = transcript;
+				if (!reused) onTranscriptReady?.(transcript);
 				setPhase(t("aiCut.pauses"));
 				const silence = await window.electronAPI.detectSilence(
 					videoPath,
@@ -179,6 +233,7 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 		} finally {
 			if (requestId.current === id) {
 				requestId.current = null;
+				transcriptionAbort.current = null;
 				if (mounted.current) setPhase("");
 			}
 		}
@@ -187,7 +242,7 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 		setLoadingModels(true);
 		setError("");
 		try {
-			const result = await window.electronAPI.aiCut.listModels();
+			const result = await window.electronAPI.openRouter.listAiCutModels();
 			if (mounted.current) setModels(result);
 		} catch (error) {
 			if (mounted.current) setError(String(error));
@@ -220,27 +275,12 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 					<DialogDescription>{t("aiCut.description")}</DialogDescription>
 				</DialogHeader>
 				<details
-					open={!settings?.hasApiKey || !settings?.model}
+					open={modelSettingsOpen}
+					onToggle={(event) => setModelSettingsOpen(event.currentTarget.open)}
 					className="rounded-lg border border-white/10 p-3"
 				>
-					<summary className="cursor-pointer text-sm">{t("aiCut.settings")}</summary>
+					<summary className="cursor-pointer text-sm">AI Cut · {t("aiCut.model")}</summary>
 					<fieldset disabled={busy || !settings} className="grid gap-3 mt-3 sm:grid-cols-2">
-						<label className="text-sm space-y-1">
-							<span>{t("aiCut.apiKey")}</span>
-							<input
-								type="password"
-								autoComplete="off"
-								spellCheck={false}
-								className={inputClass}
-								value={apiKey}
-								placeholder={settings?.hasApiKey ? t("aiCut.keyPresent") : "sk-or-…"}
-								onChange={(event) => {
-									setApiKey(event.target.value);
-									setSaved(false);
-								}}
-								onBlur={saveOnBlur}
-							/>
-						</label>
 						<label className="text-sm space-y-1">
 							<span>{t("aiCut.model")}</span>
 							<input
@@ -271,28 +311,67 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 							>
 								{t(loadingModels ? "aiCut.loadingModels" : "aiCut.loadModels")}
 							</Button>
-							{settings?.hasApiKey && (
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => void persist(true).catch((error) => setError(String(error)))}
-								>
-									{t("aiCut.removeKey")}
-								</Button>
-							)}
+							<Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
+								{t("openRouter.title")}
+							</Button>
 							<span role="status" className="text-xs text-emerald-400">
 								{saving ? t("aiCut.preparing") : saved ? t("aiCut.saved") : ""}
 							</span>
 						</div>
 					</fieldset>
-					<p className="text-xs text-slate-400 mt-2">
-						{t(
-							settings?.keyStorage === "session" || settings?.canStoreKey === false
-								? "aiCut.sessionKey"
-								: "aiCut.encryptedKey",
-						)}
-					</p>
 				</details>
+				<fieldset
+					disabled={busy || speechSaving || !settings}
+					className="rounded-lg border border-white/10 p-3 space-y-3"
+				>
+					<p className="text-sm font-medium">{t("aiCut.transcript")}</p>
+					{existingTranscript ? (
+						<>
+							<label className="flex gap-2 items-center text-sm">
+								<input
+									type="radio"
+									name="ai-cut-transcript"
+									checked={useExisting}
+									onChange={() => {
+										setUseExisting(true);
+										preparedTranscript.current = null;
+										units.current = null;
+										setSuggestions(null);
+									}}
+								/>
+								{t("aiCut.reuseTranscript", {
+									model:
+										existingTranscript.model ??
+										(existingTranscript.engine === "parakeet" ? "Parakeet" : "Whisper Tiny"),
+								})}
+							</label>
+							<label className="flex gap-2 items-center text-sm">
+								<input
+									type="radio"
+									name="ai-cut-transcript"
+									checked={!useExisting}
+									onChange={() => {
+										setUseExisting(false);
+										preparedTranscript.current = null;
+										units.current = null;
+										setSuggestions(null);
+									}}
+								/>
+								{t("aiCut.newTranscript")}
+							</label>
+						</>
+					) : (
+						<p className="text-xs text-slate-400">{t("aiCut.missingTranscript")}</p>
+					)}
+					{(!useExisting || !existingTranscript) && (
+						<TranscriptionModelSelection
+							settings={settings}
+							disabled={busy || speechSaving}
+							onSelect={(update) => void selectTranscription(update)}
+							onSettings={() => setShowSettings(true)}
+						/>
+					)}
+				</fieldset>
 				<fieldset disabled={busy} className="space-y-3">
 					<div className="flex flex-wrap gap-2">
 						{(["cleanup", "tighten", "custom"] as const).map((value) => (
@@ -325,9 +404,10 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 					<Button
 						disabled={
 							busy ||
+							speechSaving ||
 							!settings ||
 							!model.trim() ||
-							(!settings.hasApiKey && !apiKey.trim()) ||
+							!settings.hasApiKey ||
 							(mode === "custom" && !instructions.trim())
 						}
 						onClick={() => void analyze()}
@@ -440,6 +520,9 @@ export function AiCutDialog({ videoPath, durationMs, trimRegions, onClose, onApp
 							</>
 						)}
 					</section>
+				)}
+				{showSettings && (
+					<OpenRouterSettingsDialog onClose={() => setShowSettings(false)} onSaved={setSettings} />
 				)}
 			</DialogContent>
 		</Dialog>

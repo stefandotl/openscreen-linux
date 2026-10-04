@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut invia trascrizione, timestamp e istruzioni a OpenRouter. Creare una trascrizione con un modello cloud carica anche l’audio originale. Le richieste usano i tuoi crediti OpenRouter.",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "La trascrizione è incompleta. Scegli un modello che supporti l’intera registrazione.",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "Trascrizione",
+		"reuseTranscript": "Usa trascrizione esistente · {{model}}",
+		"newTranscript": "Crea una nuova trascrizione",
+		"missingTranscript": "Non esiste una trascrizione completa per questo video. Scegli un modello di trascrizione."
 	},
 	"newRecording": {
 		"title": "Torna al registratore",
@@ -144,7 +148,11 @@
 		"noneHeard": "Nessun parlato rilevato.",
 		"noAudio": "Questo video non contiene audio utilizzabile per la trascrizione.",
 		"failed": "Impossibile generare i sottotitoli.",
-		"truncated": "Sono stati trascritti solo i primi {{minutes}} minuti."
+		"truncated": "Sono stati trascritti solo i primi {{minutes}} minuti.",
+		"cloudModel": "Modello vocale OpenRouter",
+		"noWordTimestamps": "Timestamp delle parole non confermati",
+		"cloudPrivacy": "L’audio del video viene inviato a OpenRouter e al fornitore selezionato. Le richieste sono addebitate al tuo account OpenRouter.",
+		"configureCloud": "Aggiungi prima la chiave API nelle impostazioni OpenRouter."
 	},
 	"silenceDetection": {
 		"button": "Rileva silenzio",
@@ -164,5 +172,11 @@
 		"added": "Aggiunti {{count}} tagli di silenzio ({{seconds}} secondi).",
 		"noAudio": "Questo video non contiene una traccia audio utilizzabile.",
 		"failed": "Impossibile rilevare il silenzio."
+	},
+	"openRouter": {
+		"title": "Impostazioni OpenRouter",
+		"description": "Una chiave API per AI Cut e i sottotitoli automatici. Ogni funzione ha il proprio modello.",
+		"save": "Salva chiave",
+		"close": "Chiudi"
 	}
 }

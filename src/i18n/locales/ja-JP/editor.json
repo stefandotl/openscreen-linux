@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut は文字起こし、タイムスタンプ、指示を OpenRouter に送信します。クラウドモデルで文字起こしを作成すると元の音声もアップロードされます。リクエストは OpenRouter のクレジットを使用します。",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "文字起こしが不完全です。録画全体に対応した文字起こしモデルを選択してください。",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "文字起こし",
+		"reuseTranscript": "既存の文字起こしを使用 · {{model}}",
+		"newTranscript": "新しい文字起こしを作成",
+		"missingTranscript": "この動画の完全な文字起こしはありません。文字起こしモデルを選択してください。"
 	},
 	"newRecording": {
 		"title": "レコーダーに戻る",
@@ -122,7 +126,11 @@
 		"noneHeard": "音声が検出されませんでした。",
 		"noAudio": "この動画には書き起こしに使える音声がありません。",
 		"failed": "キャプションを生成できませんでした。",
-		"truncated": "最初の {{minutes}} 分のみが書き起こされました。"
+		"truncated": "最初の {{minutes}} 分のみが書き起こされました。",
+		"cloudModel": "OpenRouter音声モデル",
+		"noWordTimestamps": "単語タイムスタンプ未確認",
+		"cloudPrivacy": "元の動画の音声がOpenRouterと選択したプロバイダーに送信されます。利用料はOpenRouterアカウントに請求されます。",
+		"configureCloud": "まずOpenRouter設定でAPIキーを追加してください。"
 	},
 	"silenceDetection": {
 		"button": "無音を検出",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "プロジェクトファイルを開けませんでした。参照している動画が移動または削除された可能性があります。",
 			"couldNotOpenDroppedMessage": "ドロップしたファイルを開けませんでした。移動、削除、または読み取り不能の可能性があります。"
 		}
+	},
+	"openRouter": {
+		"title": "OpenRouter設定",
+		"description": "AI Cutと自動字幕で同じAPIキーを使用します。モデルは各機能で個別に選択します。",
+		"save": "キーを保存",
+		"close": "閉じる"
 	}
 }

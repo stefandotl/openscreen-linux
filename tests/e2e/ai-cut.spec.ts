@@ -108,7 +108,9 @@ test("reviews OpenRouter cuts through the real preload and applies them with und
 			timeout: 30000,
 		});
 		await page.getByRole("button", { name: "AI Cut", exact: true }).click();
+		await page.getByRole("button", { name: "OpenRouter settings", exact: true }).click();
 		await page.getByLabel("API key", { exact: true }).fill("test-only-not-a-real-key");
+		await page.getByRole("button", { name: "Save key", exact: true }).click();
 		await page.getByLabel("Model ID", { exact: true }).fill("test/model");
 		await page.getByRole("button", { name: "Analyze scene", exact: true }).click();
 		await expect(page.getByText("1 selected cuts · 0.4 seconds removed (source time)")).toBeVisible(
@@ -125,7 +127,7 @@ test("reviews OpenRouter cuts through the real preload and applies them with und
 		await expect(
 			page.getByTestId("editor-scene-timeline").getByText("Trim", { exact: true }),
 		).toHaveCount(0);
-		const stored = await page.evaluate(() => window.electronAPI.aiCut.getSettings());
+		const stored = await page.evaluate(() => window.electronAPI.openRouter.getSettings());
 		expect(stored).toMatchObject({ model: "test/model", hasApiKey: true });
 		expect(JSON.stringify(stored)).not.toContain("test-only-not-a-real-key");
 		expect(fs.readFileSync(path.join(userData, "openrouter.json"), "utf8")).not.toContain(
@@ -140,6 +142,9 @@ test("reviews OpenRouter cuts through the real preload and applies them with und
 		}
 		throw error;
 	} finally {
+		await app.evaluate(({ BrowserWindow }) => {
+			for (const window of BrowserWindow.getAllWindows()) window.removeAllListeners("close");
+		});
 		await app.close();
 		fs.rmSync(directory, { recursive: true, force: true });
 	}

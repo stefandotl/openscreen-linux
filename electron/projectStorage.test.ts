@@ -34,6 +34,31 @@ async function read(file: string) {
 }
 
 describe("standalone project storage", () => {
+	it("keeps transcript media identity aligned when a project is copied and reopened", async () => {
+		const screenVideoPath = await asset("recordings/source.mp4");
+		const project = {
+			version: 2,
+			media: { screenVideoPath },
+			editor: {
+				sourceTranscript: {
+					sourcePath: screenVideoPath,
+					engine: "openrouter",
+					model: "fish-audio/transcribe-1",
+					sourceDurationSec: 5,
+					granularity: "word",
+					truncated: false,
+					segments: [{ text: "Hello", startSec: 0.2, endSec: 0.8 }],
+				},
+			},
+		};
+		const saved = await saveStandaloneProject(project, path.join(root, "Copied.videtio"), options);
+		const reopened = resolveProjectAssets(await read(saved.path), saved.path) as typeof project;
+		expect(reopened.editor.sourceTranscript.sourcePath).toBe(reopened.media.screenVideoPath);
+		expect(reopened.media.screenVideoPath).not.toBe(screenVideoPath);
+		expect(reopened.editor.sourceTranscript.segments).toEqual(
+			project.editor.sourceTranscript.segments,
+		);
+	});
 	it("adds a project extension when the save dialog returns only the typed name", async () => {
 		const saved = await saveStandaloneProject(
 			{ version: 2, editor: {} },

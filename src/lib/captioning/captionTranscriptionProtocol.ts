@@ -4,6 +4,7 @@ import type { CaptionSegment, CaptionTimestampGranularity } from "./transcribe";
 export const CAPTION_TRANSCRIPTION_CHANNELS = {
 	transcribe: "caption-transcription:transcribe",
 	status: "caption-transcription:status",
+	cancel: "caption-transcription:cancel",
 } as const;
 
 export type CaptionTranscriptionPhase = "download" | "model" | "transcribe";
@@ -11,12 +12,16 @@ export type CaptionTranscriptionPhase = "download" | "model" | "transcribe";
 export interface CaptionTranscriptionStatus {
 	phase: CaptionTranscriptionPhase;
 	percent?: number;
+	requestId?: string;
 }
 
 export interface CaptionTranscriptionRequest {
 	videoPath: string;
 	trimRegions: TrimRegion[];
 	sourceDurationSec?: number;
+	engine?: "parakeet" | "openrouter";
+	model?: string;
+	requestId?: string;
 }
 
 export interface CaptionTranscriptionResult {

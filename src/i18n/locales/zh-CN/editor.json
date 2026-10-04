@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut 会将转录文本、时间戳和指令发送到 OpenRouter。使用云模型创建转录还会上传原始音频。请求会消耗你的 OpenRouter 额度。",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "转录不完整。请选择支持完整录制内容的转录模型。",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "转录文本",
+		"reuseTranscript": "使用已有转录 · {{model}}",
+		"newTranscript": "创建新的转录",
+		"missingTranscript": "此视频没有完整转录。请选择转录模型。"
 	},
 	"newRecording": {
 		"title": "返回录屏",
@@ -122,7 +126,11 @@
 		"noneHeard": "未检测到语音。",
 		"noAudio": "此视频没有可用于转写的音频。",
 		"failed": "无法生成字幕。",
-		"truncated": "仅转写了最前 {{minutes}} 分钟。"
+		"truncated": "仅转写了最前 {{minutes}} 分钟。",
+		"cloudModel": "OpenRouter 语音模型",
+		"noWordTimestamps": "词级时间戳未确认",
+		"cloudPrivacy": "源视频的音频将发送给 OpenRouter 和所选提供商。请求费用由你的 OpenRouter 账户支付。",
+		"configureCloud": "请先在 OpenRouter 设置中添加 API 密钥。"
 	},
 	"silenceDetection": {
 		"button": "检测静音",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "无法打开项目文件。它引用的视频可能已被移动或删除。",
 			"couldNotOpenDroppedMessage": "无法打开拖放的文件。它可能已被移动、删除或无法读取。"
 		}
+	},
+	"openRouter": {
+		"title": "OpenRouter 设置",
+		"description": "AI Cut 和自动字幕共用一个 API 密钥。各功能分别选择模型。",
+		"save": "保存密钥",
+		"close": "关闭"
 	}
 }

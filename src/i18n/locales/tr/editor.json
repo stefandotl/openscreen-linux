@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut transkripti, zaman damgalarını ve talimatınızı OpenRouter’a gönderir. Bulut modeliyle transkript oluşturmak kaynak sesi de yükler. İstekler OpenRouter kredilerinizi kullanır.",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "Transkript eksik. Kaydın tamamını destekleyen bir transkripsiyon modeli seçin.",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "Transkript",
+		"reuseTranscript": "Mevcut transkripti kullan · {{model}}",
+		"newTranscript": "Yeni transkript oluştur",
+		"missingTranscript": "Bu video için tam transkript yok. Bir transkripsiyon modeli seçin."
 	},
 	"errors": {
 		"noVideoLoaded": "Video yüklenmedi",
@@ -122,7 +126,11 @@
 		"noneHeard": "Konuşma algılanmadı.",
 		"noAudio": "Bu videoda yazıya dökülebilecek kullanılabilir bir ses yok.",
 		"failed": "Altyazılar oluşturulamadı.",
-		"truncated": "Yalnızca ilk {{minutes}} dakika yazıya döküldü."
+		"truncated": "Yalnızca ilk {{minutes}} dakika yazıya döküldü.",
+		"cloudModel": "OpenRouter konuşma modeli",
+		"noWordTimestamps": "Kelime zamanları doğrulanmadı",
+		"cloudPrivacy": "Kaynak videonun sesi OpenRouter ve seçilen sağlayıcıya gönderilir. İstekler OpenRouter hesabınızdan ücretlendirilir.",
+		"configureCloud": "Önce OpenRouter ayarlarına API anahtarınızı ekleyin."
 	},
 	"silenceDetection": {
 		"button": "Sessizliği algıla",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "Proje dosyası açılamadı. Başvurulan video taşınmış veya silinmiş olabilir.",
 			"couldNotOpenDroppedMessage": "Bırakılan dosya açılamadı. Taşınmış, silinmiş veya okunamıyor olabilir."
 		}
+	},
+	"openRouter": {
+		"title": "OpenRouter ayarları",
+		"description": "AI Cut ve otomatik altyazılar için tek API anahtarı. Modeller her özellikte ayrı seçilir.",
+		"save": "Anahtarı kaydet",
+		"close": "Kapat"
 	}
 }

@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut 會將轉錄文字、時間戳記和指令傳送至 OpenRouter。使用雲端模型建立轉錄還會上傳原始音訊。請求會使用你的 OpenRouter 額度。",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "轉錄不完整。請選擇支援完整錄製內容的轉錄模型。",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "轉錄文字",
+		"reuseTranscript": "使用現有轉錄 · {{model}}",
+		"newTranscript": "建立新的轉錄",
+		"missingTranscript": "此影片沒有完整轉錄。請選擇轉錄模型。"
 	},
 	"newRecording": {
 		"title": "返回錄影",
@@ -122,7 +126,11 @@
 		"noneHeard": "未偵測到語音。",
 		"noAudio": "此影片沒有可用於轉寫的音訊。",
 		"failed": "無法產生字幕。",
-		"truncated": "僅轉寫了最前 {{minutes}} 分鐘。"
+		"truncated": "僅轉寫了最前 {{minutes}} 分鐘。",
+		"cloudModel": "OpenRouter 語音模型",
+		"noWordTimestamps": "詞級時間戳未確認",
+		"cloudPrivacy": "來源影片的音訊會傳送至 OpenRouter 和所選供應商。請求費用由你的 OpenRouter 帳戶支付。",
+		"configureCloud": "請先在 OpenRouter 設定中新增 API 金鑰。"
 	},
 	"silenceDetection": {
 		"button": "偵測靜音",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "無法開啟專案檔案。它所參照的影片可能已被移動或刪除。",
 			"couldNotOpenDroppedMessage": "無法開啟拖放的檔案。它可能已被移動、刪除或無法讀取。"
 		}
+	},
+	"openRouter": {
+		"title": "OpenRouter 設定",
+		"description": "AI Cut 和自動字幕共用一個 API 金鑰。各功能分別選擇模型。",
+		"save": "儲存金鑰",
+		"close": "關閉"
 	}
 }

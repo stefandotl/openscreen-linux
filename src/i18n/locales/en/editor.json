@@ -19,14 +19,14 @@
 		"tightenHelp": "Also suggest redundant explanations to remove, while preserving important steps.",
 		"customHelp": "Describe what to shorten or remove. This version creates cuts within the current scene.",
 		"instructions": "For example: Shorten this tutorial to about five minutes and keep all important steps.",
-		"privacy": "Analysis sends the transcript, word times and your instruction to OpenRouter and the selected model provider. Audio and video stay local. Your OpenRouter account is billed for the request.",
+		"privacy": "AI Cut sends the transcript, timestamps and your instruction to OpenRouter. Creating a transcript with a cloud model also uploads source audio. Requests use your OpenRouter credits.",
 		"configure": "Set your OpenRouter API key and model first.",
 		"preparing": "Preparing…",
 		"transcribing": "Transcribing locally…",
 		"loadingSpeech": "Preparing the local speech model…",
 		"pauses": "Detecting pauses locally…",
 		"analyzing": "Creating cut proposals with OpenRouter…",
-		"truncated": "The transcript is incomplete. Split this recording into shorter scenes before analysis.",
+		"truncated": "The transcript is incomplete. Choose a transcription model that supports the full recording.",
 		"noSpeech": "No speech was found in the current scene.",
 		"analyze": "Analyze scene",
 		"review": "Cut proposal",
@@ -39,7 +39,11 @@
 		"previewCut": "Preview cut",
 		"apply": "Apply selected cuts",
 		"undoHint": "All selected cuts are applied as one undoable edit.",
-		"applied": "Applied {{count}} AI cuts."
+		"applied": "Applied {{count}} AI cuts.",
+		"transcript": "Transcript",
+		"reuseTranscript": "Use existing transcript · {{model}}",
+		"newTranscript": "Create a new transcript",
+		"missingTranscript": "No complete transcript exists for this video. Choose a transcription model."
 	},
 	"newRecording": {
 		"title": "Return to Recorder",
@@ -106,7 +110,7 @@
 	"autoCaptions": {
 		"button": "Auto captions",
 		"dialogTitle": "Auto captions",
-		"dialogDescription": "Choose roughly how many words each caption shows at once. Timing is spread across the words in that phrase.",
+		"dialogDescription": "Choose a speech model and how many words each caption shows. Word timestamps preserve the timing of the spoken audio.",
 		"model": "Speech model",
 		"minWords": "Minimum words per caption",
 		"maxWords": "Maximum words per caption",
@@ -122,7 +126,11 @@
 		"noneHeard": "No speech was detected.",
 		"noAudio": "This video has no usable audio to transcribe.",
 		"failed": "Could not generate captions.",
-		"truncated": "Only the first {{minutes}} minutes were transcribed."
+		"truncated": "Only the first {{minutes}} minutes were transcribed.",
+		"cloudModel": "OpenRouter speech model",
+		"noWordTimestamps": "Word timestamps unconfirmed",
+		"cloudPrivacy": "Audio from the source video is sent to OpenRouter and the selected provider. Requests are billed to your OpenRouter account.",
+		"configureCloud": "Add your API key in OpenRouter settings first."
 	},
 	"silenceDetection": {
 		"button": "Detect silence",
@@ -164,5 +172,11 @@
 			"couldNotOpenMessage": "The project file could not be opened. The video it references may have been moved or deleted.",
 			"couldNotOpenDroppedMessage": "The dropped file could not be opened. It may have been moved, deleted, or be unreadable."
 		}
+	},
+	"openRouter": {
+		"title": "OpenRouter settings",
+		"description": "One API key for AI Cut and Auto captions. Models are selected separately in each feature.",
+		"save": "Save key",
+		"close": "Close"
 	}
 }

@@ -184,7 +184,13 @@ export function EditorEditViewMenus({
 	);
 }
 
-export function EditorPreferencesMenu({ disabled }: { disabled: boolean }) {
+export function EditorPreferencesMenu({
+	disabled,
+	onOpenRouterSettings,
+}: {
+	disabled: boolean;
+	onOpenRouterSettings?: () => void;
+}) {
 	const { t, locale, setLocale } = useI18n();
 	const { openConfig } = useShortcuts();
 	return (
@@ -202,6 +208,11 @@ export function EditorPreferencesMenu({ disabled }: { disabled: boolean }) {
 				</button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
+				{onOpenRouterSettings && (
+					<DropdownMenuItem onSelect={onOpenRouterSettings}>
+						{t("editor.openRouter.title")}
+					</DropdownMenuItem>
+				)}
 				<DropdownMenuItem onSelect={openConfig}>{t("shortcuts.title")}</DropdownMenuItem>
 				<DropdownMenuSub>
 					<DropdownMenuSubTrigger>

@@ -16,7 +16,7 @@ export interface CaptionSegment extends CaptionWordSegment {
 }
 
 export type CaptionTimestampGranularity = "word" | "phrase";
-export type CaptionEngine = "parakeet" | "whisper-tiny";
+export type CaptionEngine = "parakeet" | "whisper-tiny" | "openrouter";
 
 export interface TranscribeMono16kResult {
 	segments: CaptionSegment[];
@@ -36,27 +36,45 @@ export type TranscribeWorkerResponse =
 	| { type: "error"; message: string };
 
 /**
- * Transcribes the video's audio with the native Parakeet caption service.
- * Model download, audio extraction, and inference run outside the renderer.
+ * Transcribes with local Parakeet or the explicitly selected OpenRouter model.
+ * Audio extraction, local inference and provider credentials stay in the main process.
  */
 export async function transcribeVideoToSegments(
 	videoPath: string,
 	options?: {
+		engine?: "parakeet" | "openrouter";
+		model?: string;
+		signal?: AbortSignal;
 		trimRegions?: TrimRegion[];
 		sourceDurationSec?: number;
 		onStatus?: (status: CaptionTranscriptionStatus) => void;
 	},
 ): Promise<CaptionTranscriptionResult> {
+	options?.signal?.throwIfAborted();
+	const requestId = options?.engine === "openrouter" ? crypto.randomUUID() : undefined;
 	const removeStatusListener = options?.onStatus
-		? window.electronAPI.onCaptionTranscriptionStatus(options.onStatus)
+		? window.electronAPI.onCaptionTranscriptionStatus((status) => {
+				if (status.requestId === requestId) options.onStatus?.(status);
+			})
 		: undefined;
+	const abort = () => {
+		if (requestId)
+			void window.electronAPI.cancelCaptionTranscription(requestId).catch(() => {
+				// The main process also cancels when the editor is destroyed.
+			});
+	};
 	try {
-		return await window.electronAPI.transcribeVideoCaptions({
+		const pending = window.electronAPI.transcribeVideoCaptions({
 			videoPath,
+			...(requestId ? { requestId, engine: "openrouter", model: options?.model } : {}),
 			trimRegions: options?.trimRegions ?? [],
 			sourceDurationSec: options?.sourceDurationSec,
 		});
+		options?.signal?.addEventListener("abort", abort, { once: true });
+		if (options?.signal?.aborted) abort();
+		return await pending;
 	} finally {
+		options?.signal?.removeEventListener("abort", abort);
 		removeStatusListener?.();
 	}
 }

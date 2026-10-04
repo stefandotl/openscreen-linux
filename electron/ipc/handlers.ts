@@ -91,6 +91,8 @@ import { registerAudioAssetHandlers } from "./audioAssets";
 import { registerEditorWindowActions } from "./editorWindowActions";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { registerNativeGpuExportHandlers } from "./nativeGpuExport";
+import { registerOpenRouterHandlers } from "./openRouter";
+import { registerOpenRouterCaptionHandlers } from "./openRouterCaptions";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 const PROJECT_FILE_EXTENSION = "videtio";
@@ -1637,7 +1639,14 @@ export function registerIpcHandlers(
 	_switchToHud?: () => void,
 ) {
 	registerEditorWindowActions(getMainWindow);
-	registerAiCutHandlers(getMainWindow);
+	const openRouterSettings = registerOpenRouterHandlers(getMainWindow);
+	registerAiCutHandlers(getMainWindow, openRouterSettings);
+	const transcribeOpenRouterCaptions = registerOpenRouterCaptionHandlers({
+		getEditor: getMainWindow,
+		settings: openRouterSettings,
+		getFfmpegBinary,
+		resolveApprovedVideoPath,
+	});
 	const customFontStore = new CustomFontStore(
 		path.join(app.getPath("appData"), "videtio-shared", "fonts"),
 	);
@@ -1670,6 +1679,9 @@ export function registerIpcHandlers(
 	ipcMain.handle(
 		CAPTION_TRANSCRIPTION_CHANNELS.transcribe,
 		async (event, request: CaptionTranscriptionRequest) => {
+			if (request?.engine === "openrouter") return transcribeOpenRouterCaptions(event, request);
+			if (request?.engine !== undefined && request.engine !== "parakeet")
+				throw new Error("Invalid caption transcription engine.");
 			const videoPath = await approveReadableVideoPath(request?.videoPath);
 			if (!videoPath) {
 				throw new Error("Caption source path is not approved or is not a supported video file");

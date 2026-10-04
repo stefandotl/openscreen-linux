@@ -22,24 +22,11 @@ export interface AiCutRequest {
 	existingTrims: SilenceInterval[];
 	units: AiCutUnit[];
 }
-export interface AiCutSettings {
-	model: string;
-	hasApiKey: boolean;
-	keyStorage: "encrypted" | "session" | "none";
-	canStoreKey: boolean;
-}
-export interface AiCutSettingsUpdate {
-	model: string;
-	apiKey?: string;
-}
 export interface AiCutModel {
 	id: string;
 	name: string;
 }
 export interface AiCutAPI {
-	getSettings(): Promise<AiCutSettings>;
-	updateSettings(update: AiCutSettingsUpdate): Promise<AiCutSettings>;
-	listModels(): Promise<AiCutModel[]>;
 	analyze(request: AiCutRequest): Promise<AiCutSuggestion[]>;
 	cancel(requestId: string): Promise<void>;
 }

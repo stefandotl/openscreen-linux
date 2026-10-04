@@ -1,5 +1,9 @@
 import { normalizeTextAnimation } from "@/lib/annotationTextAnimation";
 import { normalizeBlurColor, normalizeBlurType } from "@/lib/blurEffects";
+import {
+	normalizeSourceTranscript,
+	type SourceTranscript,
+} from "@/lib/captioning/sourceTranscript";
 import { normalizeCursorThemeId } from "@/lib/cursor/cursorThemes";
 import { type CustomFont, isCustomFont } from "@/lib/customFontDefinitions";
 import type {
@@ -79,6 +83,7 @@ function normalizeWallpaperValue(value: string): string {
 export const PROJECT_VERSION = 2;
 
 export interface ProjectEditorState {
+	sourceTranscript?: SourceTranscript | null;
 	wallpaper: string;
 	shadowIntensity: number;
 	showBlur: boolean;
@@ -571,6 +576,7 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		trimRegions: normalizedTrimRegions,
 		speedRegions: normalizedSpeedRegions,
 		annotationRegions: normalizedAnnotationRegions,
+		sourceTranscript: normalizeSourceTranscript(editor.sourceTranscript),
 		audioRegions: validateAudioRegions(editor.audioRegions),
 		aspectRatio: normalizedAspectRatio,
 		webcamLayoutPreset: normalizedWebcamLayoutPreset,
