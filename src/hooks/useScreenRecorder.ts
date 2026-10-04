@@ -1,4 +1,3 @@
-import { fixWebmDuration } from "@fix-webm-duration/fix";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useScopedT } from "@/contexts/I18nContext";
@@ -25,6 +24,7 @@ import {
 } from "@/lib/webcamCapture";
 import { type WebcamFormatChange, WebcamRecordingBridge } from "@/lib/webcamRecordingBridge";
 import { getRecommendedWebcamVideoOffsetMs } from "@/lib/webcamSync";
+import { fixWebmDuration } from "@/lib/webmDuration";
 import { selectPreferredCameraDevice } from "./cameraDeviceSelection";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
 import { isUnexpectedWebcamTrackEnd } from "./webcamTrackLifecycle";

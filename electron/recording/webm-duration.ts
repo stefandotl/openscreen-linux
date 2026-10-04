@@ -1,10 +1,9 @@
 import fs from "node:fs/promises";
-import { fixParsedWebmDuration } from "@fix-webm-duration/fix";
-import { WebmFile } from "@fix-webm-duration/parser";
+import { patchWebmDuration } from "../../src/lib/webmDuration";
 
 export type DurationPatchResult =
 	| { patched: true }
-	| { patched: false; reason: "no-section" | "already-valid" | "io-error" | "internal" };
+	| { patched: false; reason: "no-section" | "already-valid" | "io-error" };
 
 /**
  * Patch the WebM Duration header on a finalized recording file.
@@ -26,13 +25,9 @@ export async function patchWebmDurationOnDisk(
 ): Promise<DurationPatchResult> {
 	try {
 		const fileBytes = await fs.readFile(filePath);
-		const webm = new WebmFile(new Uint8Array(fileBytes));
-
-		const patched = fixParsedWebmDuration(webm, durationMs, { logger: false });
-		if (!patched) {
-			// false means missing Segment, missing Info, or an already-valid Duration.
-			// The first two mean a malformed (likely truncated) file; the third is a no-op.
-			const reason = inferUnpatchedReason(webm);
+		const result = patchWebmDuration(fileBytes, durationMs);
+		if (!result.patched) {
+			const { reason } = result;
 			if (reason === "no-section") {
 				console.warn(
 					`[webm-duration] no Segment/Info section in ${filePath}; file may be truncated`,
@@ -41,19 +36,9 @@ export async function patchWebmDurationOnDisk(
 			return { patched: false, reason };
 		}
 
-		if (!webm.source) {
-			console.error(`[webm-duration] patched but source missing for ${filePath}`);
-			return { patched: false, reason: "internal" };
-		}
-
 		const tmpPath = `${filePath}.duration-patch.tmp`;
-		const patchedBytes = Buffer.from(
-			webm.source.buffer,
-			webm.source.byteOffset,
-			webm.source.byteLength,
-		);
 		try {
-			await fs.writeFile(tmpPath, patchedBytes);
+			await fs.writeFile(tmpPath, result.bytes);
 			await fs.rename(tmpPath, filePath);
 			return { patched: true };
 		} catch (writeError) {
@@ -66,21 +51,4 @@ export async function patchWebmDurationOnDisk(
 		console.error(`[webm-duration] failed to patch ${filePath}:`, error);
 		return { patched: false, reason: "io-error" };
 	}
-}
-
-/**
- * Distinguish "no Segment/Info section" (malformed/truncated file) from "Info present
- * but Duration already valid" (patch unnecessary).
- *
- * The IDs are the length-descriptor-stripped form @fix-webm-duration/parser uses as lookup
- * keys (Segment `0x8538067`, Info `0x549a966`), per the parser's `src/lib/sections.js`, not
- * the canonical 4-byte EBML IDs (`0x18538067` / `0x1549A966`) that `getSectionById` never matches.
- */
-function inferUnpatchedReason(webm: WebmFile): "no-section" | "already-valid" {
-	const segment = webm.getSectionById?.(0x8538067);
-	if (!segment) return "no-section";
-	const info = (
-		segment as unknown as { getSectionById?: (id: number) => unknown }
-	).getSectionById?.(0x549a966);
-	return info ? "already-valid" : "no-section";
 }
